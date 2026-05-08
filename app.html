@@ -803,21 +803,27 @@
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.85);
     z-index: 999;
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(4px);
+    padding: 12px;
   }
   .modal-overlay.show { display: flex; }
   .modal {
     background: var(--surface);
     border: 1px solid var(--accent);
     border-radius: 10px;
-    padding: 24px;
-    width: 380px;
+    padding: 20px;
+    width: min(420px, calc(100vw - 24px));
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     box-shadow: var(--glow-blue), 0 0 60px rgba(0,212,255,0.1);
     animation: modalIn 0.25s ease;
+    position: relative;
+    z-index: 1000;
   }
   @keyframes modalIn {
     from { opacity:0; transform: scale(0.9) translateY(-20px); }
@@ -2276,31 +2282,31 @@ const DEMO = {
 // KR 스캔 필터 메타데이터 (거래대금·시장·시총·RSI)
 // ──────────────────────────────────────────────
 const DEMO_META = {
-  // swing
+  // swing — large
   '009150': { tradingAmt: 3200, mktType: 'kospi',  capType: 'large', rsi: 46 }, // 삼성전기
   '066570': { tradingAmt: 2800, mktType: 'kospi',  capType: 'large', rsi: 42 }, // LG전자
   '005490': { tradingAmt: 1500, mktType: 'kospi',  capType: 'large', rsi: 46 }, // POSCO홀딩스
   '005380': { tradingAmt: 4200, mktType: 'kospi',  capType: 'large', rsi: 43 }, // 현대차
-  '105560': { tradingAmt:  980, mktType: 'kospi',  capType: 'large', rsi: 49 }, // KB금융
+  '105560': { tradingAmt:  980, mktType: 'kospi',  capType: 'mid',   rsi: 49 }, // KB금융 → mid
   // surge
   '011070': { tradingAmt:  650, mktType: 'kospi',  capType: 'mid',   rsi: 38 }, // LG이노텍
   '247540': { tradingAmt:  820, mktType: 'kosdaq', capType: 'mid',   rsi: 35 }, // 에코프로비엠
   '068270': { tradingAmt: 1200, mktType: 'kospi',  capType: 'large', rsi: 41 }, // 셀트리온
   '000660': { tradingAmt: 7500, mktType: 'kospi',  capType: 'large', rsi: 44 }, // SK하이닉스
-  '035720': { tradingAmt:  560, mktType: 'kospi',  capType: 'mid',   rsi: 37 }, // 카카오
+  '035720': { tradingAmt:  560, mktType: 'kosdaq', capType: 'mid',   rsi: 37 }, // 카카오
   // tomorrow
   '006400': { tradingAmt: 1800, mktType: 'kospi',  capType: 'large', rsi: 52 }, // 삼성SDI
   '012450': { tradingAmt: 4200, mktType: 'kospi',  capType: 'large', rsi: 58 }, // 한화에어로스페이스
   '267260': { tradingAmt: 2800, mktType: 'kospi',  capType: 'mid',   rsi: 55 }, // HD현대일렉트릭
   '035420': { tradingAmt: 1500, mktType: 'kospi',  capType: 'large', rsi: 53 }, // NAVER
-  '096770': { tradingAmt:  850, mktType: 'kospi',  capType: 'large', rsi: 50 }, // SK이노베이션
-  // 소형주 (small cap) 추가
-  '950130': { tradingAmt:  120, mktType: 'kosdaq', capType: 'small', rsi: 34 }, // 엑세스바이오
-  '214150': { tradingAmt:  180, mktType: 'kosdaq', capType: 'small', rsi: 42 }, // 클래시스
-  '065350': { tradingAmt:  150, mktType: 'kosdaq', capType: 'small', rsi: 38 }, // 신성델타테크
-  // 중형주 추가
-  '251270': { tradingAmt:  420, mktType: 'kospi',  capType: 'mid',   rsi: 45 }, // 넷마블
-  '036570': { tradingAmt:  380, mktType: 'kosdaq', capType: 'mid',   rsi: 40 }, // 엔씨소프트
+  '096770': { tradingAmt:  850, mktType: 'kospi',  capType: 'mid',   rsi: 50 }, // SK이노베이션
+  // 소형주 (small) — KOSDAQ
+  '950130': { tradingAmt:  120, mktType: 'kosdaq', capType: 'small', rsi: 34 },
+  '214150': { tradingAmt:  180, mktType: 'kosdaq', capType: 'small', rsi: 42 },
+  '065350': { tradingAmt:  150, mktType: 'kosdaq', capType: 'small', rsi: 38 },
+  // 중형주 추가 (mid)
+  '251270': { tradingAmt:  420, mktType: 'kospi',  capType: 'mid',   rsi: 45 },
+  '036570': { tradingAmt:  380, mktType: 'kosdaq', capType: 'mid',   rsi: 40 },
 };
 
 // ── 필터 적용 함수 ──
@@ -2396,15 +2402,32 @@ let scanSettings = {
 };
 
 function openSettings() {
-  // 현재 설정값 반영
   document.getElementById('vol-current-display').textContent = fmtNum(scanSettings.volMin) + '억+';
   document.getElementById('vol-custom-inp').value = '';
   document.getElementById('rsi-min').value = scanSettings.rsiMin;
   document.getElementById('rsi-max').value = scanSettings.rsiMax;
-  // 프리셋 버튼 active 상태 초기화
-  document.querySelectorAll('.vol-preset-btn').forEach(b => {
-    if (b.onclick && b.onclick.toString().includes('setVolPreset')) b.classList.remove('active');
+
+  // 거래대금 버튼 active 복원
+  document.querySelectorAll('[onclick*="setVolPreset"]').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('[onclick*="setVolPreset"]').forEach(b => {
+    const m = b.onclick?.toString().match(/setVolPreset\(this,(\d+)\)/);
+    if (m && parseInt(m[1]) === scanSettings.volMin) b.classList.add('active');
   });
+
+  // 시총 버튼 active 복원
+  document.querySelectorAll('[onclick*="setCapFilter"]').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('[onclick*="setCapFilter"]').forEach(b => {
+    const m = b.onclick?.toString().match(/setCapFilter\(this,'(\w+)'\)/);
+    if (m && m[1] === scanSettings.cap) b.classList.add('active');
+  });
+
+  // 시장 버튼 active 복원
+  document.querySelectorAll('[onclick*="setMktFilter"]').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('[onclick*="setMktFilter"]').forEach(b => {
+    const m = b.onclick?.toString().match(/setMktFilter\(this,'(\w+)'\)/);
+    if (m && m[1] === scanSettings.mkt) b.classList.add('active');
+  });
+
   document.getElementById('settings-modal').classList.add('show');
 }
 
@@ -2423,15 +2446,29 @@ function setVolPreset(btn, val) {
 }
 
 function setCapFilter(btn, val) {
-  scanSettings.cap = val;
-  document.querySelectorAll('[id^="cap-"]').forEach(b => b?.classList.remove('active'));
-  btn.classList.add('active');
+  // 이미 선택된 버튼 클릭 시 '전체'로 토글
+  if (scanSettings.cap === val && val !== 'all') {
+    scanSettings.cap = 'all';
+    document.querySelectorAll('[id^="cap-"],[onclick*="setCapFilter"]').forEach(b => b?.classList.remove('active'));
+    document.getElementById('cap-all-btn')?.classList.add('active');
+  } else {
+    scanSettings.cap = val;
+    document.querySelectorAll('[onclick*="setCapFilter"]').forEach(b => b?.classList.remove('active'));
+    btn.classList.add('active');
+  }
 }
 
 function setMktFilter(btn, val) {
-  scanSettings.mkt = val;
-  document.querySelectorAll('[id^="mkt-"]').forEach(b => b?.classList.remove('active'));
-  btn.classList.add('active');
+  // 이미 선택된 버튼 클릭 시 'all'로 토글
+  if (scanSettings.mkt === val && val !== 'all') {
+    scanSettings.mkt = 'all';
+    document.querySelectorAll('[onclick*="setMktFilter"]').forEach(b => b?.classList.remove('active'));
+    document.getElementById('mkt-all-btn')?.classList.add('active');
+  } else {
+    scanSettings.mkt = val;
+    document.querySelectorAll('[onclick*="setMktFilter"]').forEach(b => b?.classList.remove('active'));
+    btn.classList.add('active');
+  }
 }
 
 function applySettings() {
