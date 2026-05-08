@@ -521,11 +521,15 @@
   .chart-popup-overlay.show { display: block; }
   .chart-popup {
     position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     background: var(--surface);
     border: 1px solid var(--accent);
     border-radius: 10px;
     padding: 16px;
-    min-width: 240px;
+    min-width: min(300px, 90vw);
+    max-width: 90vw;
     box-shadow: var(--glow-blue), 0 8px 32px rgba(0,0,0,0.6);
     z-index: 8001;
     animation: modalIn 0.18s ease;
@@ -2315,9 +2319,32 @@ function filterKrStocks(stocks) {
   });
 }
 
+// ──────────────────────────────────────────────
+// US 종목 필터 메타데이터
+// ──────────────────────────────────────────────
+const DEMO_US_META = {
+  'NVDA':  { volM: 45000, capType: 'large', rsi: 48 },
+  'AAPL':  { volM: 35000, capType: 'large', rsi: 47 },
+  'MSFT':  { volM: 30000, capType: 'large', rsi: 50 },
+  'META':  { volM: 28000, capType: 'large', rsi: 51 },
+  'AVGO':  { volM: 22000, capType: 'large', rsi: 45 },
+  'TSLA':  { volM: 60000, capType: 'large', rsi: 42 },
+  'AMD':   { volM: 38000, capType: 'large', rsi: 44 },
+  'AMZN':  { volM: 32000, capType: 'large', rsi: 49 },
+  'GOOGL': { volM: 25000, capType: 'large', rsi: 46 },
+};
+
+function filterUsStocks(stocks) {
+  return stocks.filter(s => {
+    const m = DEMO_US_META[s.code] || { volM: 10000, capType: 'large', rsi: 45 };
+    if (scanSettings.cap !== 'all' && m.capType !== scanSettings.cap) return false;
+    if (m.rsi < scanSettings.rsiMin || m.rsi > scanSettings.rsiMax) return false;
+    return true;
+  });
+}
+
 // ── 필터 초기화 ──
 function resetScanSettings() {
-  scanSettings = { volMin: 500, cap: 'all', mkt: 'all', rsiMin: 30, rsiMax: 60 };
   try { localStorage.removeItem('k_scan_settings'); } catch(e) {}
   // 설정 모달 UI도 초기화
   document.getElementById('scan-vol-label').textContent = '500억+';
@@ -2428,6 +2455,7 @@ function applySettings() {
 
   // ── 핵심: 필터 적용하여 카드 즉시 재렌더 ──
   renderCards();
+  renderUsCards();
 
   const total = updateFilterCounts();
   addLog(ts, `[SCAN] 필터 재적용 완료 — 조건 충족 ${total}종목`, total > 0 ? 'ok' : 'warn');
@@ -2817,10 +2845,21 @@ function renderUsCards() {
     const container = document.getElementById(`cards-${cat}-us`);
     if (!container) return;
     container.innerHTML = '';
-    DEMO_US[cat].forEach((stock, i) => {
-      const card = buildUsCard(stock, i+1);
-      container.appendChild(card);
-    });
+    const filtered = filterUsStocks(DEMO_US[cat]);
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="empty-state">
+        <div class="icon">🔍</div>
+        <div style="text-align:center">
+          <div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 미국주식이 없습니다</div>
+          <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
+        </div>
+      </div>`;
+    } else {
+      filtered.forEach((stock, i) => {
+        const card = buildUsCard(stock, i+1);
+        container.appendChild(card);
+      });
+    }
   });
   setTimeout(() => {
     [...DEMO_US.swing, ...DEMO_US.surge, ...DEMO_US.tomorrow].forEach(stock => {
@@ -3483,15 +3522,10 @@ function openKisChart(code, market, name, event) {
     </a>
   `).join('');
 
-  // 팝업 위치 계산 (클릭 위치 기준)
-  const vw = window.innerWidth, vh = window.innerHeight;
-  let x = event ? event.clientX + 8 : vw / 2 - 120;
-  let y = event ? event.clientY + 8 : vh / 2 - 100;
-  if (x + 260 > vw) x = vw - 268;
-  if (y + 320 > vh) y = vh - 328;
-
-  popup.style.left = x + 'px';
-  popup.style.top  = y + 'px';
+  // 항상 화면 정중앙 표시
+  popup.style.left = '50%';
+  popup.style.top  = '50%';
+  popup.style.transform = 'translate(-50%, -50%)';
   popup.style.display = 'block';
   overlay.classList.add('show');
 }
@@ -3918,16 +3952,71 @@ if (window.__KIS_TOKEN__) {
   kisAccNo    = (window.__KIS_ACC__ || '').replace(/-/g,'');
   const env   = kisBaseUrl.includes('openapivts') ? 'paper' : 'real';
   apiEnv      = env;
-  document.getElementById('mode-display').textContent = env === 'paper' ? 'KIS 모의투자 LIVE' : 'KIS 실전투자 LIVE';
-  document.getElementById('mode-display').style.color = env === 'paper' ? 'var(--accent2)' : 'var(--accent3)';
+  const modeEl = document.getElementById('mode-display');
+  if (modeEl) {
+    modeEl.textContent = env === 'paper' ? 'KIS 모의투자 LIVE' : 'KIS 실전투자 LIVE';
+    modeEl.style.color = env === 'paper' ? 'var(--accent2)' : 'var(--accent3)';
+  }
 
-  // Python이 미리 조회한 현재가 즉시 적용
-  if (window.__KIS_PRICES__) {
+  // 현재가 즉시 적용 (Python 서버사이드 조회)
+  if (window.__KIS_PRICES__ && Object.keys(window.__KIS_PRICES__).length > 0) {
     setTimeout(() => applyInjectedPrices(window.__KIS_PRICES__), 400);
   }
 
-  // 잔고/체결 등 추가 데이터 로드
-  setTimeout(() => kisLoadAll(window.__KIS_ACC__), 800);
+  // 잔고 데이터 적용
+  if (window.__KIS_BALANCE__ && !window.__KIS_BALANCE__.error) {
+    setTimeout(() => applyInjectedBalance(window.__KIS_BALANCE__), 500);
+  }
+}
+
+// Python 주입 잔고를 포트폴리오에 적용
+function applyInjectedBalance(bal) {
+  try {
+    const o2 = bal.output2?.[0] || {};
+    const deposit    = parseInt(o2.dnca_tot_amt || 0);
+    const evalAmt    = parseInt(o2.tot_evlu_amt || 0);
+    const evalPnl    = parseInt(o2.evlu_pfls_smtl_amt || 0);
+    const evalPct    = parseFloat(o2.asst_icdc_erng_rt || 0);
+
+    const depEl = document.getElementById('pf-cash');
+    const evlEl = document.getElementById('pf-eval');
+    const pnlEl = document.getElementById('pf-pnl');
+    const pctEl = document.getElementById('pf-pnl-pct');
+
+    if (depEl) depEl.textContent = deposit.toLocaleString('ko-KR') + ' 원';
+    if (evlEl) evlEl.textContent = evalAmt.toLocaleString('ko-KR') + ' 원';
+    if (pnlEl) {
+      pnlEl.textContent = (evalPnl >= 0 ? '+' : '') + evalPnl.toLocaleString('ko-KR') + ' 원';
+      pnlEl.style.color = evalPnl >= 0 ? 'var(--accent2)' : 'var(--accent3)';
+    }
+    if (pctEl) {
+      pctEl.textContent = (evalPct >= 0 ? '+' : '') + evalPct.toFixed(2) + '%';
+      pctEl.style.color = evalPct >= 0 ? 'var(--accent2)' : 'var(--accent3)';
+    }
+
+    // 보유 종목 반영
+    const holdings = bal.output1 || [];
+    if (holdings.length > 0) {
+      holdings.forEach(h => {
+        const code = h.pdno;
+        const qty  = parseInt(h.hldg_qty || 0);
+        const avg  = parseInt(h.pchs_avg_pric || 0);
+        const cur  = parseInt(h.prpr || 0);
+        const pnl2 = parseInt(h.evlu_pfls_amt || 0);
+        if (qty === 0) return;
+        // 기존 포트폴리오에 없으면 추가
+        const exists = pfHoldings.find(p => p.code === code);
+        if (!exists) {
+          pfHoldings.push({ code, name: h.prdt_name || code, qty, avg,
+                            cur: cur.toLocaleString(), pnl: pnl2, mkt: 'kr' });
+        }
+      });
+      pfRenderHoldings();
+    }
+    const now = new Date();
+    const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    addLog(ts, `[잔고] 예수금 ${deposit.toLocaleString()}원 · 평가금액 ${evalAmt.toLocaleString()}원`, 'ok');
+  } catch(e) { console.error('잔고 적용 오류', e); }
 }
 
 // Python 주입 가격을 카드에 적용
