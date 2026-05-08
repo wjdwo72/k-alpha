@@ -111,56 +111,46 @@ if not st.session_state.auth:
     if st.session_state.wrong:
         st.session_state.wrong = False
 
-    # postMessage 수신 리스너 (메인 페이지에서 iframe 메시지 수신)
-    st.markdown("""<script>
-window.addEventListener('message', function(e) {
-    if (e.data === 'pin_correct') {
-        var url = new URL(window.location.href);
-        url.searchParams.set('auth','1');
-        window.location.href = url.toString();
-    } else if (e.data === 'pin_wrong') {
-        // 틀림 처리는 iframe 내부에서
-    }
-}, false);
-</script>""", unsafe_allow_html=True)
+    # ── onerror 트릭: React dangerouslySetInnerHTML은 <script> 실행 안함,
+    #    하지만 onerror 이벤트 핸들러는 실행됨 ──
+    st.markdown("""<img src="data:image/gif,invalid" style="display:none;position:absolute"
+onerror="if(!window._pinAuth){window._pinAuth=true;window.addEventListener('message',function(e){if(e.data==='pin_correct'){var u=new URL(window.location.href);u.searchParams.set('auth','1');window.location.href=u.toString();}else if(e.data&&e.data.auth){window.location.href=e.data.auth;}});}" >
+<div id="_pin_style"></div>""", unsafe_allow_html=True)
 
-    # PIN 화면 전체를 components.html로 — Streamlit React 레이어 완전 분리
     components.html(f"""<!DOCTYPE html>
 <html><head>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Share+Tech+Mono&display=swap');
 *{{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}}
-html,body{{width:100%;height:100%;background:#020408;overflow:hidden}}
+html,body{{width:100%;height:100%;background:#020408;overflow:hidden;
+  font-family:'Share Tech Mono',monospace}}
 .lw{{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:100vh;font-family:'Share Tech Mono',monospace;padding:20px}}
-.lt{{font-family:'Orbitron',monospace;font-size:clamp(22px,7vw,42px);font-weight:700;
-  letter-spacing:6px;background:linear-gradient(90deg,#00d4ff,#00ff88);
+  height:100vh;padding:16px}}
+.lt{{font-size:clamp(20px,6vw,36px);font-weight:700;letter-spacing:6px;
+  background:linear-gradient(90deg,#00d4ff,#00ff88);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  text-align:center;margin-bottom:6px}}
-.ls{{font-size:12px;color:#4a5568;letter-spacing:2px;margin-bottom:32px;text-align:center}}
+  text-align:center;margin-bottom:4px;
+  font-family:'Share Tech Mono',monospace}}
+.ls{{font-size:10px;color:#4a5568;letter-spacing:2px;margin-bottom:20px;text-align:center}}
 .lb{{background:#0a0e1a;border:1px solid #1a2535;border-radius:16px;
-  padding:28px 24px 20px;width:min(300px,88vw);box-shadow:0 0 40px rgba(0,212,255,.1)}}
-.ll{{font-size:11px;color:#4a5568;letter-spacing:2px;margin-bottom:12px;text-align:center}}
-.ld{{display:flex;justify-content:center;gap:14px;margin-bottom:22px}}
-.dot{{width:13px;height:13px;border-radius:50%;border:2px solid #1a3a4a;background:transparent;transition:all .2s}}
-.dot.f{{background:#00d4ff;border-color:#00d4ff;box-shadow:0 0 10px rgba(0,212,255,.7)}}
-.np{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}
-.nb{{padding:18px 0;border-radius:12px;border:1px solid #1a2535;background:#0d1220;
-  color:#e2e8f0;font-family:'Share Tech Mono',monospace;font-size:22px;
-  cursor:pointer;text-align:center;
-  user-select:none;touch-action:manipulation;
-  transition:background .12s,transform .08s}}
-.nb:active{{background:#1e2a3a!important;transform:scale(.92)!important}}
-.nb.d{{font-size:16px;color:#64748b}}
+  padding:22px 20px 16px;width:min(280px,86vw)}}
+.ll{{font-size:10px;color:#4a5568;letter-spacing:2px;margin-bottom:10px;text-align:center}}
+.ld{{display:flex;justify-content:center;gap:12px;margin-bottom:18px}}
+.dot{{width:11px;height:11px;border-radius:50%;border:2px solid #1a3a4a;background:transparent;transition:all .2s}}
+.dot.f{{background:#00d4ff;border-color:#00d4ff;box-shadow:0 0 8px rgba(0,212,255,.7)}}
+.np{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}}
+.nb{{padding:15px 0;border-radius:10px;border:1px solid #1a2535;background:#0d1220;
+  color:#e2e8f0;font-size:20px;cursor:pointer;text-align:center;
+  user-select:none;touch-action:manipulation;transition:background .1s,transform .08s}}
+.nb:active{{background:#1e2a3a;transform:scale(.92)}}
 .nb.e{{visibility:hidden}}
-.nb.enter{{background:rgba(0,212,255,.15);border-color:rgba(0,212,255,.4);
-  color:#00d4ff;font-size:22px;font-weight:700}}
-.nb.enter:active{{background:rgba(0,212,255,.3)!important}}
-.nb.enter.ready{{background:rgba(0,212,255,.25);border-color:#00d4ff;
-  box-shadow:0 0 12px rgba(0,212,255,.4)}}
-.le{{text-align:center;font-size:11px;margin-top:14px;min-height:18px;
-  color:#ff4d6d;transition:opacity .3s}}
+.nb.enter{{background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.35);
+  color:#00d4ff;font-size:20px}}
+.nb.enter.ready{{background:rgba(0,212,255,.2);border-color:#00d4ff;
+  box-shadow:0 0 10px rgba(0,212,255,.35)}}
+.bot-row{{display:flex;gap:8px}}
+.nb.del{{flex:1;color:#64748b;font-size:14px}}
+.le{{text-align:center;font-size:10px;color:#ff4d6d;margin-top:10px;min-height:16px}}
 </style>
 </head><body>
 <div class="lw">
@@ -173,58 +163,67 @@ html,body{{width:100%;height:100%;background:#020408;overflow:hidden}}
       <div class="dot" id="d2"></div><div class="dot" id="d3"></div>
     </div>
     <div class="np" id="np">
-      <div class="nb" data-n="1">1</div>
-      <div class="nb" data-n="2">2</div>
-      <div class="nb" data-n="3">3</div>
-      <div class="nb" data-n="4">4</div>
-      <div class="nb" data-n="5">5</div>
-      <div class="nb" data-n="6">6</div>
-      <div class="nb" data-n="7">7</div>
-      <div class="nb" data-n="8">8</div>
-      <div class="nb" data-n="9">9</div>
+      <div class="nb" data-n="1">1</div><div class="nb" data-n="2">2</div><div class="nb" data-n="3">3</div>
+      <div class="nb" data-n="4">4</div><div class="nb" data-n="5">5</div><div class="nb" data-n="6">6</div>
+      <div class="nb" data-n="7">7</div><div class="nb" data-n="8">8</div><div class="nb" data-n="9">9</div>
       <div class="nb e" data-n=""></div>
       <div class="nb" data-n="0">0</div>
-      <div class="nb enter" data-n="enter">↵</div>
+      <div class="nb enter" id="enter-btn" data-n="enter">↵</div>
     </div>
-    <!-- 삭제 버튼 별도 행 -->
-    <div class="del-row" style="display:flex;justify-content:flex-end;margin-top:8px">
-      <div class="nb d" data-n="del" style="width:30%;padding:12px 0;font-size:16px">⌫</div>
+    <div class="bot-row">
+      <div class="nb del" id="del-btn" data-n="del">⌫ 지우기</div>
     </div>
     <div class="le" id="le">{wrong_msg}</div>
   </div>
 </div>
 <script>
-const PW = "{PASSWORD}";
-let p = "", done = false;
+var PW = "{PASSWORD}";
+var p = "", done = false;
 
 function ud() {{
-  for(let i=0;i<4;i++) {{
-    const d = document.getElementById("d"+i);
-    if(i < p.length) {{ d.classList.add("f"); d.style.background=""; d.style.borderColor=""; }}
+  for(var i=0;i<4;i++) {{
+    var d = document.getElementById("d"+i);
+    if(i < p.length) {{ d.classList.add("f"); d.style.cssText=""; }}
     else {{ d.classList.remove("f"); }}
   }}
-  // 엔터 버튼 강조 (4자리 완성 시)
-  const eb = document.querySelector('.nb.enter');
-  if(eb) {{ eb.classList.toggle('ready', p.length===4); }}
+  var eb = document.getElementById("enter-btn");
+  if(eb) eb.classList.toggle("ready", p.length===4);
+}}
+
+function doAuth() {{
+  // 방법1: postMessage (메인 페이지 onerror 리스너가 수신)
+  try {{ window.parent.postMessage("pin_correct", "*"); }} catch(e) {{}}
+  // 방법2: 직접 URL 변경 시도 (같은 origin이면 작동)
+  try {{
+    var u = new URL(window.parent.location.href);
+    u.searchParams.set("auth","1");
+    window.parent.location.href = u.toString();
+  }} catch(e) {{}}
+  // 방법3: top frame 변경
+  try {{
+    var u2 = new URL(window.top.location.href);
+    u2.searchParams.set("auth","1");
+    window.top.location.href = u2.toString();
+  }} catch(e) {{}}
+  // 방법4: a[target=_top] 링크 클릭 (상대 URL)
+  try {{
+    var a = document.createElement("a");
+    a.href = "?auth=1";
+    a.target = "_top";
+    document.body.appendChild(a);
+    a.click();
+  }} catch(e) {{}}
 }}
 
 function submit() {{
   if(done || p.length < 4) return;
   done = true;
   if(p === PW) {{
-    window.parent.postMessage('pin_correct', '*');
-    setTimeout(function() {{
-      try {{
-        const url = new URL(window.parent.location.href);
-        url.searchParams.set('auth','1');
-        window.parent.location.href = url.toString();
-      }} catch(e) {{}}
-    }}, 80);
+    doAuth();
   }} else {{
     document.getElementById("le").textContent = "❌ 비밀번호가 틀렸습니다";
     document.querySelectorAll(".dot").forEach(function(d) {{
       d.style.background="#ff4d6d"; d.style.borderColor="#ff4d6d";
-      d.style.boxShadow="0 0 8px rgba(255,77,109,.5)";
     }});
     setTimeout(function() {{ p=""; done=false; ud(); document.getElementById("le").textContent=""; }}, 800);
   }}
@@ -233,63 +232,44 @@ function submit() {{
 function pp(n) {{
   if(done || p.length >= 4) return;
   p += String(n); ud();
-  // 4자리 완성 시 자동 제출
-  if(p.length === 4) {{
-    setTimeout(submit, 200);
-  }}
+  if(p.length === 4) setTimeout(submit, 180);
 }}
 
-function pd() {{
-  if(done) return;
-  p = p.slice(0,-1); ud();
-}}
+function pd() {{ if(done) return; p = p.slice(0,-1); ud(); }}
 
-// 터치/클릭 이벤트
-var np = document.getElementById('np');
-var np2 = document.querySelector('.del-row');
+// 이벤트 등록 (touchend + click 중복방지)
 var touched = false;
-
-function handleBtn(btn) {{
-  var n = btn.getAttribute('data-n');
-  if(n === 'del') pd();
-  else if(n === 'enter') submit();
-  else if(n !== '') pp(parseInt(n));
-}}
-
-function addEvents(el) {{
+function addEv(el) {{
   if(!el) return;
-  el.addEventListener('touchstart', function(e) {{
-    var btn = e.target.closest('.nb');
-    if(!btn) return;
-    e.preventDefault(); touched = true;
-    btn.style.background='#1e2a3a'; btn.style.transform='scale(.92)';
+  el.addEventListener("touchstart", function(e) {{
+    var b = e.target.closest(".nb"); if(!b) return;
+    e.preventDefault(); touched=true;
+    b.style.background="#1e2a3a"; b.style.transform="scale(.92)";
   }}, {{passive:false}});
-  el.addEventListener('touchend', function(e) {{
-    var btn = e.target.closest('.nb');
-    if(!btn) return;
-    e.preventDefault(); touched = true;
-    btn.style.background=''; btn.style.transform='';
-    handleBtn(btn);
+  el.addEventListener("touchend", function(e) {{
+    var b = e.target.closest(".nb"); if(!b) return;
+    e.preventDefault(); touched=true;
+    b.style.background=""; b.style.transform="";
+    var n = b.getAttribute("data-n");
+    if(n==="del") pd(); else if(n==="enter") submit(); else if(n) pp(parseInt(n));
     setTimeout(function(){{touched=false;}},300);
   }}, {{passive:false}});
-  el.addEventListener('click', function(e) {{
+  el.addEventListener("click", function(e) {{
     if(touched) return;
-    var btn = e.target.closest('.nb');
-    if(!btn) return;
-    handleBtn(btn);
+    var b = e.target.closest(".nb"); if(!b) return;
+    var n = b.getAttribute("data-n");
+    if(n==="del") pd(); else if(n==="enter") submit(); else if(n) pp(parseInt(n));
   }});
 }}
-
-addEvents(document.getElementById('np'));
-addEvents(document.querySelector('.del-row'));
-
-document.addEventListener('keydown', function(e) {{
-  if(e.key >= '0' && e.key <= '9') pp(parseInt(e.key));
-  else if(e.key === 'Backspace') pd();
-  else if(e.key === 'Enter') submit();
+addEv(document.getElementById("np"));
+addEv(document.querySelector(".bot-row"));
+document.addEventListener("keydown", function(e) {{
+  if(e.key>="0"&&e.key<="9") pp(parseInt(e.key));
+  else if(e.key==="Backspace") pd();
+  else if(e.key==="Enter") submit();
 }});
 </script>
-</body></html>""", height=620, scrolling=False)
+</body></html>""", height=580, scrolling=False)
     st.stop()
 
 # ════════════════════════════════════════
