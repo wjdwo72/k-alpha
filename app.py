@@ -318,12 +318,60 @@ with open("app.html","r",encoding="utf-8") as f:
     html = f.read()
 
 if st.session_state.kis_token:
+    token    = st.session_state.kis_token
+    base_url = st.session_state.kis_base_url
+    ak       = st.session_state.kis_ak
+    sec      = st.session_state.kis_sec
+
+    # ── Python 서버사이드 현재가 조회 (CORS 없음) ──
+    KR_CODES = ['009150','066570','005490','005380','105560',
+                '011070','247540','068270','000660','035720',
+                '006400','012450','267260','035420','096770']
+
+    @st.cache_data(ttl=30, show_spinner=False)
+    def fetch_all_prices(token, base_url, ak, sec):
+        prices = {}
+        headers = {
+            "authorization": f"Bearer {token}",
+            "appkey": ak, "appsecret": sec,
+            "tr_id": "FHKST01010100",
+            "Content-Type": "application/json"
+        }
+        for code in KR_CODES:
+            try:
+                r = requests.get(
+                    f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
+                    params={"FID_COND_MRKT_DIV_CODE":"J","FID_INPUT_ISCD":code},
+                    headers=headers, verify=False, timeout=6
+                )
+                o = r.json().get("output",{})
+                if not o.get("stck_prpr"): continue
+                sign = o.get("prdy_vrss_sign","3")
+                is_down = sign in ("4","5")
+                chg_abs = int(o.get("prdy_vrss","0") or 0)
+                pct_abs = float(o.get("prdy_ctrt","0") or 0)
+                chg = -chg_abs if is_down else chg_abs
+                pct = -pct_abs if is_down else pct_abs
+                prices[code] = {
+                    "price": int(o["stck_prpr"]),
+                    "change": chg, "changePct": round(pct,2),
+                    "up": not is_down,
+                    "high": int(o.get("stck_hgpr","0") or 0),
+                    "low":  int(o.get("stck_lwpr","0") or 0),
+                }
+            except: pass
+        return prices
+
+    with st.spinner("현재가 조회 중..."):
+        prices = fetch_all_prices(token, base_url, ak, sec)
+
     inject = f"""<script>
-window.__KIS_TOKEN__    = {json.dumps(st.session_state.kis_token)};
-window.__KIS_BASE_URL__ = {json.dumps(st.session_state.kis_base_url)};
-window.__KIS_AK__       = {json.dumps(st.session_state.kis_ak)};
-window.__KIS_SEC__      = {json.dumps(st.session_state.kis_sec)};
+window.__KIS_TOKEN__    = {json.dumps(token)};
+window.__KIS_BASE_URL__ = {json.dumps(base_url)};
+window.__KIS_AK__       = {json.dumps(ak)};
+window.__KIS_SEC__      = {json.dumps(sec)};
 window.__KIS_ACC__      = {json.dumps(st.session_state.kis_acc)};
+window.__KIS_PRICES__   = {json.dumps(prices)};
 </script>"""
     html = html.replace("</head>", inject+"\n</head>")
 
