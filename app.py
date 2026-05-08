@@ -154,6 +154,11 @@ html,body{{width:100%;height:100%;background:#020408;overflow:hidden}}
 .nb:active{{background:#1e2a3a!important;transform:scale(.92)!important}}
 .nb.d{{font-size:16px;color:#64748b}}
 .nb.e{{visibility:hidden}}
+.nb.enter{{background:rgba(0,212,255,.15);border-color:rgba(0,212,255,.4);
+  color:#00d4ff;font-size:22px;font-weight:700}}
+.nb.enter:active{{background:rgba(0,212,255,.3)!important}}
+.nb.enter.ready{{background:rgba(0,212,255,.25);border-color:#00d4ff;
+  box-shadow:0 0 12px rgba(0,212,255,.4)}}
 .le{{text-align:center;font-size:11px;margin-top:14px;min-height:18px;
   color:#ff4d6d;transition:opacity .3s}}
 </style>
@@ -179,7 +184,11 @@ html,body{{width:100%;height:100%;background:#020408;overflow:hidden}}
       <div class="nb" data-n="9">9</div>
       <div class="nb e" data-n=""></div>
       <div class="nb" data-n="0">0</div>
-      <div class="nb d" data-n="del">⌫</div>
+      <div class="nb enter" data-n="enter">↵</div>
+    </div>
+    <!-- 삭제 버튼 별도 행 -->
+    <div class="del-row" style="display:flex;justify-content:flex-end;margin-top:8px">
+      <div class="nb d" data-n="del" style="width:30%;padding:12px 0;font-size:16px">⌫</div>
     </div>
     <div class="le" id="le">{wrong_msg}</div>
   </div>
@@ -194,34 +203,39 @@ function ud() {{
     if(i < p.length) {{ d.classList.add("f"); d.style.background=""; d.style.borderColor=""; }}
     else {{ d.classList.remove("f"); }}
   }}
+  // 엔터 버튼 강조 (4자리 완성 시)
+  const eb = document.querySelector('.nb.enter');
+  if(eb) {{ eb.classList.toggle('ready', p.length===4); }}
+}}
+
+function submit() {{
+  if(done || p.length < 4) return;
+  done = true;
+  if(p === PW) {{
+    window.parent.postMessage('pin_correct', '*');
+    setTimeout(function() {{
+      try {{
+        const url = new URL(window.parent.location.href);
+        url.searchParams.set('auth','1');
+        window.parent.location.href = url.toString();
+      }} catch(e) {{}}
+    }}, 80);
+  }} else {{
+    document.getElementById("le").textContent = "❌ 비밀번호가 틀렸습니다";
+    document.querySelectorAll(".dot").forEach(function(d) {{
+      d.style.background="#ff4d6d"; d.style.borderColor="#ff4d6d";
+      d.style.boxShadow="0 0 8px rgba(255,77,109,.5)";
+    }});
+    setTimeout(function() {{ p=""; done=false; ud(); document.getElementById("le").textContent=""; }}, 800);
+  }}
 }}
 
 function pp(n) {{
   if(done || p.length >= 4) return;
   p += String(n); ud();
+  // 4자리 완성 시 자동 제출
   if(p.length === 4) {{
-    done = true;
-    if(p === PW) {{
-      // ✅ 정답 — postMessage로 부모 페이지에 알림
-      window.parent.postMessage('pin_correct', '*');
-      // fallback: 직접 URL 변경 시도
-      setTimeout(function() {{
-        try {{
-          const url = new URL(window.parent.location.href);
-          url.searchParams.set('auth','1');
-          window.parent.location.href = url.toString();
-        }} catch(e) {{
-          // postMessage만 사용
-        }}
-      }}, 100);
-    }} else {{
-      document.getElementById("le").textContent = "❌ 비밀번호가 틀렸습니다";
-      document.querySelectorAll(".dot").forEach(function(d) {{
-        d.style.background="#ff4d6d"; d.style.borderColor="#ff4d6d";
-        d.style.boxShadow="0 0 8px rgba(255,77,109,.5)";
-      }});
-      setTimeout(function() {{ p=""; done=false; ud(); document.getElementById("le").textContent=""; }}, 800);
-    }}
+    setTimeout(submit, 200);
   }}
 }}
 
@@ -230,44 +244,49 @@ function pd() {{
   p = p.slice(0,-1); ud();
 }}
 
-// 터치/클릭 이벤트 — 둘 다 등록하되 중복 방지
+// 터치/클릭 이벤트
 var np = document.getElementById('np');
+var np2 = document.querySelector('.del-row');
 var touched = false;
-np.addEventListener('touchstart', function(e) {{
-  var btn = e.target.closest('.nb');
-  if(!btn) return;
-  e.preventDefault();
-  touched = true;
-  btn.style.background='#1e2a3a';
-  btn.style.transform='scale(.92)';
-}}, {{passive:false}});
 
-np.addEventListener('touchend', function(e) {{
-  var btn = e.target.closest('.nb');
-  if(!btn) return;
-  e.preventDefault();
-  touched = true;
-  btn.style.background='';
-  btn.style.transform='';
+function handleBtn(btn) {{
   var n = btn.getAttribute('data-n');
   if(n === 'del') pd();
+  else if(n === 'enter') submit();
   else if(n !== '') pp(parseInt(n));
-  setTimeout(function(){{touched=false;}}, 300);
-}}, {{passive:false}});
+}}
 
-np.addEventListener('click', function(e) {{
-  if(touched) return;
-  var btn = e.target.closest('.nb');
-  if(!btn) return;
-  var n = btn.getAttribute('data-n');
-  if(n === 'del') pd();
-  else if(n !== '') pp(parseInt(n));
-}});
+function addEvents(el) {{
+  if(!el) return;
+  el.addEventListener('touchstart', function(e) {{
+    var btn = e.target.closest('.nb');
+    if(!btn) return;
+    e.preventDefault(); touched = true;
+    btn.style.background='#1e2a3a'; btn.style.transform='scale(.92)';
+  }}, {{passive:false}});
+  el.addEventListener('touchend', function(e) {{
+    var btn = e.target.closest('.nb');
+    if(!btn) return;
+    e.preventDefault(); touched = true;
+    btn.style.background=''; btn.style.transform='';
+    handleBtn(btn);
+    setTimeout(function(){{touched=false;}},300);
+  }}, {{passive:false}});
+  el.addEventListener('click', function(e) {{
+    if(touched) return;
+    var btn = e.target.closest('.nb');
+    if(!btn) return;
+    handleBtn(btn);
+  }});
+}}
 
-// 키보드 지원
+addEvents(document.getElementById('np'));
+addEvents(document.querySelector('.del-row'));
+
 document.addEventListener('keydown', function(e) {{
   if(e.key >= '0' && e.key <= '9') pp(parseInt(e.key));
   else if(e.key === 'Backspace') pd();
+  else if(e.key === 'Enter') submit();
 }});
 </script>
 </body></html>""", height=620, scrolling=False)
