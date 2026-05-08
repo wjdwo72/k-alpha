@@ -3909,6 +3909,20 @@ function pfUpdateCash(cashAmt) {
 pfRenderSummary();
 pfRenderHoldings();
 
+// ── Streamlit에서 주입된 토큰 자동 적용 ──
+if (window.__KIS_TOKEN__) {
+  kisToken    = window.__KIS_TOKEN__;
+  kisBaseUrl  = window.__KIS_BASE_URL__;
+  kisAppKey   = window.__KIS_AK__;
+  kisAppSecret= window.__KIS_SEC__;
+  kisAccNo    = (window.__KIS_ACC__ || '').replace(/-/g,'');
+  const env   = kisBaseUrl.includes('openapivts') ? 'paper' : 'real';
+  apiEnv      = env;
+  document.getElementById('mode-display').textContent = env === 'paper' ? 'KIS 모의투자 LIVE' : 'KIS 실전투자 LIVE';
+  document.getElementById('mode-display').style.color = env === 'paper' ? 'var(--accent2)' : 'var(--accent3)';
+  setTimeout(() => kisLoadAll(window.__KIS_ACC__), 800);
+}
+
 // 저장된 API 키 있으면 힌트 표시
 if (localStorage.getItem('k_api_keys')) {
   const pinSt = document.getElementById('pin-status');
