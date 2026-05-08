@@ -109,38 +109,55 @@ def fetch_balance(token, base_url, ak, secret, acc):
 if not st.session_state.auth:
     wrong_msg = "❌ 비밀번호가 틀렸습니다" if st.session_state.wrong else ""
     if st.session_state.wrong:
-        st.session_state.wrong = False  # 다음 렌더 때 리셋
-    # 현재 URL (auth 파라미터 없는 버전)
-    current_url = qp.get('_url', '')  # fallback
+        st.session_state.wrong = False
 
-    st.markdown(f"""<style>
+    # postMessage 수신 리스너 (메인 페이지에서 iframe 메시지 수신)
+    st.markdown("""<script>
+window.addEventListener('message', function(e) {
+    if (e.data === 'pin_correct') {
+        var url = new URL(window.location.href);
+        url.searchParams.set('auth','1');
+        window.location.href = url.toString();
+    } else if (e.data === 'pin_wrong') {
+        // 틀림 처리는 iframe 내부에서
+    }
+}, false);
+</script>""", unsafe_allow_html=True)
+
+    # PIN 화면 전체를 components.html로 — Streamlit React 레이어 완전 분리
+    components.html(f"""<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Share+Tech+Mono&display=swap');
-body,.stApp,.main{{background:#020408!important}}
-.stApp{{min-height:100vh}}
-/* Streamlit 기본 요소 숨김 */
-.stTextInput,.stButton{{opacity:0;pointer-events:none;position:absolute;bottom:-9999px}}
+*{{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}}
+html,body{{width:100%;height:100%;background:#020408;overflow:hidden}}
 .lw{{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:100vh;background:#020408;font-family:'Share Tech Mono',monospace;padding:20px}}
-.lt{{font-family:'Orbitron',monospace;font-size:clamp(22px,6vw,40px);font-weight:700;
+  min-height:100vh;font-family:'Share Tech Mono',monospace;padding:20px}}
+.lt{{font-family:'Orbitron',monospace;font-size:clamp(22px,7vw,42px);font-weight:700;
   letter-spacing:6px;background:linear-gradient(90deg,#00d4ff,#00ff88);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  text-align:center;margin-bottom:4px}}
-.ls{{font-size:11px;color:#4a5568;letter-spacing:2px;margin-bottom:28px;text-align:center}}
+  text-align:center;margin-bottom:6px}}
+.ls{{font-size:12px;color:#4a5568;letter-spacing:2px;margin-bottom:32px;text-align:center}}
 .lb{{background:#0a0e1a;border:1px solid #1a2535;border-radius:16px;
-  padding:28px 24px 20px;width:min(300px,90vw);box-shadow:0 0 40px rgba(0,212,255,.08)}}
-.ll{{font-size:11px;color:#4a5568;letter-spacing:2px;margin-bottom:10px;text-align:center}}
-.ld{{display:flex;justify-content:center;gap:12px;margin-bottom:20px}}
-.dot{{width:12px;height:12px;border-radius:50%;border:2px solid #1a3a4a;background:transparent;transition:all .2s}}
-.dot.f{{background:#00d4ff;border-color:#00d4ff;box-shadow:0 0 8px rgba(0,212,255,.6)}}
-.np{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}
-.nb{{padding:16px 0;border-radius:12px;border:1px solid #1a2535;background:#0d1220;
-  color:#e2e8f0;font-family:'Share Tech Mono',monospace;font-size:20px;
-  cursor:pointer;text-align:center;transition:background .15s,transform .1s;
-  -webkit-tap-highlight-color:transparent;user-select:none;touch-action:manipulation}}
-.nb:active{{background:#1a2535;transform:scale(.93)}}
-.nb.d{{font-size:15px;color:#64748b}}.nb.e{{visibility:hidden}}
-.le{{text-align:center;color:#ff4d6d;font-size:11px;margin-top:12px;min-height:16px}}
+  padding:28px 24px 20px;width:min(300px,88vw);box-shadow:0 0 40px rgba(0,212,255,.1)}}
+.ll{{font-size:11px;color:#4a5568;letter-spacing:2px;margin-bottom:12px;text-align:center}}
+.ld{{display:flex;justify-content:center;gap:14px;margin-bottom:22px}}
+.dot{{width:13px;height:13px;border-radius:50%;border:2px solid #1a3a4a;background:transparent;transition:all .2s}}
+.dot.f{{background:#00d4ff;border-color:#00d4ff;box-shadow:0 0 10px rgba(0,212,255,.7)}}
+.np{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}
+.nb{{padding:18px 0;border-radius:12px;border:1px solid #1a2535;background:#0d1220;
+  color:#e2e8f0;font-family:'Share Tech Mono',monospace;font-size:22px;
+  cursor:pointer;text-align:center;
+  user-select:none;touch-action:manipulation;
+  transition:background .12s,transform .08s}}
+.nb:active{{background:#1e2a3a!important;transform:scale(.92)!important}}
+.nb.d{{font-size:16px;color:#64748b}}
+.nb.e{{visibility:hidden}}
+.le{{text-align:center;font-size:11px;margin-top:14px;min-height:18px;
+  color:#ff4d6d;transition:opacity .3s}}
 </style>
+</head><body>
 <div class="lw">
   <div class="lt">K · ALPHA</div>
   <div class="ls">TRADING TERMINAL · SECURE ACCESS</div>
@@ -150,50 +167,110 @@ body,.stApp,.main{{background:#020408!important}}
       <div class="dot" id="d0"></div><div class="dot" id="d1"></div>
       <div class="dot" id="d2"></div><div class="dot" id="d3"></div>
     </div>
-    <div class="np">
-      {''.join([f'<div class="nb" onclick="pp({i})">{i}</div>' for i in [1,2,3,4,5,6,7,8,9]])}
-      <div class="nb e"></div>
-      <div class="nb" onclick="pp(0)">0</div>
-      <div class="nb d" onclick="pd()">⌫</div>
+    <div class="np" id="np">
+      <div class="nb" data-n="1">1</div>
+      <div class="nb" data-n="2">2</div>
+      <div class="nb" data-n="3">3</div>
+      <div class="nb" data-n="4">4</div>
+      <div class="nb" data-n="5">5</div>
+      <div class="nb" data-n="6">6</div>
+      <div class="nb" data-n="7">7</div>
+      <div class="nb" data-n="8">8</div>
+      <div class="nb" data-n="9">9</div>
+      <div class="nb e" data-n=""></div>
+      <div class="nb" data-n="0">0</div>
+      <div class="nb d" data-n="del">⌫</div>
     </div>
     <div class="le" id="le">{wrong_msg}</div>
   </div>
 </div>
 <script>
-let p=""; const PW="{PASSWORD}"; let done=false;
-function ud(){{
-  for(let i=0;i<4;i++){{
-    const d=document.getElementById("d"+i);
-    if(i<p.length){{d.classList.add("f");d.style.cssText="";}}
-    else{{d.classList.remove("f");d.style.cssText="";}}
+const PW = "{PASSWORD}";
+let p = "", done = false;
+
+function ud() {{
+  for(let i=0;i<4;i++) {{
+    const d = document.getElementById("d"+i);
+    if(i < p.length) {{ d.classList.add("f"); d.style.background=""; d.style.borderColor=""; }}
+    else {{ d.classList.remove("f"); }}
   }}
 }}
-function pp(n){{
-  if(done||p.length>=4)return;
-  p+=String(n); ud();
-  if(p.length===4){{
-    done=true;
-    if(p===PW){{
-      // 정답: URL 파라미터로 인증 전달 → Streamlit 재로드
-      const url=new URL(window.location.href);
-      url.searchParams.set('auth','1');
-      window.location.href=url.toString();
-    }}else{{
-      document.getElementById("le").textContent="❌ 비밀번호가 틀렸습니다";
-      document.querySelectorAll(".dot").forEach(d=>{{
-        d.style.background="#ff4d6d";d.style.borderColor="#ff4d6d";
+
+function pp(n) {{
+  if(done || p.length >= 4) return;
+  p += String(n); ud();
+  if(p.length === 4) {{
+    done = true;
+    if(p === PW) {{
+      // ✅ 정답 — postMessage로 부모 페이지에 알림
+      window.parent.postMessage('pin_correct', '*');
+      // fallback: 직접 URL 변경 시도
+      setTimeout(function() {{
+        try {{
+          const url = new URL(window.parent.location.href);
+          url.searchParams.set('auth','1');
+          window.parent.location.href = url.toString();
+        }} catch(e) {{
+          // postMessage만 사용
+        }}
+      }}, 100);
+    }} else {{
+      document.getElementById("le").textContent = "❌ 비밀번호가 틀렸습니다";
+      document.querySelectorAll(".dot").forEach(function(d) {{
+        d.style.background="#ff4d6d"; d.style.borderColor="#ff4d6d";
         d.style.boxShadow="0 0 8px rgba(255,77,109,.5)";
       }});
-      setTimeout(()=>{{p="";done=false;ud();document.getElementById("le").textContent="";}},800);
+      setTimeout(function() {{ p=""; done=false; ud(); document.getElementById("le").textContent=""; }}, 800);
     }}
   }}
 }}
-function pd(){{if(done)return;p=p.slice(0,-1);ud();}}
-document.addEventListener('keydown',e=>{{
-  if(e.key>='0'&&e.key<='9')pp(parseInt(e.key));
-  else if(e.key==='Backspace')pd();
+
+function pd() {{
+  if(done) return;
+  p = p.slice(0,-1); ud();
+}}
+
+// 터치/클릭 이벤트 — 둘 다 등록하되 중복 방지
+var np = document.getElementById('np');
+var touched = false;
+np.addEventListener('touchstart', function(e) {{
+  var btn = e.target.closest('.nb');
+  if(!btn) return;
+  e.preventDefault();
+  touched = true;
+  btn.style.background='#1e2a3a';
+  btn.style.transform='scale(.92)';
+}}, {{passive:false}});
+
+np.addEventListener('touchend', function(e) {{
+  var btn = e.target.closest('.nb');
+  if(!btn) return;
+  e.preventDefault();
+  touched = true;
+  btn.style.background='';
+  btn.style.transform='';
+  var n = btn.getAttribute('data-n');
+  if(n === 'del') pd();
+  else if(n !== '') pp(parseInt(n));
+  setTimeout(function(){{touched=false;}}, 300);
+}}, {{passive:false}});
+
+np.addEventListener('click', function(e) {{
+  if(touched) return;
+  var btn = e.target.closest('.nb');
+  if(!btn) return;
+  var n = btn.getAttribute('data-n');
+  if(n === 'del') pd();
+  else if(n !== '') pp(parseInt(n));
 }});
-</script>""", unsafe_allow_html=True)
+
+// 키보드 지원
+document.addEventListener('keydown', function(e) {{
+  if(e.key >= '0' && e.key <= '9') pp(parseInt(e.key));
+  else if(e.key === 'Backspace') pd();
+}});
+</script>
+</body></html>""", height=620, scrolling=False)
     st.stop()
 
 # ════════════════════════════════════════
