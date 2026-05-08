@@ -3937,24 +3937,35 @@ if (!kisToken) {
 }
 
 // ── Streamlit 환경 감지 (iframe 내부 실행 여부) ──
-const IS_STREAMLIT = window.self !== window.top || window.location.hostname.includes('streamlit');
+const IS_STREAMLIT = window.self !== window.top;
 
-// Streamlit에서는 프록시 배너 숨김
+// Streamlit에서는 HTML 내부 KIS API 섹션 숨기고 안내 표시
 if (IS_STREAMLIT) {
   document.addEventListener('DOMContentLoaded', () => {
-    const banner = document.getElementById('proxy-status-banner');
-    if (banner) banner.style.display = 'none';
+    // 프록시 배너 숨김
+    const proxyBanner = document.getElementById('proxy-status-banner');
+    if (proxyBanner) proxyBanner.style.display = 'none';
+
+    // HTML 내부 KIS API 연결 섹션 전체 숨기고 Streamlit 사이드바 안내로 교체
+    const apiSection = document.querySelector('.sidebar-section:first-child');
+    if (apiSection) {
+      apiSection.innerHTML = `
+        <div style="padding:12px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);
+          border-radius:8px;font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.8">
+          <div style="color:var(--accent);font-weight:700;margin-bottom:6px">🔑 KIS API 연결</div>
+          <div style="color:var(--text-dim)">
+            Streamlit 사이드바에서 연결하세요:<br>
+            <strong style="color:var(--text-bright)">📱 모바일</strong> → 화면 왼쪽에서 오른쪽으로 스와이프<br>
+            <strong style="color:var(--text-bright)">💻 PC</strong> → 좌측 상단 <strong>›</strong> 버튼 클릭
+          </div>
+        </div>`;
+    }
   });
 }
 
 // 프록시 상태 자동 확인 (로컬에서만)
 setTimeout(() => {
   if (!IS_STREAMLIT) checkProxyAndUpdate();
-  else {
-    // Streamlit에서는 배너를 초록으로 표시
-    const banner = document.getElementById('proxy-status-banner');
-    if (banner) banner.style.display = 'none';
-  }
 }, 500);
 renderCards();
 renderUsCards();
