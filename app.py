@@ -247,125 +247,64 @@ label = (f"🔑 KIS API  ✅ {st.session_state.kis_env} 연결됨"
 
 with st.expander(label, expanded=not bool(st.session_state.kis_token)):
 
-    # ── 간편비번 저장/불러오기 (components.html — 독립 저장소) ──
-    saved_ck = qp.get('ck','')
-    saved_cp = qp.get('cp','')
-    cur_url_b64 = base64.b64encode(
-        f"?ck={saved_ck}&cp={saved_cp}" .encode()
-    ).decode() if saved_ck else ''
+    # ── 간편비번 저장/불러오기 (Python 완전 네이티브) ──
+    st.markdown("""<div style='background:#0a0e1a;border:1px solid #1a2535;border-radius:8px;
+      padding:10px 12px;margin-bottom:8px;font-family:monospace;font-size:11px;color:#4a5568'>
+      🔒 간편비번 저장/불러오기</div>""", unsafe_allow_html=True)
 
-    components.html(f"""<!DOCTYPE html>
-<html><head><style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-html,body{{background:#0a0e1a;font-family:'Share Tech Mono',monospace;
-  padding:10px 12px;border:1px solid #1a2535;border-radius:8px;height:auto}}
-.t{{font-size:10px;color:#4a5568;letter-spacing:1px;margin-bottom:8px}}
-.hint{{font-size:10px;min-height:13px;margin-bottom:5px}}
-.row{{display:flex;gap:6px;align-items:stretch}}
-.pi{{flex:0 0 90px;padding:8px;background:#0d1220;border:1px solid #1a2535;
-  border-radius:6px;color:#e2e8f0;font-size:16px;letter-spacing:6px;
-  text-align:center;outline:none}}
-.pi:focus{{border-color:#00d4ff}}
-.b{{flex:1;padding:9px 4px;border-radius:6px;border:none;cursor:pointer;
-  font-size:11px;transition:all .15s;touch-action:manipulation;white-space:nowrap;
-  -webkit-tap-highlight-color:transparent}}
-.bs{{background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.35);color:#00d4ff}}
-.bs:active{{background:rgba(0,212,255,.25)}}
-.bl{{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.3);color:#00ff88}}
-.bl:active{{background:rgba(0,255,136,.2)}}
-.bd{{flex:0 0 34px;background:rgba(255,77,109,.08);border:1px solid rgba(255,77,109,.2);
-  color:#ff4d6d;font-size:14px}}
-.msg{{font-size:10px;margin-top:6px;min-height:14px}}
-</style></head><body>
-<div class="t">🔒 간편비번 저장/불러오기</div>
-<div class="hint" id="h">{'💾 저장된 키 있음 — PIN 입력 후 불러오기' if saved_ck else ''}</div>
-<div class="row">
-  <input type="password" class="pi" id="pin" placeholder="····"
-         maxlength="4" inputmode="numeric"
-         oninput="this.value=this.value.replace(/\\D/g,'')">
-  <button class="b bs" onclick="doSave()">💾 저장</button>
-  <button class="b bl" onclick="doLoad()">📂 불러오기</button>
-  <button class="b bd" onclick="doDel()">🗑</button>
-</div>
-<div class="msg" id="msg"></div>
-<script>
-const SAVED_CK='{saved_ck}', SAVED_CP='{saved_cp}';
-const LS_CK='kalpha_ck_v3', LS_CP='kalpha_cp_v3', LS_AK='kalpha_ak', LS_SEC='kalpha_sec', LS_ACC='kalpha_acc', LS_ENV='kalpha_env';
+    if st.session_state.get('_saved_ck'):
+        st.caption("💾 저장된 키 있음")
 
-function xor(s,p){{return s.split('').map((c,i)=>String.fromCharCode(c.charCodeAt(0)^p.charCodeAt(i%4))).join('');}}
-function msg(t,ok){{const e=document.getElementById('msg');e.textContent=t;e.style.color=ok?'#00ff88':'#ff4d6d';setTimeout(()=>e.textContent='',4000);}}
-function hint(){{
-  const s=localStorage.getItem(LS_CK)||SAVED_CK;
-  document.getElementById('h').textContent=s?'💾 저장된 키 있음 — PIN 입력 후 불러오기':'';
-  document.getElementById('h').style.color='#ffc800';
-}}
-hint();
+    sv_pin = st.text_input("간편비번 (4자리)", max_chars=4, placeholder="····",
+                            key="sv_pin", label_visibility="visible",
+                            type="password")
 
-function doSave(){{
-  const pin=document.getElementById('pin').value;
-  if(!/^\\d{{4}}$/.test(pin)){{msg('❌ 4자리 숫자 입력',false);return;}}
-  // localStorage에서 현재 입력된 키 값 읽기 (저장된 API 키)
-  // 사용자가 입력한 값을 URL 파라미터로 전달해서 Python이 저장
-  const ak=localStorage.getItem('_tmp_ak')||'';
-  const sec=localStorage.getItem('_tmp_sec')||'';
-  const acc=localStorage.getItem('_tmp_acc')||'';
-  const env=localStorage.getItem('_tmp_env')||'실전투자';
-  if(!ak||!sec){{msg('❌ 앱키/시크릿을 먼저 입력하고 [연결]을 한 번 시도하세요',false);return;}}
-  try{{
-    function enc(payload,p){{
-      const bytes=Array.from(payload).map((c,i)=>c.charCodeAt(0)^p.charCodeAt(i%4));
-      return btoa(bytes.map(b=>b.toString(16).padStart(2,'0')).join(''));
-    }}
-    const payload=JSON.stringify({{ak,sec,acc,env}});
-    const encrypted=enc(payload,pin);
-    const pinChk=btoa(pin+':kalpha');
-    localStorage.setItem(LS_CK,encrypted);
-    localStorage.setItem(LS_CP,pinChk);
-    hint();
-    msg('✅ 저장 완료!',true);
-  }}catch(e){{msg('❌ 저장 실패: '+e.message,false);}}
-}}
+    sc1, sc2, sc3 = st.columns([1,1,0.35])
+    with sc1:
+        if st.button("💾 저장", use_container_width=True, key="do_save"):
+            pin_v = (sv_pin or "").strip()
+            if len(pin_v) == 4 and pin_v.isdigit():
+                ak_v = st.session_state.get("kis_ak_inp") or st.session_state.kis_ak
+                sec_v = st.session_state.get("kis_sec_inp") or st.session_state.kis_sec
+                acc_v = st.session_state.get("kis_acc_inp") or st.session_state.kis_acc
+                env_v = st.session_state.get("kis_env_sel") or st.session_state.kis_env
+                if ak_v and sec_v:
+                    st.session_state["_saved_ck"]  = py_save(ak_v, sec_v, acc_v, env_v, pin_v)
+                    st.session_state["_saved_cp"]  = base64.b64encode((pin_v+":kalpha").encode()).decode()
+                    st.success("✅ 저장 완료")
+                else:
+                    st.error("앱키/시크릿 먼저 입력")
+            else:
+                st.error("4자리 숫자를 입력하세요")
+    with sc2:
+        if st.button("📂 불러오기", use_container_width=True, key="do_load"):
+            pin_v = (sv_pin or "").strip()
+            ck = st.session_state.get("_saved_ck","")
+            cp = st.session_state.get("_saved_cp","")
+            if len(pin_v) == 4 and pin_v.isdigit():
+                if not ck:
+                    st.error("저장된 키 없음")
+                elif cp and base64.b64decode(cp).decode() != pin_v+":kalpha":
+                    st.error("❌ PIN이 틀렸습니다")
+                else:
+                    try:
+                        data = py_load(ck, pin_v)
+                        st.session_state.kis_ak  = data.get("ak","")
+                        st.session_state.kis_sec = data.get("sec","")
+                        st.session_state.kis_acc = data.get("acc","")
+                        st.session_state.kis_env = data.get("env","실전투자")
+                        st.success("✅ 불러오기 완료! 연결 버튼을 누르세요")
+                        st.rerun()
+                    except:
+                        st.error("❌ 복호화 실패. PIN 확인")
+            else:
+                st.error("4자리 숫자를 입력하세요")
+    with sc3:
+        if st.button("🗑", use_container_width=True, key="do_del_key"):
+            st.session_state.pop("_saved_ck", None)
+            st.session_state.pop("_saved_cp", None)
+            st.rerun()
 
-function doLoad(){{
-  const pin=document.getElementById('pin').value;
-  if(!/^\\d{{4}}$/.test(pin)){{msg('❌ 4자리 숫자 입력',false);return;}}
-  const enc=localStorage.getItem(LS_CK)||SAVED_CK;
-  const chk=localStorage.getItem(LS_CP)||SAVED_CP;
-  if(!enc){{msg('❌ 저장된 키 없음. 먼저 저장하세요.',false);return;}}
-  if(chk&&atob(chk)!==pin+':kalpha'){{msg('❌ PIN이 틀렸습니다',false);return;}}
-  try{{
-    function dec(s,p){{
-      const hex=atob(s);
-      const bytes=[];for(let i=0;i<hex.length;i+=2)bytes.push(parseInt(hex.substr(i,2),16));
-      return xor(bytes.map(b=>String.fromCharCode(b)).join(''),p);
-    }}
-    const data=JSON.parse(dec(enc,pin));
-    // URL 파라미터로 Python에 전달 → Python이 session_state 설정
-    const url=new URL(window.parent.location.href);
-    url.searchParams.set('do_load','1');
-    url.searchParams.set('ck',enc);
-    url.searchParams.set('cp',chk);
-    url.searchParams.set('lp',pin);
-    window.parent.location.href=url.toString();
-  }}catch(e){{msg('❌ 복호화 실패. PIN을 확인하세요',false);}}
-}}
-
-function doDel(){{
-  if(!confirm('저장된 키를 삭제할까요?'))return;
-  localStorage.removeItem(LS_CK);localStorage.removeItem(LS_CP);
-  hint();msg('🗑 삭제 완료',true);
-}}
-
-// API 키 입력값 임시 저장 (저장 버튼용)
-window.addEventListener('message', e=>{{
-  if(e.data&&e.data.type==='api_vals'){{
-    localStorage.setItem('_tmp_ak', e.data.ak||'');
-    localStorage.setItem('_tmp_sec', e.data.sec||'');
-    localStorage.setItem('_tmp_acc', e.data.acc||'');
-    localStorage.setItem('_tmp_env', e.data.env||'실전투자');
-  }}
-}});
-</script></body></html>""", height=115, scrolling=False)
 
     st.divider()
 
@@ -380,7 +319,7 @@ window.addEventListener('message', e=>{{
     sec = st.text_input("시크릿", type="password", value=st.session_state.kis_sec,
                          key="kis_sec_inp")
     acc = st.text_input("계좌번호", value=st.session_state.kis_acc,
-                         placeholder="69108332-01", key="kis_acc_inp")
+                         placeholder="69108332-01  (8자리-2자리)", key="kis_acc_inp")
 
     # 입력값을 iframe으로 전달 (저장용)
     if ak or sec or acc:
@@ -476,4 +415,4 @@ window.__KIS_BALANCE__  = {balance_json};
 window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
-components.html(html, height=1400, scrolling=True)
+components.html(html, height=1600, scrolling=True)
