@@ -2894,44 +2894,72 @@ function renderCards() {
 
 
 // ──────────────────────────────────────────────
-// TABS
+// MARKET SWITCH (K-ALPHA ↔ U-ALPHA)
 // ──────────────────────────────────────────────
+function switchMarket(market) {
+  var krBtn  = document.getElementById('sw-kr');
+  var usBtn  = document.getElementById('sw-us');
+  var krSec  = document.getElementById('section-kr');
+  var usSec  = document.getElementById('section-us');
+  if (!krBtn || !usBtn || !krSec || !usSec) return;
+
+  if (market === 'kr') {
+    krSec.style.display = 'block';
+    usSec.style.display = 'none';
+    krBtn.classList.add('active-kr');
+    usBtn.classList.remove('active-us');
+  } else {
+    krSec.style.display = 'none';
+    usSec.style.display = 'block';
+    usBtn.classList.add('active-us');
+    krBtn.classList.remove('active-kr');
+  }
+}
 function switchTab(tab, btn, market) {
-  const section = market === 'us' ? 'section-us' : 'section-kr';
-  const tabsEl = document.getElementById(market === 'us' ? 'tabs-us' : 'tabs-kr');
+  // 마켓 전환
+  switchMarket(market === 'us' ? 'us' : 'kr');
 
   // 포트폴리오 탭
   if (tab === 'portfolio') {
-    switchMarket('kr');
-    document.querySelectorAll('#tabs-kr .tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('#section-kr .tab-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('#tabs-kr .tab-btn').forEach(b => {
-      if (b.dataset.tab === 'portfolio') b.classList.add('active');
-    });
-    const pfPanel = document.getElementById('tab-portfolio');
+    var krTabs = document.querySelectorAll('#tabs-kr .tab-btn');
+    var krPanels = document.querySelectorAll('#section-kr .tab-panel');
+    krTabs.forEach(function(b) { b.classList.remove('active'); });
+    krPanels.forEach(function(p) { p.classList.remove('active'); p.style.display='none'; });
+    // 포트폴리오 버튼 active
+    document.querySelectorAll('[data-tab="portfolio"]').forEach(function(b) { b.classList.add('active'); });
+    // 포트폴리오 패널 표시
+    var pfPanel = document.getElementById('tab-portfolio');
     if (pfPanel) {
       pfPanel.classList.add('active');
-      if (IS_STREAMLIT) { pfPanel.style.height = 'auto'; pfPanel.style.overflow = 'visible'; }
+      pfPanel.style.display = 'block';
+      pfPanel.style.height = 'auto';
+      pfPanel.style.overflow = 'visible';
     }
-    // 포트폴리오 반드시 재렌더
-    setTimeout(() => {
+    // 데이터 렌더
+    setTimeout(function() {
       if (typeof pfRenderSummary === 'function') pfRenderSummary();
       if (typeof pfRenderHoldings === 'function') pfRenderHoldings();
+      if (IS_STREAMLIT && typeof sendHeight === 'function') sendHeight();
     }, 50);
     return;
   }
 
-  tabsEl.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('section-' + (market === 'us' ? 'us' : 'kr'))
-    .querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  // 일반 탭
+  var tabsEl = document.getElementById(market === 'us' ? 'tabs-us' : 'tabs-kr');
+  var sectionEl = document.getElementById(market === 'us' ? 'section-us' : 'section-kr');
+  if (!tabsEl || !sectionEl) return;
 
-  btn.classList.add('active');
-  const panel = document.getElementById('tab-' + tab);
+  tabsEl.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  sectionEl.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); p.style.display='none'; });
+
+  if (btn) btn.classList.add('active');
+  var panel = document.getElementById('tab-' + tab);
   if (panel) {
     panel.classList.add('active');
-    // Streamlit 모드: 탭 패널 높이 제한 해제
+    panel.style.display = 'block';
     if (IS_STREAMLIT) { panel.style.height = 'auto'; panel.style.overflow = 'visible'; }
   }
+  if (IS_STREAMLIT && typeof sendHeight === 'function') setTimeout(sendHeight, 200);
 }
 
 // ──────────────────────────────────────────────
@@ -4236,16 +4264,15 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // ── Streamlit iframe 높이 자동 조정 ──
+function sendHeight() {
+  var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
+  try { window.parent.postMessage({ type: 'streamlit:setFrameHeight', height: h }, '*'); } catch(e) {}
+}
+
 if (IS_STREAMLIT) {
-  function sendHeight() {
-    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
-    window.parent.postMessage({ type: 'streamlit:setFrameHeight', height: h }, '*');
-  }
-  // 초기 + 렌더 후
   setTimeout(sendHeight, 300);
   setTimeout(sendHeight, 800);
   setTimeout(sendHeight, 2000);
-  // 탭 전환/렌더 시마다 재측정
   window.addEventListener('click', function() { setTimeout(sendHeight, 400); });
 }
 
