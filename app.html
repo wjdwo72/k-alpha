@@ -4176,21 +4176,20 @@ if (!kisToken) {
   setTimeout(() => loadYahooPrices(), 800);
 }
 
-// ── Streamlit 환경 감지 즉시 실행 ──
-const IS_STREAMLIT = (function() {
-  try { return window.self !== window.top; } catch(e) { return true; }
-})();
+// ── Streamlit 모드: Python이 직접 주입한 플래그 사용 (100% 신뢰) ──
+// window.__STREAMLIT_MODE__ 는 app.py가 HTML에 inject할 때 설정
+const IS_STREAMLIT = !!window.__STREAMLIT_MODE__;
 
 if (IS_STREAMLIT) {
-  // body에 클래스 추가 → CSS로 사이드바 즉시 숨김
+  // 즉시 body에 클래스 추가
   document.documentElement.classList.add('streamlit-mode');
-  if (document.body) document.body.classList.add('streamlit-mode');
-  else document.addEventListener('DOMContentLoaded', () => document.body.classList.add('streamlit-mode'));
-
-  // 추가 스타일 주입
-  const s = document.createElement('style');
-  s.textContent = '.sidebar{display:none!important}.main{display:block!important}.content{width:100%!important;padding:8px!important}#proxy-status-banner{display:none!important}';
-  document.head.appendChild(s);
+  if (document.body) {
+    document.body.classList.add('streamlit-mode');
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.classList.add('streamlit-mode');
+    });
+  }
 }
 renderCards();
 renderUsCards();

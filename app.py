@@ -529,6 +529,7 @@ with open("app.html","r",encoding="utf-8") as f:
     html=f.read()
 
 inject=f"""<script>
+window.__STREAMLIT_MODE__ = true;
 window.__KIS_TOKEN__    = {json.dumps(st.session_state.kis_token or '')};
 window.__KIS_BASE_URL__ = {json.dumps(st.session_state.kis_base_url or '')};
 window.__KIS_AK__       = {json.dumps(st.session_state.kis_ak)};
