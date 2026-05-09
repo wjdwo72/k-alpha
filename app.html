@@ -1444,12 +1444,16 @@
         <div class="portfolio-summary">
           <div class="pf-sum-card wide">
             <div class="pf-sum-label">💰 총 예수금 (D+2 결제예정)</div>
-            <div class="pf-sum-val" id="pf-cash">API 연결 필요</div>
-            <div class="pf-sum-sub" id="pf-cash-sub">KIS API 연결 시 실시간 갱신</div>
+            <div class="pf-sum-val" id="pf-cash" style="font-size:clamp(18px,4vw,28px)">조회 중...</div>
+            <div class="pf-sum-sub" id="pf-cash-sub">KIS 실시간 연동</div>
           </div>
           <div class="pf-sum-card">
             <div class="pf-sum-label">📊 평가금액 합계</div>
             <div class="pf-sum-val" id="pf-eval">0 원</div>
+          </div>
+          <div class="pf-sum-card">
+            <div class="pf-sum-label">💸 총 매입금액</div>
+            <div class="pf-sum-val" id="pf-cost">0 원</div>
           </div>
           <div class="pf-sum-card">
             <div class="pf-sum-label">📈 총 평가손익</div>
@@ -3974,23 +3978,40 @@ function pfRenderSummary() {
   const totalPnl = totalEval - totalCost;
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
+  // 예수금
   const cashEl = document.getElementById('pf-cash');
-  if (pfCashData.updated) {
-    cashEl.textContent = fmtNum(pfCashData.cash) + ' 원';
-  } else {
-    cashEl.textContent = 'API 연결 필요';
+  if (cashEl) {
+    if (pfCashData.updated) {
+      cashEl.textContent = fmtNum(pfCashData.cash) + ' 원';
+      cashEl.style.color = 'var(--accent2)';
+    } else if (window.__KIS_TOKEN__) {
+      cashEl.textContent = '조회 중...';
+    } else {
+      cashEl.textContent = 'KIS API 연결 후 표시';
+      cashEl.style.color = 'var(--text-dim)';
+    }
   }
 
+  // 평가금액
   const evalEl = document.getElementById('pf-eval');
-  evalEl.textContent = fmtNum(totalEval) + ' 원';
+  if (evalEl) evalEl.textContent = fmtNum(totalEval) + ' 원';
 
+  // 매입금액 합계
+  const costEl = document.getElementById('pf-cost');
+  if (costEl) costEl.textContent = fmtNum(totalCost) + ' 원';
+
+  // 평가손익
   const pnlEl = document.getElementById('pf-pnl');
-  pnlEl.textContent = (totalPnl >= 0 ? '+' : '') + fmtNum(totalPnl) + ' 원';
-  pnlEl.className = 'pf-sum-val ' + (totalPnl >= 0 ? 'pos' : 'neg');
+  if (pnlEl) {
+    pnlEl.textContent = (totalPnl >= 0 ? '+' : '') + fmtNum(totalPnl) + ' 원';
+    pnlEl.className = 'pf-sum-val ' + (totalPnl >= 0 ? 'pos' : 'neg');
+  }
 
   const pnlPctEl = document.getElementById('pf-pnl-pct');
-  pnlPctEl.textContent = (totalPnlPct >= 0 ? '+' : '') + fmtNum(totalPnlPct, 2) + '%';
-  pnlPctEl.style.color = totalPnlPct >= 0 ? 'var(--accent3)' : '#4fa3e0';
+  if (pnlPctEl) {
+    pnlPctEl.textContent = (totalPnlPct >= 0 ? '+' : '') + fmtNum(totalPnlPct, 2) + '%';
+    pnlPctEl.style.color = totalPnlPct >= 0 ? 'var(--accent3)' : '#4fa3e0';
+  }
 }
 
 function pfRenderHoldings() {
@@ -4179,6 +4200,13 @@ if (window.__KIS_TOKEN__) {
   }
 }
 
+// 토큰 없어도 잔고 데이터 있으면 적용 (독립 실행)
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.__KIS_BALANCE__ && !window.__KIS_BALANCE__.error) {
+    setTimeout(() => applyInjectedBalance(window.__KIS_BALANCE__), 600);
+  }
+});
+
 // Python 주입 잔고를 포트폴리오에 적용
 function applyInjectedBalance(bal) {
   try {
@@ -4188,16 +4216,15 @@ function applyInjectedBalance(bal) {
     var evalPnl  = parseInt(o2.evlu_pfls_smtl_amt || o2.evlu_pfls_amt || 0);
     var evalPct  = parseFloat(o2.asst_icdc_erng_rt || 0);
 
-    // 예수금
+    // 예수금 (pfCashData도 업데이트)
     var depEl = document.getElementById('pf-cash');
     var depSub = document.getElementById('pf-cash-sub');
+    pfCashData = { cash: deposit, updated: true };
     if (depEl) {
-      depEl.textContent = deposit > 0
-        ? deposit.toLocaleString('ko-KR') + ' 원'
-        : '0 원';
+      depEl.textContent = deposit > 0 ? deposit.toLocaleString('ko-KR') + ' 원' : '0 원';
       depEl.style.color = 'var(--accent2)';
     }
-    if (depSub) depSub.textContent = 'KIS 실시간 연동';
+    if (depSub) depSub.textContent = 'KIS 실시간 연동 ✓';
 
     // 평가금액
     var evlEl = document.getElementById('pf-eval');

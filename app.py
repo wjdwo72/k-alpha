@@ -383,17 +383,18 @@ if st.session_state.kis_token:
             balance = fetch_balance(st.session_state.kis_token, st.session_state.kis_base_url,
                                      st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
         price_ts = time.strftime("%H:%M:%S")
-        if prices: prices_json=json.dumps(prices); st.caption(f"📊 {len(prices)}종목 · {price_ts}")
+        if prices:
+            prices_json = json.dumps(prices)
+            # 눈에 잘 보이는 스타일로 표시
+            st.markdown(f"""<div style="font-family:'Share Tech Mono',monospace;
+              font-size:13px;color:#00d4ff;padding:4px 0;letter-spacing:1px">
+              📊 <strong>{len(prices)}</strong>종목 현재가 · <span style="color:#00ff88">{price_ts}</span>
+            </div>""", unsafe_allow_html=True)
         if balance and not balance.get('error'):
             balance_json = json.dumps(balance)
-            o2 = balance.get('output2',[{}])
-            if o2 and isinstance(o2,list) and len(o2)>0:
-                dep = int(o2[0].get('dnca_tot_amt',0) or 0)
-                ev  = int(o2[0].get('tot_evlu_amt',0) or 0)
-                o1  = balance.get('output1',[])
-                st.caption(f"💰 예수금 {dep:,}원 · 평가금액 {ev:,}원 · 보유종목 {len(o1)}개")
+            # 잔고 요약은 숨김 (HTML 포트폴리오에 표시됨)
         elif balance and balance.get('error'):
-            st.warning(f"잔고 조회: {balance.get('error','')[:60]}")
+            st.caption(f"⚠ 잔고: {balance.get('error','')[:50]}")
 
 # ════════════════════════════════════════
 # 5. HTML 터미널
