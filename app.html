@@ -520,10 +520,7 @@
   }
   .chart-popup-overlay.show { display: block; }
   .chart-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    position: absolute;
     background: var(--surface);
     border: 1px solid var(--accent);
     border-radius: 10px;
@@ -3558,12 +3555,17 @@ function openKisChart(code, market, name, event) {
     </a>
   `).join('');
 
-  // 항상 화면 정중앙 표시
-  popup.style.left = '50%';
-  popup.style.top  = '50%';
-  popup.style.transform = 'translate(-50%, -50%)';
-  popup.style.display = 'block';
+  // iframe 내부: position:absolute + 현재 스크롤 위치 기준 배치
+  const scrollTop = window.scrollY || document.documentElement.scrollTop;
+  popup.style.position  = 'absolute';
+  popup.style.left      = '50%';
+  popup.style.top       = (scrollTop + 80) + 'px';
+  popup.style.transform = 'translateX(-50%)';
+  popup.style.display   = 'block';
   overlay.classList.add('show');
+
+  // 팝업으로 스크롤
+  setTimeout(() => popup.scrollIntoView({ behavior:'smooth', block:'start' }), 60);
 }
 
 function closeChartPopup() {

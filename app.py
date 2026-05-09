@@ -247,43 +247,47 @@ label = (f"🔑 KIS API  ✅ {st.session_state.kis_env} 연결됨"
 
 with st.expander(label, expanded=not bool(st.session_state.kis_token)):
 
-    # ── 간편비번 저장/불러오기 (Python 완전 네이티브) ──
-    st.markdown("""<div style='background:#0a0e1a;border:1px solid #1a2535;border-radius:8px;
-      padding:10px 12px;margin-bottom:8px;font-family:monospace;font-size:11px;color:#4a5568'>
-      🔒 간편비번 저장/불러오기</div>""", unsafe_allow_html=True)
+    # ── 간편비번 저장/불러오기 (URL 파라미터 → 영구 보존) ──
+    # qp에서 저장된 키 읽기
+    saved_ck = qp.get('ck','')
+    saved_cp = qp.get('cp','')
 
-    if st.session_state.get('_saved_ck'):
-        st.caption("💾 저장된 키 있음")
+    st.markdown(f"""<div style='background:#0a0e1a;border:1px solid #1a2535;border-radius:8px;
+      padding:8px 12px;margin-bottom:6px;font-family:monospace;font-size:11px;color:#4a5568'>
+      🔒 간편비번 저장/불러오기
+      {"&nbsp;&nbsp;<span style='color:#ffc800'>💾 저장된 키 있음</span>" if saved_ck else ""}
+      </div>""", unsafe_allow_html=True)
 
-    sv_pin = st.text_input("간편비번 (4자리)", max_chars=4, placeholder="····",
-                            key="sv_pin", label_visibility="visible",
-                            type="password")
+    sv_pin = st.text_input("비번(4자리)", max_chars=4, placeholder="4자리 숫자",
+                            key="sv_pin", label_visibility="visible", type="password")
 
     sc1, sc2, sc3 = st.columns([1,1,0.35])
     with sc1:
         if st.button("💾 저장", use_container_width=True, key="do_save"):
             pin_v = (sv_pin or "").strip()
             if len(pin_v) == 4 and pin_v.isdigit():
-                ak_v = st.session_state.get("kis_ak_inp") or st.session_state.kis_ak
-                sec_v = st.session_state.get("kis_sec_inp") or st.session_state.kis_sec
-                acc_v = st.session_state.get("kis_acc_inp") or st.session_state.kis_acc
-                env_v = st.session_state.get("kis_env_sel") or st.session_state.kis_env
+                # 현재 입력된 값 우선, 없으면 session_state
+                ak_v  = st.session_state.get("kis_ak_inp","")  or st.session_state.kis_ak
+                sec_v = st.session_state.get("kis_sec_inp","") or st.session_state.kis_sec
+                acc_v = st.session_state.get("kis_acc_inp","") or st.session_state.kis_acc
+                env_v = st.session_state.get("kis_env_sel","실전투자")
                 if ak_v and sec_v:
-                    st.session_state["_saved_ck"]  = py_save(ak_v, sec_v, acc_v, env_v, pin_v)
-                    st.session_state["_saved_cp"]  = base64.b64encode((pin_v+":kalpha").encode()).decode()
-                    st.success("✅ 저장 완료")
+                    # URL 파라미터에 저장 → 북마크 시 영구 보존
+                    qp['ck'] = py_save(ak_v, sec_v, acc_v, env_v, pin_v)
+                    qp['cp'] = base64.b64encode((pin_v+":kalpha").encode()).decode()
+                    st.success("✅ 저장 완료! 이 URL을 북마크하세요")
                 else:
-                    st.error("앱키/시크릿 먼저 입력")
+                    st.error("앱키·시크릿을 먼저 입력하세요")
             else:
                 st.error("4자리 숫자를 입력하세요")
     with sc2:
         if st.button("📂 불러오기", use_container_width=True, key="do_load"):
             pin_v = (sv_pin or "").strip()
-            ck = st.session_state.get("_saved_ck","")
-            cp = st.session_state.get("_saved_cp","")
+            ck = qp.get('ck','')
+            cp = qp.get('cp','')
             if len(pin_v) == 4 and pin_v.isdigit():
                 if not ck:
-                    st.error("저장된 키 없음")
+                    st.error("저장된 키 없음 — 먼저 저장하세요")
                 elif cp and base64.b64decode(cp).decode() != pin_v+":kalpha":
                     st.error("❌ PIN이 틀렸습니다")
                 else:
@@ -295,16 +299,15 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
                         st.session_state.kis_env = data.get("env","실전투자")
                         st.success("✅ 불러오기 완료! 연결 버튼을 누르세요")
                         st.rerun()
-                    except:
-                        st.error("❌ 복호화 실패. PIN 확인")
+                    except Exception as e:
+                        st.error(f"❌ 복호화 실패: {e}")
             else:
                 st.error("4자리 숫자를 입력하세요")
     with sc3:
         if st.button("🗑", use_container_width=True, key="do_del_key"):
-            st.session_state.pop("_saved_ck", None)
-            st.session_state.pop("_saved_cp", None)
+            if 'ck' in qp: del qp['ck']
+            if 'cp' in qp: del qp['cp']
             st.rerun()
-
 
     st.divider()
 
