@@ -1778,20 +1778,35 @@ if (IS_STREAMLIT) {
     if (sidebar) { sidebar.style.cssText = 'display:none!important'; }
     var proxy = document.getElementById('proxy-status-banner');
     if (proxy) { proxy.style.display = 'none'; }
-    // main 영역 풀너비
+    // main/content: 높이 제한 제거 (iframe 자체가 스크롤)
     var main = document.querySelector('.main');
-    if (main) { main.style.cssText = 'display:block!important'; }
+    if (main) { main.style.cssText = 'display:block!important;height:auto!important;min-height:0!important'; }
     var content = document.querySelector('.content');
-    if (content) { content.style.cssText = 'width:100%!important;padding:8px!important'; }
+    if (content) { content.style.cssText = 'width:100%!important;padding:8px!important;overflow-y:visible!important;height:auto!important'; }
+    // 탭 패널 높이 제한 제거
+    document.querySelectorAll('.tab-panel').forEach(function(p) {
+      p.style.overflow = 'visible';
+      p.style.height = 'auto';
+    });
+    // 포트폴리오 재렌더
+    if (typeof pfRenderSummary === 'function') pfRenderSummary();
+    if (typeof pfRenderHoldings === 'function') pfRenderHoldings();
   });
-  // head에 전역 스타일도 추가
   var _ss = document.createElement('style');
   _ss.id = 'streamlit-override';
   _ss.textContent = [
-    '.sidebar{display:none!important}',
-    '.main{display:block!important;grid-template-columns:unset!important}',
-    '.content{width:100%!important;max-width:100%!important}',
-    '#proxy-status-banner{display:none!important}'
+    '*, *::before, *::after { -webkit-overflow-scrolling: auto !important; }',
+    'html, body { height: auto !important; overflow: visible !important; min-height: 0 !important; }',
+    '.sidebar { display:none !important; }',
+    '.main { display:block !important; height:auto !important; grid-template-columns:unset !important; }',
+    '.content { width:100% !important; max-width:100% !important; overflow-y:visible !important; height:auto !important; flex:none !important; }',
+    '#proxy-status-banner { display:none !important; }',
+    '.tab-panel { overflow:visible !important; height:auto !important; }',
+    '.tab-panel.active { overflow:visible !important; height:auto !important; }',
+    '.cards-grid { height:auto !important; overflow:visible !important; }',
+    '#tab-portfolio { height:auto !important; overflow:visible !important; }',
+    '.portfolio-summary, .pf-market-tabs, .pf-holdings, #pf-holdings-kr, #pf-holdings-us { height:auto !important; overflow:visible !important; }',
+    '#section-kr, #section-us { height:auto !important; overflow:visible !important; }'
   ].join('');
   document.head.appendChild(_ss);
 }
@@ -2885,7 +2900,7 @@ function switchTab(tab, btn, market) {
   const section = market === 'us' ? 'section-us' : 'section-kr';
   const tabsEl = document.getElementById(market === 'us' ? 'tabs-us' : 'tabs-kr');
 
-  // 포트폴리오 탭은 KR 섹션에서 처리
+  // 포트폴리오 탭
   if (tab === 'portfolio') {
     switchMarket('kr');
     document.querySelectorAll('#tabs-kr .tab-btn').forEach(b => b.classList.remove('active'));
@@ -2893,7 +2908,16 @@ function switchTab(tab, btn, market) {
     document.querySelectorAll('#tabs-kr .tab-btn').forEach(b => {
       if (b.dataset.tab === 'portfolio') b.classList.add('active');
     });
-    document.getElementById('tab-portfolio').classList.add('active');
+    const pfPanel = document.getElementById('tab-portfolio');
+    if (pfPanel) {
+      pfPanel.classList.add('active');
+      if (IS_STREAMLIT) { pfPanel.style.height = 'auto'; pfPanel.style.overflow = 'visible'; }
+    }
+    // 포트폴리오 반드시 재렌더
+    setTimeout(() => {
+      if (typeof pfRenderSummary === 'function') pfRenderSummary();
+      if (typeof pfRenderHoldings === 'function') pfRenderHoldings();
+    }, 50);
     return;
   }
 
@@ -2903,7 +2927,11 @@ function switchTab(tab, btn, market) {
 
   btn.classList.add('active');
   const panel = document.getElementById('tab-' + tab);
-  if (panel) panel.classList.add('active');
+  if (panel) {
+    panel.classList.add('active');
+    // Streamlit 모드: 탭 패널 높이 제한 해제
+    if (IS_STREAMLIT) { panel.style.height = 'auto'; panel.style.overflow = 'visible'; }
+  }
 }
 
 // ──────────────────────────────────────────────
