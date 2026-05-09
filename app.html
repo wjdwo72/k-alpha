@@ -1179,6 +1179,17 @@
   .pf-delete-btn:hover { color: var(--accent3); }
 
   /* ── 필터 설정 버튼 강제 표시 (항상 최상단) ── */
+  /* ══ STREAMLIT 모드: 사이드바 완전 숨김, 메인 풀 너비 ══ */
+  body.streamlit-mode .sidebar { display: none !important; }
+  body.streamlit-mode .main {
+    display: block !important;
+  }
+  body.streamlit-mode .content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 8px !important;
+  }
+
   #filter-fab {
     position: fixed;
     bottom: 20px;
@@ -4171,50 +4182,15 @@ const IS_STREAMLIT = (function() {
 })();
 
 if (IS_STREAMLIT) {
-  // 즉시 실행 (DOM이 준비되기 전이라도 style 주입 가능)
-  const styleTag = document.createElement('style');
-  styleTag.textContent = `
-    #proxy-status-banner { display:none !important; }
-    .sidebar-section:first-child .api-key-form,
-    .sidebar-section:first-child .api-help,
-    .sidebar-section:first-child .api-status-msg,
-    .sidebar-section:first-child .api-connect-btn,
-    #proxy-status-banner,
-    .api-notice { display:none !important; }
-  `;
-  document.head.appendChild(styleTag);
+  // body에 클래스 추가 → CSS로 사이드바 즉시 숨김
+  document.documentElement.classList.add('streamlit-mode');
+  if (document.body) document.body.classList.add('streamlit-mode');
+  else document.addEventListener('DOMContentLoaded', () => document.body.classList.add('streamlit-mode'));
 
-  // DOM 준비 후 KIS 섹션 내용 교체
-  function hideSidebarKis() {
-    const proxyBanner = document.getElementById('proxy-status-banner');
-    if (proxyBanner) proxyBanner.style.display = 'none';
-
-    // 사이드바 첫 번째 섹션(KIS API)을 안내 메시지로 교체
-    const apiSections = document.querySelectorAll('.sidebar-section');
-    if (apiSections.length > 0) {
-      const first = apiSections[0];
-      const title = first.querySelector('.sidebar-title');
-      if (title && title.textContent.includes('KIS')) {
-        first.innerHTML = `
-          <div style="padding:10px;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);
-            border-radius:8px;font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.8">
-            <div style="color:var(--accent);font-weight:700;margin-bottom:6px">🔑 KIS API 연결</div>
-            <div style="color:var(--text-dim)">
-              위 <strong style="color:var(--text-bright)">▾ KIS API 연결</strong> 패널에서<br>
-              앱키·시크릿·계좌번호를 입력하세요.
-            </div>
-          </div>`;
-      }
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', hideSidebarKis);
-  } else {
-    hideSidebarKis();
-    // 렌더링 후 한 번 더 (카드 렌더 후 사이드바 재구성되는 경우 대비)
-    setTimeout(hideSidebarKis, 500);
-  }
+  // 추가 스타일 주입
+  const s = document.createElement('style');
+  s.textContent = '.sidebar{display:none!important}.main{display:block!important}.content{width:100%!important;padding:8px!important}#proxy-status-banner{display:none!important}';
+  document.head.appendChild(s);
 }
 renderCards();
 renderUsCards();
