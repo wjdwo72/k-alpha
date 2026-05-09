@@ -107,107 +107,132 @@ def fetch_balance(token, base_url, ak, secret, acc):
 # 비밀번호 화면 (URL 파라미터 방식 — 가장 신뢰성 높음)
 # ════════════════════════════════════════
 if not st.session_state.auth:
-    wrong_msg = "❌ 비밀번호가 틀렸습니다" if st.session_state.wrong else ""
-    if st.session_state.wrong:
-        st.session_state.wrong = False
+    # ── 세션 초기화 ──
+    if 'pin_buf' not in st.session_state:
+        st.session_state.pin_buf = ''
+    if 'pin_err' not in st.session_state:
+        st.session_state.pin_err = False
 
-    PW = PASSWORD
-    # onclick에 모든 로직 직접 내장 — 외부 함수/onerror 의존 없음
-    def PIN_LOGIC(n):
-        return (
-            f"(function(){{"
-            f"if(window._d)return;"
-            f"window._p=window._p||'';"
-            f"if('{n}'==='del'){{window._p=window._p.slice(0,-1);}}"
-            f"else if('{n}'==='ok'){{if(window._p.length<4)return;}}"
-            f"else{{if(window._p.length>=4)return;window._p+='{n}';}}"
-            f"for(var i=0;i<4;i++){{"
-            f"var d=document.getElementById('_d'+i);"
-            f"if(d)d.style.cssText=(i<window._p.length)?'background:#00d4ff;border-color:#00d4ff;box-shadow:0 0 8px rgba(0,212,255,.7)':'';"
-            f"}}"
-            f"var eb=document.getElementById('_ent');"
-            f"if(eb)eb.style.borderColor=(window._p.length===4)?'#00d4ff':'';"
-            f"if(window._p.length===4){{"
-            f"window._d=true;"
-            f"if(window._p==='{PW}'){{"
-            f"window.location.href=window.location.href.split('?')[0]+'?auth=1';"
-            f"}}else{{"
-            f"var e=document.getElementById('_err');"
-            f"if(e)e.textContent='❌ 비밀번호가 틀렸습니다';"
-            f"document.querySelectorAll('._dot').forEach(function(x){{x.style.background='#ff4d6d';x.style.borderColor='#ff4d6d';}});"
-            f"setTimeout(function(){{window._p='';window._d=false;"
-            f"for(var j=0;j<4;j++){{var dd=document.getElementById('_d'+j);if(dd)dd.style.cssText='';}}"
-            f"if(e)e.textContent='';if(eb)eb.style.borderColor='';}},800);"
-            f"}}}}}})();"
-        )
+    # ── 버튼 콜백 ──
+    def press(n):
+        if st.session_state.pin_err:
+            st.session_state.pin_buf = ''
+            st.session_state.pin_err = False
+        if len(st.session_state.pin_buf) < 4:
+            st.session_state.pin_buf += str(n)
+        if len(st.session_state.pin_buf) == 4:
+            if st.session_state.pin_buf == PASSWORD:
+                st.session_state.auth = True
+                st.session_state.pin_buf = ''
+                st.session_state.pin_err = False
+            else:
+                st.session_state.pin_err = True
+                st.session_state.pin_buf = ''
 
-    btn = lambda n, label='': f'<div class="pb" onclick="{PIN_LOGIC(n)}">{label or n}</div>'
+    def press_del():
+        if st.session_state.pin_err:
+            st.session_state.pin_err = False
+        st.session_state.pin_buf = st.session_state.pin_buf[:-1]
 
-    st.markdown(f"""<style>
+    def press_ok():
+        if len(st.session_state.pin_buf) == 4:
+            press('')
+
+    buf = st.session_state.pin_buf
+    err = st.session_state.pin_err
+
+    # ── PIN 패드 CSS ──
+    st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Share+Tech+Mono&display=swap');
-body,.stApp{{background:#020408!important}}
-.block-container{{padding:0!important;max-width:100%!important}}
-.stMarkdown{{padding:0!important}}
-header,footer,[data-testid="stToolbar"]{{display:none!important}}
-.pin-wrap{{display:flex;flex-direction:column;align-items:center;
-  justify-content:center;min-height:100vh;background:#020408;
-  font-family:'Share Tech Mono',monospace;padding:16px}}
-.pin-title{{font-family:'Orbitron',monospace;font-size:clamp(20px,7vw,40px);
-  font-weight:700;letter-spacing:6px;
-  background:linear-gradient(90deg,#00d4ff,#00ff88);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  text-align:center;margin-bottom:4px}}
-.pin-sub{{font-size:11px;color:#4a5568;letter-spacing:2px;
-  margin-bottom:24px;text-align:center}}
-.pin-box{{background:#0a0e1a;border:1px solid #1a2535;border-radius:16px;
-  padding:24px 20px 16px;width:min(296px,88vw)}}
-.pin-lbl{{font-size:10px;color:#4a5568;letter-spacing:2px;
-  text-align:center;margin-bottom:10px}}
-.pin-dots{{display:flex;justify-content:center;gap:14px;margin-bottom:18px}}
-._dot{{width:12px;height:12px;border-radius:50%;
-  border:2px solid #1a3a4a;background:transparent;transition:all .2s}}
-.pg{{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:9px}}
-.pb{{padding:16px 0;border-radius:11px;border:1px solid #1a2535;
-  background:#0d1220;color:#e2e8f0;font-size:21px;
-  text-align:center;cursor:pointer;user-select:none;
-  touch-action:manipulation;transition:background .1s,transform .08s;
-  -webkit-tap-highlight-color:transparent}}
-.pb:active{{background:#1e2a3a !important;transform:scale(.91)}}
-.pb-ent{{border:1px solid rgba(0,212,255,.35);background:rgba(0,212,255,.1);
-  color:#00d4ff;font-size:22px}}
-.pb-del{{color:#64748b;font-size:14px;width:100%;
-  padding:13px 0;border-radius:11px;border:1px solid #1a2535;
-  background:#0d1220;cursor:pointer;touch-action:manipulation;
-  -webkit-tap-highlight-color:transparent;user-select:none}}
-.pb-del:active{{background:#1e2a3a !important;transform:scale(.97)}}
-.pin-err{{text-align:center;color:#ff4d6d;font-size:11px;
-  margin-top:10px;min-height:16px}}
-</style>
+body,.stApp{background:#020408!important}
+.block-container{padding:8px!important;max-width:360px!important;margin:0 auto!important}
+header,footer,[data-testid="stToolbar"],[data-testid="stDecoration"]{display:none!important}
 
-<div class="pin-wrap">
-  <div class="pin-title">K · ALPHA</div>
-  <div class="pin-sub">TRADING TERMINAL · SECURE ACCESS</div>
-  <div class="pin-box">
-    <div class="pin-lbl">🔒 PIN 번호 입력</div>
-    <div class="pin-dots">
-      <div class="_dot" id="_d0"></div>
-      <div class="_dot" id="_d1"></div>
-      <div class="_dot" id="_d2"></div>
-      <div class="_dot" id="_d3"></div>
+/* 모든 PIN 버튼 공통 스타일 */
+div[data-testid="column"] .stButton button {
+    width:100%!important; height:68px!important;
+    background:#0d1220!important; color:#e2e8f0!important;
+    border:1px solid #1a2535!important; border-radius:12px!important;
+    font-size:22px!important; font-family:'Share Tech Mono',monospace!important;
+    font-weight:400!important; line-height:1!important;
+    padding:0!important; margin:0!important;
+    transition:background .12s,transform .08s!important;
+    box-shadow:none!important;
+}
+div[data-testid="column"] .stButton button:hover {
+    background:#1a2535!important; border-color:#2a3545!important;
+    transform:scale(.96)!important; color:#e2e8f0!important;
+}
+div[data-testid="column"] .stButton button:active {
+    background:#1e2a3a!important; transform:scale(.90)!important;
+}
+/* 엔터 버튼 */
+div[data-testid="column"]:last-child .stButton button {
+    background:rgba(0,212,255,.12)!important;
+    border-color:rgba(0,212,255,.4)!important; color:#00d4ff!important;
+}
+div[data-testid="column"]:last-child .stButton button:hover {
+    background:rgba(0,212,255,.22)!important;
+}
+/* 지우기 버튼 */
+.del-btn button {
+    width:100%!important; height:52px!important;
+    background:#0d1220!important; color:#64748b!important;
+    border:1px solid #1a2535!important; border-radius:10px!important;
+    font-size:14px!important; font-family:'Share Tech Mono',monospace!important;
+    padding:0!important;
+}
+.del-btn button:hover{background:#1a2535!important;color:#94a3b8!important}
+</style>""", unsafe_allow_html=True)
+
+    # ── 헤더 ──
+    st.markdown(f"""
+<div style="text-align:center;padding:32px 0 20px;font-family:'Share Tech Mono',monospace">
+  <div style="font-family:'Orbitron',monospace;font-size:clamp(24px,8vw,40px);
+    font-weight:700;letter-spacing:6px;
+    background:linear-gradient(90deg,#00d4ff,#00ff88);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    margin-bottom:6px">K · ALPHA</div>
+  <div style="font-size:11px;color:#4a5568;letter-spacing:2px;margin-bottom:24px">
+    TRADING TERMINAL · SECURE ACCESS</div>
+  <div style="background:#0a0e1a;border:1px solid #1a2535;border-radius:16px;
+    padding:20px 16px 14px;max-width:300px;margin:0 auto">
+    <div style="font-size:10px;color:#4a5568;letter-spacing:2px;margin-bottom:12px">
+      🔒 PIN 번호 입력</div>
+    <div style="display:flex;justify-content:center;gap:14px;margin-bottom:16px">
+      {''.join([
+        f'<div style="width:12px;height:12px;border-radius:50%;transition:all .2s;'
+        + (f'background:#00d4ff;border:2px solid #00d4ff;box-shadow:0 0 8px rgba(0,212,255,.7)">'
+           if i < len(buf) else f'border:2px solid #1a3a4a;background:transparent">')
+        + '</div>'
+        for i in range(4)
+      ])}
     </div>
-    <div class="pg">
-      {btn(1)}{btn(2)}{btn(3)}
-      {btn(4)}{btn(5)}{btn(6)}
-      {btn(7)}{btn(8)}{btn(9)}
-      <div class="pb" style="visibility:hidden"></div>
-      {btn(0)}
-      <div class="pb pb-ent" id="_ent" onclick="{PIN_LOGIC('ok')}">↵</div>
-    </div>
-    <div class="pb-del" onclick="{PIN_LOGIC('del')}">⌫ 지우기</div>
-    <div class="pin-err" id="_err">{wrong_msg}</div>
+    {'<div style="color:#ff4d6d;font-size:11px;margin-bottom:8px">❌ 비밀번호가 틀렸습니다</div>' if err else ''}
   </div>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
+
+    # ── 숫자 패드 ──
+    for row in [[1,2,3],[4,5,6],[7,8,9]]:
+        cols = st.columns(3)
+        for c, n in zip(cols, row):
+            with c:
+                st.button(str(n), key=f'pb{n}', on_click=press, args=(n,), use_container_width=True)
+
+    # 마지막 행: 빈칸, 0, 엔터
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown('<div style="height:68px"></div>', unsafe_allow_html=True)
+    with c2:
+        st.button('0', key='pb0', on_click=press, args=(0,), use_container_width=True)
+    with c3:
+        st.button('↵', key='pb_ok', on_click=press_ok, use_container_width=True)
+
+    # 지우기
+    st.markdown('<div class="del-btn">', unsafe_allow_html=True)
+    st.button('⌫  지우기', key='pb_del', on_click=press_del, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
     st.stop()
 
 # ════════════════════════════════════════
