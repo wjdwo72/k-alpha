@@ -2371,6 +2371,8 @@ const DEMO_META = {
 // ── 필터 적용 함수 ──
 function filterKrStocks(stocks) {
   return stocks.filter(s => {
+    // smallmid 카테고리는 필터에서 항상 통과 (별도 Alpha-10 로직)
+    if (s.cat === 'smallmid') return true;
     const m = DEMO_META[s.code] || { tradingAmt: 1000, mktType: 'kospi', capType: 'large', rsi: 45 };
     // 거래대금 필터
     if (m.tradingAmt < scanSettings.volMin) return false;
