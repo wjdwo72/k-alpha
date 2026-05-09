@@ -25,6 +25,22 @@ KR_CODES = ['009150','066570','005490','005380','105560',
             '058470','140860','039440','320000','084370',
             '454910','039030','005420','064760','036830']
 
+# ── localStorage → URL 파라미터 자동 복원 (JS onerror trick) ──
+# 페이지 로드 시: localStorage에 저장된 키 있으면 자동으로 URL에 추가 → Streamlit이 읽음
+st.markdown("""<img src="x" style="display:none" onerror="(function(){
+  if(window._ls_init)return; window._ls_init=true;
+  var ck=localStorage.getItem('kalpha_ck');
+  var cp=localStorage.getItem('kalpha_cp');
+  if(!ck||!cp)return;
+  var url=new URL(window.location.href);
+  // 이미 URL에 있으면 skip
+  if(url.searchParams.get('ck'))return;
+  // localStorage → URL 파라미터로 복원
+  url.searchParams.set('ck',ck);
+  url.searchParams.set('cp',cp);
+  window.location.replace(url.toString());
+})()">""", unsafe_allow_html=True)
+
 def py_xor(text, pin):
     pb = pin.encode()
     return bytes([ord(c)^pb[i%4] for i,c in enumerate(text)])
@@ -269,20 +285,36 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
         if st.button("💾 저장", use_container_width=True, key="do_save"):
             pin_v = (sv_pin or "").strip()
             if len(pin_v) == 4 and pin_v.isdigit():
-                # 현재 입력된 값 우선, 없으면 session_state
                 ak_v  = st.session_state.get("kis_ak_inp","")  or st.session_state.kis_ak
                 sec_v = st.session_state.get("kis_sec_inp","") or st.session_state.kis_sec
                 acc_v = st.session_state.get("kis_acc_inp","") or st.session_state.kis_acc
                 env_v = st.session_state.get("kis_env_sel","실전투자")
                 if ak_v and sec_v:
-                    # URL 파라미터에 저장 → 북마크 시 영구 보존
-                    qp['ck'] = py_save(ak_v, sec_v, acc_v, env_v, pin_v)
-                    qp['cp'] = base64.b64encode((pin_v+":kalpha").encode()).decode()
-                    st.success("✅ 저장 완료! 이 URL을 북마크하세요")
+                    ck_val = py_save(ak_v, sec_v, acc_v, env_v, pin_v)
+                    cp_val = base64.b64encode((pin_v+":kalpha").encode()).decode()
+                    # URL 파라미터 저장
+                    qp['ck'] = ck_val
+                    qp['cp'] = cp_val
+                    # localStorage에도 저장 (영구 보존)
+                    st.markdown(f"""<img src="x" style="display:none" onerror="(function(){{
+  localStorage.setItem('kalpha_ck',{json.dumps(ck_val)});
+  localStorage.setItem('kalpha_cp',{json.dumps(cp_val)});
+  document.getElementById('_save_ok_msg').textContent='✅ 저장 완료 (자동 복원 가능)';
+}})()"><span id="_save_ok_msg" style="color:#00ff88;font-family:monospace;font-size:12px"></span>""",
+                    unsafe_allow_html=True)
+                    st.success("✅ 저장 완료! 다음 접속 시 자동으로 불러옵니다")
                 else:
                     st.error("앱키·시크릿을 먼저 입력하세요")
             else:
                 st.error("4자리 숫자를 입력하세요")
+    # localStorage 저장 여부 표시 (JS onerror trick)
+    st.markdown("""<img src="x" style="display:none" onerror="(function(){
+  var has=!!localStorage.getItem('kalpha_ck');
+  var el=document.getElementById('_ls_hint');
+  if(el&&has)el.textContent='💾 저장된 키 있음 (자동 복원됨)';
+})()"><span id="_ls_hint" style="font-family:monospace;font-size:10px;color:#ffc800"></span>""",
+    unsafe_allow_html=True)
+
     with sc2:
         if st.button("📂 불러오기", use_container_width=True, key="do_load"):
             pin_v = (sv_pin or "").strip()
@@ -310,6 +342,13 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
         if st.button("🗑", use_container_width=True, key="do_del_key"):
             if 'ck' in qp: del qp['ck']
             if 'cp' in qp: del qp['cp']
+            # localStorage도 삭제
+            st.markdown("""<img src="x" style="display:none" onerror="
+  localStorage.removeItem('kalpha_ck');
+  localStorage.removeItem('kalpha_cp');
+  var el=document.getElementById('_ls_hint');
+  if(el)el.textContent='🗑 삭제 완료';
+">""", unsafe_allow_html=True)
             st.rerun()
 
     st.divider()
