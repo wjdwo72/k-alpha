@@ -799,8 +799,9 @@
   .modal-overlay {
     display: none;
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0; left: 0; right: 0;
     min-height: 100%;
+    height: max(100%, 100vh);
     background: rgba(0,0,0,0.85);
     z-index: 4999;
   }
@@ -4110,7 +4111,10 @@ function applyInjectedPrices(prices) {
   addLog(ts, `[PRICE] Python 서버사이드 현재가 적용 완료 (${Object.keys(prices).length}종목)`, 'ok');
 }
 
-// 저장된 API 키 있으면 힌트 표시
+// 프록시 상태 자동 확인 (로컬에서만)
+if (!IS_STREAMLIT) {
+  setTimeout(() => checkProxyAndUpdate(), 600);
+}
 if (localStorage.getItem('k_api_keys')) {
   const pinSt = document.getElementById('pin-status');
   if (pinSt) { pinSt.textContent = '💾 저장된 키 있음 — 비번 입력 후 불러오기'; pinSt.style.color = 'var(--accent4)'; }
@@ -4123,37 +4127,57 @@ if (!kisToken) {
   setTimeout(() => loadYahooPrices(), 800);
 }
 
-// ── Streamlit 환경 감지 (iframe 내부 실행 여부) ──
-const IS_STREAMLIT = window.self !== window.top;
+// ── Streamlit 환경 감지 즉시 실행 ──
+const IS_STREAMLIT = (function() {
+  try { return window.self !== window.top; } catch(e) { return true; }
+})();
 
-// Streamlit에서는 HTML 내부 KIS API 섹션 숨기고 안내 표시
 if (IS_STREAMLIT) {
-  document.addEventListener('DOMContentLoaded', () => {
-    // 프록시 배너 숨김
+  // 즉시 실행 (DOM이 준비되기 전이라도 style 주입 가능)
+  const styleTag = document.createElement('style');
+  styleTag.textContent = `
+    #proxy-status-banner { display:none !important; }
+    .sidebar-section:first-child .api-key-form,
+    .sidebar-section:first-child .api-help,
+    .sidebar-section:first-child .api-status-msg,
+    .sidebar-section:first-child .api-connect-btn,
+    #proxy-status-banner,
+    .api-notice { display:none !important; }
+  `;
+  document.head.appendChild(styleTag);
+
+  // DOM 준비 후 KIS 섹션 내용 교체
+  function hideSidebarKis() {
     const proxyBanner = document.getElementById('proxy-status-banner');
     if (proxyBanner) proxyBanner.style.display = 'none';
 
-    // HTML 내부 KIS API 연결 섹션 전체 숨기고 Streamlit 사이드바 안내로 교체
-    const apiSection = document.querySelector('.sidebar-section:first-child');
-    if (apiSection) {
-      apiSection.innerHTML = `
-        <div style="padding:12px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);
-          border-radius:8px;font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.8">
-          <div style="color:var(--accent);font-weight:700;margin-bottom:6px">🔑 KIS API 연결</div>
-          <div style="color:var(--text-dim)">
-            Streamlit 사이드바에서 연결하세요:<br>
-            <strong style="color:var(--text-bright)">📱 모바일</strong> → 화면 왼쪽에서 오른쪽으로 스와이프<br>
-            <strong style="color:var(--text-bright)">💻 PC</strong> → 좌측 상단 <strong>›</strong> 버튼 클릭
-          </div>
-        </div>`;
+    // 사이드바 첫 번째 섹션(KIS API)을 안내 메시지로 교체
+    const apiSections = document.querySelectorAll('.sidebar-section');
+    if (apiSections.length > 0) {
+      const first = apiSections[0];
+      const title = first.querySelector('.sidebar-title');
+      if (title && title.textContent.includes('KIS')) {
+        first.innerHTML = `
+          <div style="padding:10px;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);
+            border-radius:8px;font-family:'Share Tech Mono',monospace;font-size:11px;line-height:1.8">
+            <div style="color:var(--accent);font-weight:700;margin-bottom:6px">🔑 KIS API 연결</div>
+            <div style="color:var(--text-dim)">
+              위 <strong style="color:var(--text-bright)">▾ KIS API 연결</strong> 패널에서<br>
+              앱키·시크릿·계좌번호를 입력하세요.
+            </div>
+          </div>`;
+      }
     }
-  });
-}
+  }
 
-// 프록시 상태 자동 확인 (로컬에서만)
-setTimeout(() => {
-  if (!IS_STREAMLIT) checkProxyAndUpdate();
-}, 500);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hideSidebarKis);
+  } else {
+    hideSidebarKis();
+    // 렌더링 후 한 번 더 (카드 렌더 후 사이드바 재구성되는 경우 대비)
+    setTimeout(hideSidebarKis, 500);
+  }
+}
 renderCards();
 renderUsCards();
 setInterval(updateClock, 1000);
