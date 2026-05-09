@@ -798,17 +798,17 @@
   /* ── MODAL ── */
   .modal-overlay {
     display: none;
-    position: fixed;
-    inset: 0;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    min-height: 100%;
     background: rgba(0,0,0,0.85);
     z-index: 4999;
   }
   .modal-overlay.show { display: block; }
   .modal {
-    position: fixed;
-    top: 50%;
+    position: absolute;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     background: var(--surface);
     border: 1px solid var(--accent);
     border-radius: 10px;
@@ -2468,28 +2468,30 @@ function openSettings() {
   document.getElementById('rsi-min').value = scanSettings.rsiMin;
   document.getElementById('rsi-max').value = scanSettings.rsiMax;
 
-  // 거래대금 버튼 active 복원
   document.querySelectorAll('[onclick*="setVolPreset"]').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('[onclick*="setVolPreset"]').forEach(b => {
     const m = b.onclick?.toString().match(/setVolPreset\(this,(\d+)\)/);
     if (m && parseInt(m[1]) === scanSettings.volMin) b.classList.add('active');
   });
-
-  // 시총 버튼 active 복원
   document.querySelectorAll('[onclick*="setCapFilter"]').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('[onclick*="setCapFilter"]').forEach(b => {
     const m = b.onclick?.toString().match(/setCapFilter\(this,'(\w+)'\)/);
     if (m && m[1] === scanSettings.cap) b.classList.add('active');
   });
-
-  // 시장 버튼 active 복원
   document.querySelectorAll('[onclick*="setMktFilter"]').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('[onclick*="setMktFilter"]').forEach(b => {
     const m = b.onclick?.toString().match(/setMktFilter\(this,'(\w+)'\)/);
     if (m && m[1] === scanSettings.mkt) b.classList.add('active');
   });
 
+  // 모달 위치: 현재 스크롤 기준 (iframe position:fixed 미작동 보정)
+  const scrollTop = window.scrollY || document.documentElement.scrollTop;
+  const modal = document.querySelector('#settings-modal .modal');
+  if (modal) {
+    modal.style.top = (scrollTop + 40) + 'px';
+  }
   document.getElementById('settings-modal').classList.add('show');
+  setTimeout(() => { if (modal) modal.scrollIntoView({ behavior:'smooth', block:'start' }); }, 50);
 }
 
 function closeSettings() {

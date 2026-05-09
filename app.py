@@ -300,7 +300,7 @@ label = (f"🔑 KIS API  ✅ {st.session_state.kis_env} 연결됨"
 
 with st.expander(label, expanded=not bool(st.session_state.kis_token)):
 
-    # ── 간편비번 저장/불러오기 (components.html → localStorage 영구 저장) ──
+    # ── 간편비번 저장/불러오기 (localStorage → 브라우저 재시작해도 유지) ──
     if st.session_state.get('_kv_action'):
         act = st.session_state.pop('_kv_action')
         pin_v = st.session_state.pop('_kv_pin','')
@@ -314,18 +314,20 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
                 cp_val = base64.b64encode((pin_v+":kalpha").encode()).decode()
                 st.session_state['_saved_ck'] = ck_val
                 st.session_state['_saved_cp'] = cp_val
-                st.success("✅ 저장 완료! 다음에 불러오기 가능")
+                # JS로 localStorage에도 저장
+                st.session_state['_js_save'] = (ck_val, cp_val)
+                st.success("✅ 저장 완료! 브라우저에 영구 보존됩니다")
             elif not ak_v or not sec_v:
-                st.error("앱키·시크릿 먼저 입력·연결 후 저장")
+                st.error("앱키·시크릿 먼저 입력·연결 후 저장하세요")
             else:
-                st.error("4자리 숫자 비번 입력")
+                st.error("4자리 숫자 비번을 입력하세요")
         elif act == 'load':
             ck = st.session_state.get('_saved_ck','')
             cp = st.session_state.get('_saved_cp','')
             if not ck:
-                st.error("저장된 키 없음")
+                st.error("저장된 키 없음 — 먼저 저장하세요")
             elif cp and base64.b64decode(cp).decode() != pin_v+":kalpha":
-                st.error("❌ PIN 틀림")
+                st.error("❌ PIN이 틀렸습니다")
             else:
                 try:
                     data = py_load(ck, pin_v)
@@ -339,11 +341,74 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
         elif act == 'del':
             st.session_state.pop('_saved_ck',None)
             st.session_state.pop('_saved_cp',None)
+            st.session_state['_js_save'] = ('','')  # localStorage도 삭제
             st.rerun()
 
+    # localStorage 읽기/쓰기 컴포넌트
+    js_save = st.session_state.pop('_js_save', None)
+    ck_init = json.dumps(st.session_state.get('_saved_ck',''))
+    cp_init = json.dumps(st.session_state.get('_saved_cp',''))
+
+    load_result = components.html(f"""<!DOCTYPE html>
+<html><head><style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+html,body{{background:#0a0e1a;font-family:'Share Tech Mono',monospace;overflow:hidden}}
+#hint{{font-size:10px;color:#ffc800;padding:4px 0;min-height:14px}}
+</style></head><body>
+<div id="hint"></div>
+<script>
+const CK='kalpha_ck_v4', CP='kalpha_cp_v4';
+// Python이 저장 요청한 경우
+var jsave={json.dumps(list(js_save) if js_save else None)};
+if(jsave&&jsave[0]){{
+  localStorage.setItem(CK,jsave[0]);
+  localStorage.setItem(CP,jsave[1]);
+}}else if(jsave&&jsave[0]===''){{
+  localStorage.removeItem(CK);localStorage.removeItem(CP);
+}}
+// localStorage에서 읽어서 부모로 전달 (window.parent 같은 origin)
+var ck=localStorage.getItem(CK)||'';
+var cp=localStorage.getItem(CP)||'';
+var hint=document.getElementById('hint');
+if(ck)hint.textContent='💾 브라우저에 저장된 키 있음';
+// 세션에 아직 없으면 window.parent.location으로 URL 파라미터 전달
+var pCk={ck_init};
+if(ck&&!pCk){{
+  try{{
+    // Streamlit과 같은 origin이면 작동
+    var url=new URL(window.parent.location.href);
+    if(!url.searchParams.get('_ck')){{
+      url.searchParams.set('_ck',ck);
+      url.searchParams.set('_cp',cp);
+      window.parent.location.replace(url.toString());
+    }}
+  }}catch(e){{
+    // cross-origin blocked: 부모 페이지 form submit trick
+    try{{
+      var f=window.parent.document.createElement('form');
+      f.method='GET'; f.action=window.parent.location.pathname;
+      var i1=window.parent.document.createElement('input');
+      i1.name='_ck'; i1.value=ck; f.appendChild(i1);
+      var i2=window.parent.document.createElement('input');
+      i2.name='_cp'; i2.value=cp; f.appendChild(i2);
+      window.parent.document.body.appendChild(f);
+      f.submit();
+    }}catch(e2){{}}
+  }}
+}}
+</script>
+</body></html>""", height=22, scrolling=False)
+
+    # URL 파라미터로 localStorage 데이터 수신
+    if qp.get('_ck') and not st.session_state.get('_saved_ck'):
+        st.session_state['_saved_ck'] = qp.get('_ck','')
+        st.session_state['_saved_cp'] = qp.get('_cp','')
+        try:
+            del qp['_ck']; del qp['_cp']
+        except: pass
+        st.rerun()
+
     has_saved = bool(st.session_state.get('_saved_ck'))
-    if has_saved:
-        st.caption("💾 저장된 키 있음 — PIN 입력 후 불러오기")
 
     sv_pin = st.text_input("🔒 간편비번(4자리)", max_chars=4,
                             placeholder="4자리 숫자", key="sv_pin",
