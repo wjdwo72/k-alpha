@@ -2355,6 +2355,17 @@ const DEMO_META = {
   // 중형주 추가 (mid)
   '251270': { tradingAmt:  420, mktType: 'kospi',  capType: 'mid',   rsi: 45 },
   '036570': { tradingAmt:  380, mktType: 'kosdaq', capType: 'mid',   rsi: 40 },
+  // 내일의 중소형주 Alpha-10
+  '058470': { tradingAmt:  420, mktType: 'kosdaq', capType: 'small', rsi: 44 }, // 리노공업
+  '140860': { tradingAmt:  280, mktType: 'kosdaq', capType: 'small', rsi: 42 }, // 파크시스템스
+  '039440': { tradingAmt:  185, mktType: 'kosdaq', capType: 'small', rsi: 38 }, // 에스티아이
+  '320000': { tradingAmt:  145, mktType: 'kosdaq', capType: 'small', rsi: 41 }, // 윈텍
+  '084370': { tradingAmt:  220, mktType: 'kosdaq', capType: 'small', rsi: 39 }, // 유진테크
+  '454910': { tradingAmt:  380, mktType: 'kospi',  capType: 'mid',   rsi: 47 }, // 두산로보틱스
+  '039030': { tradingAmt:  160, mktType: 'kosdaq', capType: 'small', rsi: 43 }, // 이오테크닉스
+  '005420': { tradingAmt:  125, mktType: 'kospi',  capType: 'small', rsi: 36 }, // 코스모화학
+  '064760': { tradingAmt:  195, mktType: 'kosdaq', capType: 'small', rsi: 40 }, // 티씨케이
+  '036830': { tradingAmt:  108, mktType: 'kospi',  capType: 'small', rsi: 37 }, // 솔브레인홀딩스
 };
 
 // ── 필터 적용 함수 ──
@@ -3258,7 +3269,7 @@ async function fetchYahooPrice(code) {
 
 // ── KIS 미연결 시 Yahoo Finance로 전체 카드 현재가 자동 로드 ──
 async function loadYahooPrices() {
-  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow];
+  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow, ...DEMO.smallmid];
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
   addLog(ts, `[PRICE] Yahoo Finance 현재가 자동 조회 시작 (${allStocks.length}종목)...`, 'info');
@@ -3295,7 +3306,7 @@ async function refreshOnePrice(code, name) {
   if (!p || p.price === 0) {
     addLog(ts, `[PRICE] ${name}(${code}) 현재가 조회 실패 — 프록시 서버 확인 필요`, 'err'); return;
   }
-  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow];
+  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow, ...DEMO.smallmid];
   const stock = allStocks.find(s => s.code === code);
   if (stock) {
     updateCardPrice(stock, p, p.source);
@@ -3304,7 +3315,7 @@ async function refreshOnePrice(code, name) {
 }
 
 async function refreshAllKrPrices() {
-  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow];
+  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow, ...DEMO.smallmid];
   const ts = new Date(); const tsStr = `${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}:${String(ts.getSeconds()).padStart(2,'0')}`;
   addLog(tsStr, `[PRICE] KIS 현재가 조회 시작 (${allStocks.length}종목)`, 'info');
   let ok = 0;
@@ -4084,7 +4095,7 @@ function applyInjectedBalance(bal) {
 
 // Python 주입 가격을 카드에 적용
 function applyInjectedPrices(prices) {
-  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow];
+  const allStocks = [...DEMO.swing, ...DEMO.surge, ...DEMO.tomorrow, ...DEMO.smallmid];
   allStocks.forEach(stock => {
     const p = prices[stock.code];
     if (!p || !p.price) return;
