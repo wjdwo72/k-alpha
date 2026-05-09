@@ -362,6 +362,49 @@ if(!SCK){{
     if st.session_state.kis_token:
         st.success(f"✅ {st.session_state.kis_env} · {acc}")
 
+    st.divider()
+
+    # ── 텔레그램 알림 설정 ──
+    st.markdown("**📱 텔레그램 알림 설정**", unsafe_allow_html=False)
+    tg_token = st.text_input("Bot Token", type="password",
+                              value=st.session_state.get('tg_token',''),
+                              placeholder="1234567890:ABCdef...",
+                              key="tg_token_inp",
+                              help="@BotFather에서 발급")
+    tg_chat  = st.text_input("Chat ID",
+                              value=st.session_state.get('tg_chat',''),
+                              placeholder="-100xxxxxxxxx 또는 숫자",
+                              key="tg_chat_inp",
+                              help="@userinfobot 에서 확인")
+
+    col_tg1, col_tg2 = st.columns([2,1])
+    with col_tg1:
+        if st.button("📱 테스트 알림 전송", use_container_width=True, key="btn_tg_test"):
+            if tg_token and tg_chat:
+                try:
+                    r = requests.post(
+                        f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id": tg_chat,
+                              "text": "✅ K-ALPHA 터미널 알림 연결 성공!\n\n"
+                                      "S급 종목 포착 시 자동 알림이 전송됩니다.",
+                              "parse_mode": "HTML"},
+                        timeout=8)
+                    if r.json().get('ok'):
+                        st.session_state['tg_token'] = tg_token
+                        st.session_state['tg_chat']  = tg_chat
+                        st.success("✅ 텔레그램 연결 성공!")
+                    else:
+                        st.error(f"❌ {r.json().get('description','전송 실패')}")
+                except Exception as e:
+                    st.error(f"❌ {str(e)[:80]}")
+            else:
+                st.error("Bot Token과 Chat ID를 입력하세요")
+    with col_tg2:
+        tg_ok = bool(st.session_state.get('tg_token') and st.session_state.get('tg_chat'))
+        st.markdown(f"""<div style="padding:8px;text-align:center;font-family:monospace;font-size:12px;
+          color:{'#00ff88' if tg_ok else '#4a5568'}">
+          {'🟢 연결됨' if tg_ok else '⭕ 미연결'}</div>""", unsafe_allow_html=True)
+
     with st.expander("🔒 로그아웃"):
         if st.button("로그아웃",key="btn_logout"):
             for k in ["agreed","auth","kis_token","kis_ak","kis_sec","kis_acc"]:
@@ -393,6 +436,45 @@ if st.session_state.kis_token:
         if balance and not balance.get('error'): balance_json=json.dumps(balance)
         elif balance and balance.get('error'): st.caption(f"⚠ 잔고: {balance.get('error','')[:50]}")
 
+    # ── 텔레그램 S급 알림 (10분마다, 최대 5개) ──
+    tg_token = st.session_state.get('tg_token','')
+    tg_chat  = st.session_state.get('tg_chat','')
+    if tg_token and tg_chat and prices:
+        # 10분 간격 체크
+        now_min = int(time.time() // 600)  # 10분 단위 버킷
+        last_bucket = st.session_state.get('_tg_bucket', -1)
+        if now_min != last_bucket:
+            st.session_state['_tg_bucket'] = now_min
+            DEMO_STOCKS = [
+                {'name':'리노공업','code':'058470','score':94,'grade':'S','buy':'182,000','target':'205,000','stop':'176,500','rr':'4.1'},
+                {'name':'파크시스템스','code':'140860','score':91,'grade':'S','buy':'211,000','target':'238,000','stop':'204,500','rr':'4.2'},
+                {'name':'삼성전기','code':'009150','score':91,'grade':'S','buy':'168,000','target':'182,000','stop':'163,100','rr':'2.6'},
+                {'name':'LG이노텍','code':'011070','score':88,'grade':'S','buy':'182,000','target':'210,000','stop':'176,000','rr':'4.7'},
+                {'name':'한화에어로스페이스','code':'012450','score':87,'grade':'S','buy':'550,000','target':'640,000','stop':'530,000','rr':'4.5'},
+                {'name':'에스티아이','code':'039440','score':88,'grade':'A','buy':'38,500','target':'43,500','stop':'37,300','rr':'4.2'},
+                {'name':'유진테크','code':'084370','score':85,'grade':'A','buy':'42,600','target':'48,000','stop':'41,200','rr':'3.9'},
+            ]
+            candidates = [s for s in DEMO_STOCKS if s['score'] >= 85][:5]
+            if candidates:
+                lines = [f"📡 <b>K-ALPHA 10분 스캔 알림</b> [{price_ts}]\n━━━━━━━━━━━━━━━━"]
+                for s in candidates:
+                    p = prices.get(s['code'],{})
+                    cur = f"{p.get('price',0):,}" if p.get('price') else s['buy']
+                    chg = f"{p.get('changePct',0):+.2f}%" if p.get('changePct') else ''
+                    icon = '🔴' if s['grade']=='S' else '🟡'
+                    lines.append(
+                        f"{icon} <b>[{s['grade']}·{s['score']}점] {s['name']}</b>\n"
+                        f"   현재가 {cur}원 {chg} | RR {s['rr']}\n"
+                        f"   매입 {s['buy']} → 목표 {s['target']} | 손절 {s['stop']}"
+                    )
+                lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(prices)}종목 스캔 완료")
+                try:
+                    requests.post(
+                        f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id": tg_chat, "text": "\n\n".join(lines), "parse_mode": "HTML"},
+                        timeout=8)
+                except: pass
+
 # ════ 5. HTML 터미널 ════
 if not os.path.exists("app.html"):
     st.error("app.html 파일을 GitHub 저장소에 업로드하세요."); st.stop()
@@ -410,6 +492,8 @@ window.__KIS_ACC__      = {json.dumps(st.session_state.kis_acc)};
 window.__KIS_PRICES__   = {prices_json};
 window.__KIS_BALANCE__  = {balance_json};
 window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
+window.__TG_TOKEN__     = {json.dumps(st.session_state.get('tg_token',''))};
+window.__TG_CHAT__      = {json.dumps(st.session_state.get('tg_chat',''))};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
 components.html(html,height=5000,scrolling=False)

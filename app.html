@@ -3100,7 +3100,7 @@ function closeModal() {
 
 function confirmOrder() {
   if (!currentModal) return;
-  const { code, name, buy, score } = currentModal;
+  const { code, name, buy, target, stop, rr, score, grade } = currentModal;
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 
@@ -3112,8 +3112,11 @@ function confirmOrder() {
   addLog(ts, `[ORDER] ${name} 매입 ${buy}원 → KIS API 전송 완료 (테스트)`, 'ok');
   addLog(ts, `[LOG] 매매근거 저장 완료 · 점수:${score}`, 'info');
 
-  // Add telegram
-  addTelegram(`<span class="tg-tag signal">체결</span><strong>${name}</strong> — ${buy}원 매입 접수. 목표: ${currentModal.target}원 · 손절: ${currentModal.stop}원`, ts);
+  // 텔레그램 실시간 전송
+  onAutoTradeApprove(name, code, buy, target, stop, rr, score);
+
+  // Add telegram feed
+  addTelegram(`<span class="tg-tag signal">체결</span><strong>${name}</strong> — ${buy}원 매입 접수. 목표: ${target}원 · 손절: ${stop}원`, ts, 'S');
 
   closeModal();
 }
@@ -3129,12 +3132,50 @@ function addLog(ts, msg, type) {
   box.prepend(div);
 }
 
-function addTelegram(msg, ts) {
+function addTelegram(msg, ts, grade) {
   const feed = document.getElementById('tg-feed');
+  if (!feed) return;
   const div = document.createElement('div');
-  div.className = 'tg-msg';
+  div.className = 'tg-msg' + (grade === 'S' ? ' s-grade' : grade === 'risk' ? ' risk' : '');
   div.innerHTML = `${msg}<div class="tg-time">${ts}</div>`;
   feed.prepend(div);
+  // 실제 텔레그램 전송
+  sendTelegramMsg(msg.replace(/<[^>]+>/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+}
+
+function sendTelegramMsg(text) {
+  var token = window.__TG_TOKEN__ || '';
+  var chat  = window.__TG_CHAT__  || '';
+  if (!token || !chat) return;
+  fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat_id: chat, text: text, parse_mode: 'HTML'})
+  }).catch(function(){});
+}
+
+// K-자동매매 승인 버튼 클릭 시 텔레그램 발송
+function onAutoTradeApprove(name, code, buy, target, stop, rr, score) {
+  var token = window.__TG_TOKEN__ || '';
+  var chat  = window.__TG_CHAT__  || '';
+  if (!token || !chat) return;
+  var now = new Date();
+  var ts = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  var msg = '🚀 <b>[K-자동매매 승인]</b> ' + ts + '\n'
+          + '━━━━━━━━━━━━━━\n'
+          + '📌 종목: <b>' + name + '</b> (' + code + ')\n'
+          + '💰 매입가: <b>' + buy + '원</b>\n'
+          + '🎯 목표가: ' + target + '원\n'
+          + '🛑 손절가: ' + stop + '원\n'
+          + '⚖️ 손익비: ' + rr + '\n'
+          + '⭐ K점수: ' + score + '점\n'
+          + '━━━━━━━━━━━━━━\n'
+          + '한국투자증권 API 주문 전송 완료';
+  fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat_id: chat, text: msg, parse_mode: 'HTML'})
+  }).catch(function(){});
 }
 
 // ──────────────────────────────────────────────
