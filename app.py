@@ -13,8 +13,21 @@ st.markdown("""<style>
   div[data-testid="stExpander"]{background:#0a0e1a;border:1px solid #1a2535!important;border-radius:8px;margin-bottom:6px}
   div[data-testid="stExpander"] summary{color:#00d4ff;font-family:monospace;font-size:13px}
   .stTextInput>div>div>input{background:#0d1220!important;color:#e2e8f0!important;border-color:#1a2535!important;font-family:monospace!important}
+  .stTextInput label{color:#94a3b8 !important;font-family:'Share Tech Mono',monospace !important;font-size:12px !important}
+  .stTextInput label p{color:#94a3b8 !important}
+  .stTextInput label strong{color:#00d4ff !important}
+  .stRadio label{color:#94a3b8 !important;font-family:'Share Tech Mono',monospace !important}
+  .stRadio [data-testid="stMarkdownContainer"] p{color:#e2e8f0 !important}
   .stButton>button{font-family:monospace}
   .stRadio>div{flex-direction:row;gap:10px}
+  /* 캡션 색상 */
+  .stCaption, .stCaption p{color:#64748b !important;font-family:'Share Tech Mono',monospace !important}
+  /* divider */
+  hr{border-color:#1a2535 !important}
+  /* expander 내부 텍스트 */
+  div[data-testid="stExpander"] .stMarkdown p{color:#94a3b8 !important}
+  div[data-testid="stExpander"] .stSuccess{background:rgba(0,255,136,.1) !important;border-color:rgba(0,255,136,.3) !important}
+  div[data-testid="stExpander"] .stError{background:rgba(255,77,109,.1) !important}
 </style>""", unsafe_allow_html=True)
 
 PASSWORD = "4545"
@@ -279,46 +292,86 @@ label = (f"🔑 KIS API  ✅ {st.session_state.kis_env} 연결됨"
          if st.session_state.kis_token else "🔑 KIS API 연결 ▾")
 
 with st.expander(label, expanded=not bool(st.session_state.kis_token)):
-    # localStorage 연동 컴포넌트
-    js_save = st.session_state.pop('_js_save', None)
-    ck_init = json.dumps(st.session_state.get('_saved_ck',''))
 
-    components.html(f"""<!DOCTYPE html><html><head><style>
-*{{margin:0;padding:0;box-sizing:border-box}}html,body{{background:#0a0e1a;overflow:hidden;font-family:'Share Tech Mono',monospace;padding:4px 8px}}
-#hint{{font-size:10px;color:#ffc800;min-height:14px}}
-</style></head><body><div id="hint"></div><script>
-var CK='kalpha_ck_v5',CP='kalpha_cp_v5';
-var jsave={json.dumps(list(js_save) if js_save else None)};
-if(jsave&&jsave[0]){{localStorage.setItem(CK,jsave[0]);localStorage.setItem(CP,jsave[1]);}}
-else if(jsave&&jsave[0]===''){{localStorage.removeItem(CK);localStorage.removeItem(CP);}}
-var ck=localStorage.getItem(CK)||'', cp=localStorage.getItem(CP)||'';
-var pCk={ck_init};
-if(ck)document.getElementById('hint').textContent='💾 브라우저에 저장된 키 있음';
-if(ck&&!pCk){{
-  try{{
-    var url=new URL(window.parent.location.href);
-    if(!url.searchParams.get('_ck')){{
-      url.searchParams.set('_ck',ck);
-      url.searchParams.set('_cp',cp);
-      window.parent.location.replace(url.toString());
-    }}
-  }}catch(e){{}}
-}}
-</script></body></html>""", height=22, scrolling=False)
+    # ── 간편비번 저장/불러오기 ──
+    # URL 파라미터가 가장 신뢰할 수 있는 저장소 (북마크 시 영구 보존)
+    saved_ck = qp.get('ck','') or st.session_state.get('_saved_ck','')
+    saved_cp = qp.get('cp','') or st.session_state.get('_saved_cp','')
 
-    has_saved = bool(st.session_state.get('_saved_ck'))
-    sv_pin = st.text_input("🔒 간편비번(4자리)", max_chars=4, placeholder="4자리 숫자", key="sv_pin", type="password")
+    if st.session_state.get('_kv_action'):
+        act = st.session_state.pop('_kv_action')
+        pin_v = st.session_state.pop('_kv_pin','')
+        if act == 'save':
+            ak_v  = st.session_state.get('kis_ak_inp','') or st.session_state.kis_ak
+            sec_v = st.session_state.get('kis_sec_inp','') or st.session_state.kis_sec
+            acc_v = st.session_state.get('kis_acc_inp','') or st.session_state.kis_acc
+            env_v = st.session_state.get('kis_env_sel','실전투자') or st.session_state.kis_env
+            if ak_v and sec_v and len(pin_v)==4 and pin_v.isdigit():
+                ck_val = py_save(ak_v,sec_v,acc_v,env_v,pin_v)
+                cp_val = base64.b64encode((pin_v+":kalpha").encode()).decode()
+                # URL 파라미터에 저장 (가장 영구적)
+                qp['ck'] = ck_val
+                qp['cp'] = cp_val
+                st.session_state['_saved_ck'] = ck_val
+                st.session_state['_saved_cp'] = cp_val
+                st.success("✅ 저장 완료! 이 URL을 북마크하면 영구 보존됩니다")
+            elif not ak_v or not sec_v:
+                st.error("앱키·시크릿 먼저 입력 후 저장")
+            else:
+                st.error("4자리 숫자 비번 입력")
+        elif act == 'load':
+            ck = saved_ck
+            cp = saved_cp
+            if not ck:
+                st.error("저장된 키 없음 — 먼저 저장하세요")
+            elif cp and base64.b64decode(cp).decode() != pin_v+":kalpha":
+                st.error("❌ PIN이 틀렸습니다")
+            else:
+                try:
+                    data = py_load(ck, pin_v)
+                    st.session_state.kis_ak  = data.get('ak','')
+                    st.session_state.kis_sec = data.get('sec','')
+                    st.session_state.kis_acc = data.get('acc','')
+                    st.session_state.kis_env = data.get('env','실전투자')
+                    st.success("✅ 불러오기 완료! 연결 버튼을 누르세요")
+                    st.rerun()
+                except: st.error("❌ 복호화 실패")
+        elif act == 'del':
+            if 'ck' in qp: del qp['ck']
+            if 'cp' in qp: del qp['cp']
+            st.session_state.pop('_saved_ck',None)
+            st.session_state.pop('_saved_cp',None)
+            st.rerun()
+
+    # 저장 상태 표시
+    st.markdown(f"""<div style="background:#0a0e1a;border:1px solid #1a2535;border-radius:8px;
+      padding:10px 12px;margin-bottom:8px">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:11px;
+        color:#94a3b8;letter-spacing:1px;margin-bottom:8px">
+        🔒 간편비번 저장/불러오기
+        {'&nbsp;&nbsp;<span style="color:#00ff88;font-size:10px">💾 저장된 키 있음</span>' if saved_ck else ''}
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    sv_pin = st.text_input(
+        "**비번 4자리 입력**",
+        max_chars=4, placeholder="예: 1234",
+        key="sv_pin", type="password",
+        help="API 키 암호화에 사용할 4자리 숫자"
+    )
 
     sc1,sc2,sc3 = st.columns([1,1,0.35])
     with sc1:
-        if st.button("💾 저장", use_container_width=True, key="do_save"):
-            st.session_state['_kv_action']='save'; st.session_state['_kv_pin']=(sv_pin or '').strip(); st.rerun()
+        st.button("💾 저장", use_container_width=True, key="do_save",
+                  on_click=lambda: (st.session_state.update({'_kv_action':'save',
+                    '_kv_pin':(st.session_state.get('sv_pin') or '').strip()})))
     with sc2:
-        if st.button("📂 불러오기", use_container_width=True, key="do_load"):
-            st.session_state['_kv_action']='load'; st.session_state['_kv_pin']=(sv_pin or '').strip(); st.rerun()
+        st.button("📂 불러오기", use_container_width=True, key="do_load",
+                  on_click=lambda: (st.session_state.update({'_kv_action':'load',
+                    '_kv_pin':(st.session_state.get('sv_pin') or '').strip()})))
     with sc3:
-        if st.button("🗑", use_container_width=True, key="do_del_key"):
-            st.session_state['_kv_action']='del'; st.rerun()
+        st.button("🗑", use_container_width=True, key="do_del_key",
+                  on_click=lambda: st.session_state.update({'_kv_action':'del'}))
 
     st.divider()
     env_label = st.radio("서버", ["실전투자","모의투자"], horizontal=True,
