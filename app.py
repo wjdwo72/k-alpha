@@ -54,7 +54,8 @@ def py_load(encoded, pin):
     return json.loads(''.join(chr(b^pb[i%4]) for i,b in enumerate(raw)))
 
 for k,v in [("auth",False),("wrong",False),("kis_token",None),("kis_base_url",None),
-            ("kis_ak",""),("kis_sec",""),("kis_acc",""),("kis_env","실전투자")]:
+            ("kis_ak",""),("kis_sec",""),("kis_acc",""),("kis_env","실전투자"),
+            ("agreed",False)]:
     if k not in st.session_state: st.session_state[k]=v
 
 # ── URL 파라미터로 PIN 인증 체크 ──
@@ -121,6 +122,76 @@ def fetch_balance(token, base_url, ak, secret, acc):
             headers=headers, verify=False, timeout=10)
         return r.json()
     except Exception as e: return {'error':str(e)}
+
+# ════════════════════════════════════════
+# 법적 고지 동의 화면
+# ════════════════════════════════════════
+if not st.session_state.agreed:
+    st.markdown("""<style>
+body,.stApp{background:#020408!important}
+.block-container{padding:12px!important;max-width:520px!important;margin:0 auto!important}
+header,footer,[data-testid="stToolbar"]{display:none!important}
+</style>""", unsafe_allow_html=True)
+
+    st.markdown("""
+<div style="text-align:center;padding:28px 0 18px;font-family:'Share Tech Mono',monospace">
+  <div style="font-size:clamp(20px,6vw,32px);font-weight:700;letter-spacing:5px;
+    background:linear-gradient(90deg,#00d4ff,#00ff88);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    margin-bottom:4px">K · ALPHA</div>
+  <div style="font-size:10px;color:#4a5568;letter-spacing:2px">
+    TRADING TERMINAL</div>
+</div>
+
+<div style="background:#0a0e1a;border:1px solid rgba(255,165,0,0.4);border-radius:12px;
+  padding:20px;margin-bottom:16px;font-family:'Share Tech Mono',monospace">
+  <div style="color:#ffc800;font-size:13px;font-weight:700;margin-bottom:14px;
+    letter-spacing:1px">⚠ 투자 위험 고지 및 면책 조항</div>
+
+  <div style="color:#94a3b8;font-size:12px;line-height:2;margin-bottom:14px">
+    본 서비스(K-ALPHA Terminal)는 <span style="color:#e2e8f0">투자 참고용 정보 제공 도구</span>이며,
+    <span style="color:#ff4d6d;font-weight:700">투자 권유 또는 자문 서비스가 아닙니다.</span>
+  </div>
+
+  <div style="background:#020408;border-radius:8px;padding:14px;font-size:11px;
+    color:#64748b;line-height:2;margin-bottom:14px;border:1px solid #1a2535">
+    <div style="color:#94a3b8;margin-bottom:6px;font-size:12px">📋 면책 조항 (Disclaimer)</div>
+    • 본 서비스 개발자는 이용자의 투자 결과에 대해 <strong style="color:#ff4d6d">일체의 법적 책임을 지지 않습니다.</strong><br>
+    • 제공되는 모든 분석 정보·신호·추천은 <strong style="color:#ffc800">참고 목적</strong>에 한하며,
+      실제 투자 결과를 보장하지 않습니다.<br>
+    • 주식 투자에는 <strong style="color:#ff4d6d">원금 손실 위험</strong>이 있으며, 투자의 최종 판단과
+      책임은 <strong style="color:#e2e8f0">전적으로 이용자 본인</strong>에게 있습니다.<br>
+    • 자동매매 기능 사용 시 발생하는 손실·오류·시스템 장애 등에 대해
+      개발자는 <strong style="color:#ff4d6d">법적·재정적 책임을 부담하지 않습니다.</strong><br>
+    • 본 서비스는 한국투자증권 등 금융기관과 <strong style="color:#ffc800">무관한 독립 개인 개발 도구</strong>입니다.<br>
+    • 금융투자상품 거래는 관련 법규에 따라 본인의 판단으로 행하시기 바랍니다.
+  </div>
+
+  <div style="background:rgba(255,77,109,0.06);border:1px solid rgba(255,77,109,0.25);
+    border-radius:8px;padding:12px;font-size:11px;color:#ff4d6d;line-height:1.8">
+    ❗ 본 서비스의 개발자(제작자)는 금융투자업자가 아니며, 본 서비스 이용으로
+    인한 <strong>직접적·간접적 손해</strong>에 대해 민사·형사상 책임을 지지 않습니다.<br>
+    이용자는 위 내용에 동의하는 경우에만 서비스를 이용할 수 있습니다.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✗ 동의하지 않음", use_container_width=True, key="btn_disagree"):
+            st.warning("서비스를 이용하시려면 위 조항에 동의하셔야 합니다.")
+    with col2:
+        if st.button("✓ 동의하고 시작", use_container_width=True,
+                     type="primary", key="btn_agree"):
+            st.session_state.agreed = True
+            st.rerun()
+
+    st.markdown("""<div style="text-align:center;font-family:'Share Tech Mono',monospace;
+      font-size:10px;color:#2d3748;margin-top:12px;line-height:1.8">
+      본 고지는 「자본시장과 금융투자업에 관한 법률」 및 관련 규정에 따라<br>
+      이용자 보호를 위해 명시합니다. · K-ALPHA Terminal © 2025
+    </div>""", unsafe_allow_html=True)
+    st.stop()
 
 # ════════════════════════════════════════
 # 비밀번호 화면 (URL 파라미터 방식 — 가장 신뢰성 높음)
