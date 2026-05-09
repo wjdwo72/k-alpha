@@ -111,129 +111,100 @@ if not st.session_state.auth:
     if st.session_state.wrong:
         st.session_state.wrong = False
 
-    # ── st.markdown() = 메인 Streamlit 페이지 컨텍스트
-    # <script> 태그는 React가 실행 안 함 → onerror 이벤트 핸들러로 우회
-    # onclick 속성은 정상 실행됨 (이미 DOM에 등록된 핸들러)
-    # window.location.href = '?auth=1' → 메인 Streamlit 페이지 직접 이동 ✅
-    st.markdown(f"""
-<style>
+    PW = PASSWORD
+    # onclick에 모든 로직 직접 내장 — 외부 함수/onerror 의존 없음
+    def PIN_LOGIC(n):
+        return (
+            f"(function(){{"
+            f"if(window._d)return;"
+            f"window._p=window._p||'';"
+            f"if('{n}'==='del'){{window._p=window._p.slice(0,-1);}}"
+            f"else if('{n}'==='ok'){{if(window._p.length<4)return;}}"
+            f"else{{if(window._p.length>=4)return;window._p+='{n}';}}"
+            f"for(var i=0;i<4;i++){{"
+            f"var d=document.getElementById('_d'+i);"
+            f"if(d)d.style.cssText=(i<window._p.length)?'background:#00d4ff;border-color:#00d4ff;box-shadow:0 0 8px rgba(0,212,255,.7)':'';"
+            f"}}"
+            f"var eb=document.getElementById('_ent');"
+            f"if(eb)eb.style.borderColor=(window._p.length===4)?'#00d4ff':'';"
+            f"if(window._p.length===4){{"
+            f"window._d=true;"
+            f"if(window._p==='{PW}'){{"
+            f"window.location.href=window.location.href.split('?')[0]+'?auth=1';"
+            f"}}else{{"
+            f"var e=document.getElementById('_err');"
+            f"if(e)e.textContent='❌ 비밀번호가 틀렸습니다';"
+            f"document.querySelectorAll('._dot').forEach(function(x){{x.style.background='#ff4d6d';x.style.borderColor='#ff4d6d';}});"
+            f"setTimeout(function(){{window._p='';window._d=false;"
+            f"for(var j=0;j<4;j++){{var dd=document.getElementById('_d'+j);if(dd)dd.style.cssText='';}}"
+            f"if(e)e.textContent='';if(eb)eb.style.borderColor='';}},800);"
+            f"}}}}}})();"
+        )
+
+    btn = lambda n, label='': f'<div class="pb" onclick="{PIN_LOGIC(n)}">{label or n}</div>'
+
+    st.markdown(f"""<style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Share+Tech+Mono&display=swap');
 body,.stApp{{background:#020408!important}}
-/* Streamlit 기본 UI 완전 숨김 */
-header,[data-testid="stHeader"],[data-testid="stToolbar"],
-.stDeployButton,[data-testid="stDecoration"],
-footer,.stMarkdown>div>div>div:has(.element-container){{display:none!important}}
 .block-container{{padding:0!important;max-width:100%!important}}
-
+.stMarkdown{{padding:0!important}}
+header,footer,[data-testid="stToolbar"]{{display:none!important}}
 .pin-wrap{{display:flex;flex-direction:column;align-items:center;
   justify-content:center;min-height:100vh;background:#020408;
-  font-family:'Share Tech Mono',monospace;padding:20px}}
-.pin-title{{font-family:'Orbitron',monospace;
-  font-size:clamp(22px,7vw,40px);font-weight:700;letter-spacing:6px;
+  font-family:'Share Tech Mono',monospace;padding:16px}}
+.pin-title{{font-family:'Orbitron',monospace;font-size:clamp(20px,7vw,40px);
+  font-weight:700;letter-spacing:6px;
   background:linear-gradient(90deg,#00d4ff,#00ff88);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  text-align:center;margin-bottom:6px}}
+  text-align:center;margin-bottom:4px}}
 .pin-sub{{font-size:11px;color:#4a5568;letter-spacing:2px;
-  margin-bottom:28px;text-align:center}}
+  margin-bottom:24px;text-align:center}}
 .pin-box{{background:#0a0e1a;border:1px solid #1a2535;border-radius:16px;
-  padding:26px 22px 18px;width:min(300px,88vw)}}
-.pin-label{{font-size:10px;color:#4a5568;letter-spacing:2px;
-  margin-bottom:10px;text-align:center}}
-.pin-dots{{display:flex;justify-content:center;gap:14px;margin-bottom:20px}}
-.dot{{width:12px;height:12px;border-radius:50%;
+  padding:24px 20px 16px;width:min(296px,88vw)}}
+.pin-lbl{{font-size:10px;color:#4a5568;letter-spacing:2px;
+  text-align:center;margin-bottom:10px}}
+.pin-dots{{display:flex;justify-content:center;gap:14px;margin-bottom:18px}}
+._dot{{width:12px;height:12px;border-radius:50%;
   border:2px solid #1a3a4a;background:transparent;transition:all .2s}}
-.dot.f{{background:#00d4ff;border-color:#00d4ff;
-  box-shadow:0 0 10px rgba(0,212,255,.7)}}
-.pin-grid{{display:grid;grid-template-columns:repeat(3,1fr);
-  gap:9px;margin-bottom:9px}}
-.pb{{padding:17px 0;border-radius:11px;border:1px solid #1a2535;
-  background:#0d1220;color:#e2e8f0;font-size:21px;cursor:pointer;
-  text-align:center;user-select:none;touch-action:manipulation;
-  transition:background .12s,transform .08s;
+.pg{{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:9px}}
+.pb{{padding:16px 0;border-radius:11px;border:1px solid #1a2535;
+  background:#0d1220;color:#e2e8f0;font-size:21px;
+  text-align:center;cursor:pointer;user-select:none;
+  touch-action:manipulation;transition:background .1s,transform .08s;
   -webkit-tap-highlight-color:transparent}}
-.pb:active{{background:#1e2a3a;transform:scale(.91)}}
-.pb.e{{visibility:hidden}}
-.pb.ent{{background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.35);
+.pb:active{{background:#1e2a3a !important;transform:scale(.91)}}
+.pb-ent{{border:1px solid rgba(0,212,255,.35);background:rgba(0,212,255,.1);
   color:#00d4ff;font-size:22px}}
-.pb.ent.rdy{{background:rgba(0,212,255,.22);border-color:#00d4ff;
-  box-shadow:0 0 12px rgba(0,212,255,.4)}}
-.pb.del{{color:#64748b;font-size:15px}}
+.pb-del{{color:#64748b;font-size:14px;width:100%;
+  padding:13px 0;border-radius:11px;border:1px solid #1a2535;
+  background:#0d1220;cursor:pointer;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;user-select:none}}
+.pb-del:active{{background:#1e2a3a !important;transform:scale(.97)}}
 .pin-err{{text-align:center;color:#ff4d6d;font-size:11px;
-  margin-top:12px;min-height:16px}}
+  margin-top:10px;min-height:16px}}
 </style>
-
-<!-- onerror: <script> 대신 이벤트 핸들러로 JS 실행 (React dangerouslySetInnerHTML 우회) -->
-<img src="data:image/gif,X" style="display:none;position:absolute"
-onerror="(function(){{
-  if(window._pinOK)return; window._pinOK=true;
-  var p='',done=false,PW='{PASSWORD}';
-  function ud(){{
-    for(var i=0;i<4;i++){{
-      var d=document.getElementById('pd'+i);
-      if(d) d.className='dot'+(i<p.length?' f':'');
-    }}
-    var e=document.getElementById('pb-ent');
-    if(e) e.className='pb ent'+(p.length===4?' rdy':'');
-  }}
-  function err(){{
-    var le=document.getElementById('pin-err');
-    if(le)le.textContent='❌ 비밀번호가 틀렸습니다';
-    document.querySelectorAll('.dot').forEach(function(d){{
-      d.style.background='#ff4d6d';d.style.borderColor='#ff4d6d';
-    }});
-    setTimeout(function(){{
-      p='';done=false;ud();
-      var le2=document.getElementById('pin-err');
-      if(le2)le2.textContent='';
-    }},800);
-  }}
-  window._pinSubmit=function(){{
-    if(done||p.length<4)return;
-    done=true;
-    if(p===PW){{
-      var u=new URL(window.location.href);
-      u.searchParams.set('auth','1');
-      window.location.href=u.toString();
-    }}else{{err();}}
-  }};
-  window._pp=function(n){{
-    if(done||p.length>=4)return;
-    p+=String(n);ud();
-    if(p.length===4)setTimeout(window._pinSubmit,160);
-  }};
-  window._pd=function(){{if(done)return;p=p.slice(0,-1);ud();}};
-  document.addEventListener('keydown',function(e){{
-    if(e.key>='0'&&e.key<='9')window._pp(+e.key);
-    else if(e.key==='Backspace')window._pd();
-    else if(e.key==='Enter')window._pinSubmit();
-  }});
-}})()">
 
 <div class="pin-wrap">
   <div class="pin-title">K · ALPHA</div>
   <div class="pin-sub">TRADING TERMINAL · SECURE ACCESS</div>
   <div class="pin-box">
-    <div class="pin-label">🔒 PIN 번호 입력</div>
+    <div class="pin-lbl">🔒 PIN 번호 입력</div>
     <div class="pin-dots">
-      <div class="dot" id="pd0"></div><div class="dot" id="pd1"></div>
-      <div class="dot" id="pd2"></div><div class="dot" id="pd3"></div>
+      <div class="_dot" id="_d0"></div>
+      <div class="_dot" id="_d1"></div>
+      <div class="_dot" id="_d2"></div>
+      <div class="_dot" id="_d3"></div>
     </div>
-    <div class="pin-grid">
-      <div class="pb" onclick="window._pp(1)">1</div>
-      <div class="pb" onclick="window._pp(2)">2</div>
-      <div class="pb" onclick="window._pp(3)">3</div>
-      <div class="pb" onclick="window._pp(4)">4</div>
-      <div class="pb" onclick="window._pp(5)">5</div>
-      <div class="pb" onclick="window._pp(6)">6</div>
-      <div class="pb" onclick="window._pp(7)">7</div>
-      <div class="pb" onclick="window._pp(8)">8</div>
-      <div class="pb" onclick="window._pp(9)">9</div>
-      <div class="pb e"></div>
-      <div class="pb" onclick="window._pp(0)">0</div>
-      <div class="pb ent" id="pb-ent" onclick="window._pinSubmit()">↵</div>
+    <div class="pg">
+      {btn(1)}{btn(2)}{btn(3)}
+      {btn(4)}{btn(5)}{btn(6)}
+      {btn(7)}{btn(8)}{btn(9)}
+      <div class="pb" style="visibility:hidden"></div>
+      {btn(0)}
+      <div class="pb pb-ent" id="_ent" onclick="{PIN_LOGIC('ok')}">↵</div>
     </div>
-    <div class="pb del" onclick="window._pd()" style="width:100%;padding:13px 0;margin-top:0">⌫ 지우기</div>
-    <div class="pin-err" id="pin-err">{wrong_msg}</div>
+    <div class="pb-del" onclick="{PIN_LOGIC('del')}">⌫ 지우기</div>
+    <div class="pin-err" id="_err">{wrong_msg}</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
