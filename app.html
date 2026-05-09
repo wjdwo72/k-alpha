@@ -1178,7 +1178,53 @@
   }
   .pf-delete-btn:hover { color: var(--accent3); }
 
-  /* ── 새로고침 버튼 ── */
+  /* ── 필터 설정 버튼 강제 표시 (항상 최상단) ── */
+  #filter-fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #020408;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 3000;
+    box-shadow: 0 0 20px rgba(0,212,255,.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #filter-fab:active { transform: scale(.9); }
+
+  /* 모달 — position:fixed 사용 (IS_STREAMLIT일 때만 absolute로 전환) */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 9000;
+    overflow-y: auto;
+  }
+  .modal-overlay.show { display: flex; align-items: flex-start; justify-content: center; padding: 20px 12px; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 20px;
+    width: min(420px, calc(100vw - 24px));
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: var(--glow-blue), 0 0 60px rgba(0,212,255,0.1);
+    animation: modalIn 0.2s ease;
+    position: relative;
+    margin: auto;
+  }
   .refresh-btn {
     display: flex;
     align-items: center;
@@ -2484,15 +2530,7 @@ function openSettings() {
     const m = b.onclick?.toString().match(/setMktFilter\(this,'(\w+)'\)/);
     if (m && m[1] === scanSettings.mkt) b.classList.add('active');
   });
-
-  // 모달 위치: 현재 스크롤 기준 (iframe position:fixed 미작동 보정)
-  const scrollTop = window.scrollY || document.documentElement.scrollTop;
-  const modal = document.querySelector('#settings-modal .modal');
-  if (modal) {
-    modal.style.top = (scrollTop + 40) + 'px';
-  }
   document.getElementById('settings-modal').classList.add('show');
-  setTimeout(() => { if (modal) modal.scrollIntoView({ behavior:'smooth', block:'start' }); }, 50);
 }
 
 function closeSettings() {
@@ -4190,6 +4228,9 @@ updateClock();
   <div class="refresh-ov-bar"><div class="refresh-ov-fill" id="refresh-ov-fill"></div></div>
   <div class="refresh-ov-step" id="refresh-ov-step"></div>
 </div>
+
+<!-- ⚙ 필터 플로팅 버튼 (항상 표시, 모든 환경) -->
+<button id="filter-fab" onclick="openSettings()" title="스캔 필터 설정">⚙</button>
 
 <!-- 차트 링크 팝업 -->
 <div class="chart-popup-overlay" id="chart-popup-overlay" onclick="closeChartPopup()"></div>
