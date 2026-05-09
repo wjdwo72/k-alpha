@@ -540,4 +540,4 @@ window.__KIS_BALANCE__  = {balance_json};
 window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
-components.html(html, height=1600, scrolling=True)
+components.html(html, height=1800, scrolling=True)
