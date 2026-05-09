@@ -73,18 +73,42 @@ def fetch_prices(token, base_url, ak, secret, codes_tuple):
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_balance(token, base_url, ak, secret, acc):
     try:
-        acc_no=acc.replace('-','')
-        tr_id='VTTC8434R' if 'openapivts' in base_url else 'TTTC8434R'
-        headers={'Content-Type':'application/json','authorization':f'Bearer {token}',
-                  'appkey':ak,'appsecret':secret,'tr_id':tr_id}
-        r=requests.get(f"{base_url}/uapi/domestic-stock/v1/trading/inquire-balance",
-            params={'CANO':acc_no[:8],'ACNT_PRDT_CD':acc_no[8:] or '01',
-                    'AFHR_FLPR_YN':'N','OFL_YN':'','INQR_DVSN':'02','UNPR_DVSN':'01',
-                    'FUND_STTL_ICLD_YN':'N','FNCG_AMT_AUTO_RDPT_YN':'N',
-                    'PRCS_DVSN':'01','CTX_AREA_FK100':'','CTX_AREA_NK100':''},
-            headers=headers, verify=False, timeout=10)
-        return r.json()
-    except Exception as e: return {'error':str(e)}
+        acc_clean = acc.replace('-','').replace(' ','')
+        cano = acc_clean[:8]
+        acnt_cd = acc_clean[8:10] if len(acc_clean) >= 10 else '01'
+        tr_id = 'VTTC8434R' if 'openapivts' in base_url else 'TTTC8434R'
+        headers = {
+            'Content-Type':'application/json',
+            'authorization':f'Bearer {token}',
+            'appkey':ak, 'appsecret':secret,
+            'tr_id':tr_id,
+            'custtype':'P'
+        }
+        r = requests.get(
+            f"{base_url}/uapi/domestic-stock/v1/trading/inquire-balance",
+            params={
+                'CANO': cano,
+                'ACNT_PRDT_CD': acnt_cd,
+                'AFHR_FLPR_YN':'N',
+                'OFL_YN':'',
+                'INQR_DVSN':'02',
+                'UNPR_DVSN':'01',
+                'FUND_STTL_ICLD_YN':'N',
+                'FNCG_AMT_AUTO_RDPT_YN':'N',
+                'PRCS_DVSN':'01',
+                'CTX_AREA_FK100':'',
+                'CTX_AREA_NK100':''
+            },
+            headers=headers, verify=False, timeout=10
+        )
+        data = r.json()
+        # rt_cd '0' = 성공
+        if data.get('rt_cd') == '0':
+            return data
+        else:
+            return {'error': data.get('msg1','잔고 조회 실패'), 'rt_cd': data.get('rt_cd')}
+    except Exception as e:
+        return {'error': str(e)}
 
 # ════════════════════════════════════════
 # 법적 고지 동의 화면
@@ -515,8 +539,17 @@ if st.session_state.kis_token:
             balance=fetch_balance(st.session_state.kis_token,st.session_state.kis_base_url,
                                    st.session_state.kis_ak,st.session_state.kis_sec,st.session_state.kis_acc)
         price_ts=time.strftime("%H:%M:%S")
-        if prices: prices_json=json.dumps(prices); st.caption(f"📊 {len(prices)}종목 · {price_ts}")
-        if balance and not balance.get('error'): balance_json=json.dumps(balance)
+        if prices: prices_json=json.dumps(prices); st.caption(f"📊 현재가 {len(prices)}종목 · {price_ts}")
+        if balance and not balance.get('error'):
+            balance_json=json.dumps(balance)
+            o2 = balance.get('output2',[{}])
+            if o2 and isinstance(o2, list) and len(o2) > 0:
+                dep = int(o2[0].get('dnca_tot_amt',0) or 0)
+                ev  = int(o2[0].get('tot_evlu_amt',0) or 0)
+                o1  = balance.get('output1',[])
+                st.caption(f"💰 예수금 {dep:,}원 · 평가금액 {ev:,}원 · 보유종목 {len(o1)}개")
+        elif balance and balance.get('error'):
+            st.warning(f"잔고 조회 실패: {balance.get('error','')[:50]}")
 
 # ════════════════════════════════════════
 # HTML 터미널

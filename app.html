@@ -4182,19 +4182,30 @@ if (window.__KIS_TOKEN__) {
 // Python 주입 잔고를 포트폴리오에 적용
 function applyInjectedBalance(bal) {
   try {
-    const o2 = bal.output2?.[0] || {};
-    const deposit    = parseInt(o2.dnca_tot_amt || 0);
-    const evalAmt    = parseInt(o2.tot_evlu_amt || 0);
-    const evalPnl    = parseInt(o2.evlu_pfls_smtl_amt || 0);
-    const evalPct    = parseFloat(o2.asst_icdc_erng_rt || 0);
+    var o2 = (bal.output2 && bal.output2[0]) ? bal.output2[0] : {};
+    var deposit  = parseInt(o2.dnca_tot_amt   || o2.nass_amt  || 0);
+    var evalAmt  = parseInt(o2.tot_evlu_amt   || o2.evlu_amt  || 0);
+    var evalPnl  = parseInt(o2.evlu_pfls_smtl_amt || o2.evlu_pfls_amt || 0);
+    var evalPct  = parseFloat(o2.asst_icdc_erng_rt || 0);
 
-    const depEl = document.getElementById('pf-cash');
-    const evlEl = document.getElementById('pf-eval');
-    const pnlEl = document.getElementById('pf-pnl');
-    const pctEl = document.getElementById('pf-pnl-pct');
+    // 예수금
+    var depEl = document.getElementById('pf-cash');
+    var depSub = document.getElementById('pf-cash-sub');
+    if (depEl) {
+      depEl.textContent = deposit > 0
+        ? deposit.toLocaleString('ko-KR') + ' 원'
+        : '0 원';
+      depEl.style.color = 'var(--accent2)';
+    }
+    if (depSub) depSub.textContent = 'KIS 실시간 연동';
 
-    if (depEl) depEl.textContent = deposit.toLocaleString('ko-KR') + ' 원';
+    // 평가금액
+    var evlEl = document.getElementById('pf-eval');
     if (evlEl) evlEl.textContent = evalAmt.toLocaleString('ko-KR') + ' 원';
+
+    // 평가손익
+    var pnlEl = document.getElementById('pf-pnl');
+    var pctEl = document.getElementById('pf-pnl-pct');
     if (pnlEl) {
       pnlEl.textContent = (evalPnl >= 0 ? '+' : '') + evalPnl.toLocaleString('ko-KR') + ' 원';
       pnlEl.style.color = evalPnl >= 0 ? 'var(--accent2)' : 'var(--accent3)';
@@ -4204,29 +4215,43 @@ function applyInjectedBalance(bal) {
       pctEl.style.color = evalPct >= 0 ? 'var(--accent2)' : 'var(--accent3)';
     }
 
-    // 보유 종목 반영
-    const holdings = bal.output1 || [];
-    if (holdings.length > 0) {
-      holdings.forEach(h => {
-        const code = h.pdno;
-        const qty  = parseInt(h.hldg_qty || 0);
-        const avg  = parseInt(h.pchs_avg_pric || 0);
-        const cur  = parseInt(h.prpr || 0);
-        const pnl2 = parseInt(h.evlu_pfls_amt || 0);
-        if (qty === 0) return;
-        // 기존 포트폴리오에 없으면 추가
-        const exists = pfHoldings.find(p => p.code === code);
-        if (!exists) {
-          pfHoldings.push({ code, name: h.prdt_name || code, qty, avg,
-                            cur: cur.toLocaleString(), pnl: pnl2, mkt: 'kr' });
-        }
-      });
-      pfRenderHoldings();
-    }
-    const now = new Date();
-    const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-    addLog(ts, `[잔고] 예수금 ${deposit.toLocaleString()}원 · 평가금액 ${evalAmt.toLocaleString()}원`, 'ok');
-  } catch(e) { console.error('잔고 적용 오류', e); }
+    // 보유 종목 (output1) → pfHoldings에 반영
+    var holdings = bal.output1 || [];
+    var added = 0;
+    holdings.forEach(function(h) {
+      var code = h.pdno;
+      var qty  = parseInt(h.hldg_qty || 0);
+      var avg  = parseFloat(h.pchs_avg_pric || 0);
+      var cur  = parseFloat(h.prpr || 0);
+      var pnl2 = parseInt(h.evlu_pfls_amt || 0);
+      var name = h.prdt_name || code;
+      if (qty === 0) return;
+
+      // 기존 항목 업데이트 or 신규 추가
+      var idx = pfHoldings.findIndex(function(p) { return p.code === code; });
+      var item = { code: code, name: name, qty: qty, avgPrice: avg,
+                   curPrice: cur, market: 'kr', autoKis: true };
+      if (idx >= 0) {
+        pfHoldings[idx] = item;
+      } else {
+        pfHoldings.push(item);
+        added++;
+      }
+    });
+
+    // 저장 및 렌더
+    pfSave();
+    pfRenderSummary();
+    pfRenderHoldings();
+
+    var ts = new Date().toLocaleTimeString('ko-KR');
+    var msg = '[잔고] 예수금 ' + deposit.toLocaleString() + '원';
+    if (added > 0) msg += ' · 보유종목 ' + added + '개 추가';
+    addLog(ts, msg, 'ok');
+
+  } catch(e) {
+    console.error('잔고 적용 오류:', e);
+  }
 }
 
 // Python 주입 가격을 카드에 적용
