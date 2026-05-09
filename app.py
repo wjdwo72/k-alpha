@@ -305,20 +305,19 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
         act = st.session_state.pop('_kv_action')
         pin_v = st.session_state.pop('_kv_pin','')
         if act == 'save':
-            ak_v  = st.session_state.kis_ak
-            sec_v = st.session_state.kis_sec
-            acc_v = st.session_state.kis_acc
-            env_v = st.session_state.kis_env
+            ak_v  = st.session_state.get('kis_ak_inp','') or st.session_state.kis_ak
+            sec_v = st.session_state.get('kis_sec_inp','') or st.session_state.kis_sec
+            acc_v = st.session_state.get('kis_acc_inp','') or st.session_state.kis_acc
+            env_v = st.session_state.get('kis_env_sel','실전투자') or st.session_state.kis_env
             if ak_v and sec_v and len(pin_v)==4 and pin_v.isdigit():
                 ck_val = py_save(ak_v,sec_v,acc_v,env_v,pin_v)
                 cp_val = base64.b64encode((pin_v+":kalpha").encode()).decode()
                 st.session_state['_saved_ck'] = ck_val
                 st.session_state['_saved_cp'] = cp_val
-                # JS로 localStorage에도 저장
                 st.session_state['_js_save'] = (ck_val, cp_val)
-                st.success("✅ 저장 완료! 브라우저에 영구 보존됩니다")
+                st.success("✅ 저장 완료!")
             elif not ak_v or not sec_v:
-                st.error("앱키·시크릿 먼저 입력·연결 후 저장하세요")
+                st.error("앱키·시크릿 먼저 입력 후 저장하세요")
             else:
                 st.error("4자리 숫자 비번을 입력하세요")
         elif act == 'load':
@@ -540,4 +539,4 @@ window.__KIS_BALANCE__  = {balance_json};
 window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
-components.html(html, height=3500, scrolling=False)
+components.html(html, height=5000, scrolling=False)

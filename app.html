@@ -2554,11 +2554,11 @@ let riskActive = false;
 // 스캔 필터 설정
 // ──────────────────────────────────────────────
 let scanSettings = {
-  volMin: 500,       // 억원
+  volMin: 100,       // 억원 (낮게 설정해 더 많은 종목 표시)
   cap: 'all',        // all / large / mid / small
   mkt: 'all',        // all / kospi / kosdaq
-  rsiMin: 30,
-  rsiMax: 60,
+  rsiMin: 20,        // 더 넓은 RSI 범위
+  rsiMax: 70,
 };
 
 function openSettings() {
@@ -4234,6 +4234,26 @@ renderCards();
 renderUsCards();
 setInterval(updateClock, 1000);
 updateClock();
+
+// ── Streamlit iframe 높이 자동 조정 ──
+if (IS_STREAMLIT) {
+  function sendHeight() {
+    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
+    window.parent.postMessage({ type: 'streamlit:setFrameHeight', height: h }, '*');
+  }
+  // 초기 + 렌더 후
+  setTimeout(sendHeight, 300);
+  setTimeout(sendHeight, 800);
+  setTimeout(sendHeight, 2000);
+  // 탭 전환/렌더 시마다 재측정
+  window.addEventListener('click', function() { setTimeout(sendHeight, 400); });
+}
+
+// 포트폴리오 초기 렌더 (탭이 숨겨져 있어도 데이터 준비)
+setTimeout(function() {
+  if (typeof pfRenderSummary === 'function') pfRenderSummary();
+  if (typeof pfRenderHoldings === 'function') pfRenderHoldings();
+}, 200);
 </script>
 <!-- 전체 새로고침 오버레이 -->
 <div id="refresh-overlay">
