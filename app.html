@@ -2797,7 +2797,7 @@ function buildCard(stock, rank) {
     <div class="card-body">
       <div class="price-block">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-          <span id="price-badge-${stock.code}" style="font-family:'Share Tech Mono',monospace;font-size:8px;padding:1px 5px;border-radius:3px;background:rgba(255,200,0,0.12);border:1px solid rgba(255,200,0,0.3);color:#ffc800">DEMO</span>
+          <span id="price-badge-${stock.code}" style="font-family:'Share Tech Mono',monospace;font-size:8px;padding:1px 5px;border-radius:3px;${stock._isLive || kisToken ? 'background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.3);color:#00ff88' : 'background:rgba(255,200,0,0.12);border:1px solid rgba(255,200,0,0.3);color:#ffc800'}">${stock._isLive || kisToken ? 'LIVE' : 'DEMO'}</span>
           <button id="price-refresh-${stock.code}" onclick="refreshOnePrice('${stock.code}','${stock.name}')" title="현재가 갱신" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:0;line-height:1;transition:color 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">↻</button>
           <span id="price-ts-${stock.code}" style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-dim)"></span>
         </div>
@@ -4436,13 +4436,14 @@ function applyRealScanData() {
 function convertScanCards(cards, cat) {
   return cards.map(function(c) {
     return {
-      name: c.name, code: c.code, score: c.score, grade: c.grade,
+      name: c.name || c.code,  // 이름 없으면 코드
+      code: c.code, score: c.score, grade: c.grade,
       price: c.price, change: c.change, up: c.up,
       buy: c.buy, target: c.target, stop: c.stop, rr: c.rr, vol: c.vol,
       reasons: c.reasons || [], inds: c.inds || [],
       chart3m: generateMiniChart(c.price, c.up),
       chartD:  generateMiniChart(c.price, c.up, true),
-      cat: cat, mkt: c.mkt || 'kospi'
+      cat: cat, mkt: c.mkt || 'kospi', _isLive: true
     };
   });
 }
