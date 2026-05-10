@@ -910,36 +910,56 @@ if st.session_state.kis_token:
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개
 </div>""", unsafe_allow_html=True)
 
-    if tg_token and tg_chat and (cats.get('swing') or cats.get('smallmid')):
-        bucket=int(time.time()//(iv_min*60))
-        if bucket!=st.session_state.get('_tg_bucket',-1):
-            st.session_state['_tg_bucket']=bucket
-            top_main  = (cats['swing']+cats['surge'])[:5]
-            top_small = cats.get('smallmid',[])[:5]
-            lines=[f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{time.strftime('%H:%M:%S')}]\n"
-                   f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n"
-                   "━━━━━━━━━━━━━━━━"]
+    # ── 텔레그램 자동 알림 ──
+    tg_token = st.session_state.get('tg_token','')
+    tg_chat  = st.session_state.get('tg_chat','')
+    if tg_token and tg_chat and all_stocks:
+        bucket = int(time.time() // (iv_min * 60))
+        if bucket != st.session_state.get('_tg_bucket', -1):
+            st.session_state['_tg_bucket'] = bucket
+
+            # 카테고리 결과 우선, 없으면 거래대금 상위 fallback
+            top_main = (cats['swing'] + cats['surge'])[:5]
+            if not top_main:
+                top_main = sorted(all_stocks, key=lambda x: x.get('trAmt',0), reverse=True)[:5]
+                for s in top_main: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
+            top_small = cats.get('smallmid', [])[:5]
+
+            now_ts = time.strftime('%H:%M:%S')
+            is_market = 9 <= int(time.strftime('%H')) <= 15
+
             def fmt_stock(s, cat):
-                pct=s.get('changePct',0); sign='+' if pct>=0 else ''
-                card=build_card(s,cat)
-                reasons=[r['text'][:35] for r in card.get('reasons',[])][:2]
-                reason_str=' | '.join(reasons) if reasons else '분석중'
-                icon='🔴' if s.get('grade')=='S' else '🟡'
+                pct = s.get('changePct', 0); sign = '+' if pct >= 0 else ''
+                card = build_card(s, cat)
+                icon = '🔴' if s.get('grade') == 'S' else '🟡'
                 return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
                         f"   💰 현재가: <b>{s['price']:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
-                        f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}\n"
-                        f"   📋 {reason_str}")
-            if top_main:
-                lines.append("🔥 <b>[실시간 스윙/급등 TOP5]</b>")
-                for s in top_main: lines.append(fmt_stock(s, s.get('cat','swing')))
+                        f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}")
+
+            mkt_label = "🟢 장중" if is_market else "🔴 장 마감"
+            section_title = "🔥 <b>[실시간 스윙/급등 TOP5]</b>" if cats.get('swing') else "📊 <b>[거래대금 상위 TOP5]</b>"
+
+            lines = [f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{now_ts}] {mkt_label}\n"
+                     f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n"
+                     "━━━━━━━━━━━━━━━━",
+                     section_title]
+            for s in top_main:
+                lines.append(fmt_stock(s, s.get('cat','swing')))
             if top_small:
                 lines.append("\n⬟ <b>[내일의 중소형주 TOP5]</b>")
-                for s in top_small: lines.append(fmt_stock(s, 'smallmid'))
-            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료")
+                for s in top_small:
+                    lines.append(fmt_stock(s, 'smallmid'))
+            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료 · 다음 알림 {iv_min}분 후")
+
             try:
-                requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=10)
-            except: pass
+                resp = requests.post(
+                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                    json={"chat_id": tg_chat, "text": "\n\n".join(lines), "parse_mode": "HTML"},
+                    timeout=10)
+                if resp.json().get('ok'):
+                    st.toast(f"📱 텔레그램 전송 완료 ({now_ts})", icon="✅")
+            except Exception as e:
+                st.caption(f"텔레그램 오류: {e}")
 
 # ════ 5. HTML 터미널 ════
 if not os.path.exists("app.html"):
