@@ -2804,12 +2804,23 @@ function getStockName(code) {
 
 function openKisChartFromEl(el, market, event) {
   if (event) event.stopPropagation();
-  // 부모 카드의 data 속성에서 직접 읽기 (가장 신뢰성 높음)
-  var card = el.closest ? el.closest('[data-stock-code]') : null;
-  if (!card) { card = el; while(card && !card.getAttribute('data-stock-code')) card = card.parentElement; }
+
+  // 1순위: 부모 카드의 data 속성
+  var card = el;
+  while (card && !card.getAttribute('data-stock-code')) {
+    card = card.parentElement;
+  }
   var code = card ? card.getAttribute('data-stock-code') : '';
-  var name = card ? card.getAttribute('data-stock-name') : getStockName(code);
+  var name = card ? card.getAttribute('data-stock-name') : '';
+
+  // 2순위: 카드 안의 card-name span 텍스트
+  if (!name && card) {
+    var nameSpan = card.querySelector('.card-name');
+    if (nameSpan) name = nameSpan.textContent.trim();
+  }
+  // 3순위: 레지스트리
   if (!name || name === code) name = getStockName(code);
+
   openKisChart(code, market, name, event);
 }
 
@@ -2950,13 +2961,15 @@ function buildCard(stock, rank) {
         </div>
       </div>
       <div class="chart-block">
-        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChartFromEl(this,'kr',event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
+          data-c="${stock.code}" data-n="${stock.name}"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'kr',this.dataset.n,e)}).call(this,event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
-        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChartFromEl(this,'kr',event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
+          data-c="${stock.code}" data-n="${stock.name}"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'kr',this.dataset.n,e)}).call(this,event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -3191,13 +3204,15 @@ function buildUsCard(stock, rank) {
         </div>
       </div>
       <div class="chart-block">
-        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChartFromEl(this,'us',event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
+          data-c="${stock.code}" data-n="${stock.name}"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'us',this.dataset.n,e)}).call(this,event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
-        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChartFromEl(this,'us',event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
+          data-c="${stock.code}" data-n="${stock.name}"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'us',this.dataset.n,e)}).call(this,event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
