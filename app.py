@@ -157,8 +157,21 @@ KOSDAQ_CODES = [
     '290650','006280','143240','026960','041510','222080','241560','063160','048830','034020',
 ]
 
-@st.cache_data(ttl=600, show_spinner=False)
-def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
+@st.cache_data(ttl=86400, show_spinner=False)  # 하루 캐시
+def fetch_stock_name(token, base_url, ak, secret, code):
+    """KIS 종목 정보 검색으로 한글 종목명 조회"""
+    try:
+        headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
+                   'appkey':ak,'appsecret':secret,'tr_id':'CTPF1002R'}
+        r = requests.get(f"{base_url}/uapi/domestic-stock/v1/quotations/search-stock-info",
+            params={'PDNO':code,'PRDT_TYPE_CD':'300'},
+            headers=headers, verify=False, timeout=5)
+        o = r.json().get('output',{})
+        name = (o.get('prdt_abrv_name') or o.get('prdt_name') or
+                o.get('hts_kor_isnm') or '').strip()
+        return name if name else code
+    except:
+        return code
     """거래량 순위 API → 실패 시 개별 현재가 조회 fallback"""
     tr_id = 'FHPST01710000'
     headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
@@ -182,6 +195,8 @@ def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
                         item.get('prdt_abrv_name') or item.get('prdt_name') or
                         item.get('kor_isnm') or '').strip()
             name = get_stock_name(code, api_name)
+            if name == code and token:  # 이름 없으면 종목 정보 API 시도
+                name = fetch_stock_name(token, base_url, ak, secret, code)
             if not code or is_etf(name): continue
             try:
                 price   = int(item.get('stck_prpr','0') or 0)
@@ -225,6 +240,9 @@ def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
                 if not found: continue
                 o, name_raw = found
                 name = get_stock_name(code, name_raw)
+                # 이름이 코드 그대로면 종목 정보 API로 한번 더 시도
+                if name == code and token:
+                    name = fetch_stock_name(token, base_url, ak, secret, code)
                 if is_etf(name): continue
                 sign    = o.get('prdy_vrss_sign','3')
                 price   = int(o.get('stck_prpr','0') or 0)
