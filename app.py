@@ -276,50 +276,56 @@ def fetch_balance(token, base_url, ak, secret, acc):
     except Exception as e: return {'error':str(e)}
 
 def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
-    """스캔 결과를 카테고리별로 분류"""
-    # 블랙리스트 제외
-    stocks = [s for s in all_stocks if s['code'] not in blacklist]
+    """스캔 결과를 카테고리별로 분류 (중복 제거 포함)"""
+    # 중복 코드 제거 (KOSPI+KOSDAQ 합칠 때 같은 종목 중복 가능)
+    seen = {}
+    unique_stocks = []
+    for s in all_stocks:
+        if s['code'] not in seen:
+            seen[s['code']] = True
+            unique_stocks.append(s)
+    stocks_filtered = [s for s in unique_stocks if s['code'] not in blacklist]
 
     swing, surge, tomorrow, smallmid = [], [], [], []
-    for s in stocks:
+    used_codes = set()  # 카테고리 중복 방지
+
+    for s in stocks_filtered:
         pct = s.get('changePct', 0)
         tr  = s.get('trAmt', 0)
-
-        if tr < vol_min: continue  # 거래대금 필터
-
-        # RSI 근사값 (등락률 기반 단순 추정)
-        rsi_approx = 50 + pct * 2.5
-        rsi_approx = max(10, min(90, rsi_approx))
+        if tr < vol_min: continue
+        rsi_approx = max(10, min(90, 50 + pct * 2.5))
         if not (rsi_min <= rsi_approx <= rsi_max): continue
-
         s['rsiApprox'] = round(rsi_approx, 1)
 
-        # 카테고리 분류 로직
         if 0.5 <= pct <= 4.0 and tr >= 200:
-            # 실시간 스윙: 적당한 상승 + 거래대금 충분
             score = min(95, 70 + int(pct*5) + min(15, tr//500))
-            s['score']=score; s['grade']='S' if score>=85 else 'A' if score>=75 else 'B'
-            swing.append(s)
+            s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=85 else 'A' if score>=75 else 'B'
+            swing.append(s2)
         elif pct >= 4.0 and tr >= 100:
-            # 급등 전야: 급등 중
             score = min(95, 65 + int(pct*3) + min(20, tr//300))
-            s['score']=score; s['grade']='S' if score>=85 else 'A' if score>=75 else 'B'
-            surge.append(s)
+            s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=85 else 'A' if score>=75 else 'B'
+            surge.append(s2)
         elif -1.0 <= pct <= 1.5 and tr >= 50:
-            # 내일 관심주: 횡보/소폭 상승
             score = min(90, 60 + min(20, tr//200) + int(abs(pct)*3))
-            s['score']=score; s['grade']='S' if score>=80 else 'A' if score>=70 else 'B'
-            tomorrow.append(s)
+            s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=80 else 'A' if score>=70 else 'B'
+            tomorrow.append(s2)
 
-        # 내일의 중소형주: 거래대금 50~500억 (중소형)
         if 50 <= tr <= 500 and -2.0 <= pct <= 3.0:
             score = min(90, 65 + min(15, tr//50) + int(pct*5))
             s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=80 else 'A' if score>=70 else 'B'
             smallmid.append(s2)
 
-    # 점수순 정렬, 상위 N개
     def top(lst, n):
-        return sorted(lst, key=lambda x: x.get('score',0), reverse=True)[:n]
+        # 점수순 정렬 + 중복 코드 제거
+        sorted_lst = sorted(lst, key=lambda x: x.get('score',0), reverse=True)
+        seen_codes = set()
+        result = []
+        for s in sorted_lst:
+            if s['code'] not in seen_codes:
+                seen_codes.add(s['code'])
+                result.append(s)
+            if len(result) >= n: break
+        return result
 
     return {
         'swing':    top(swing, 5),

@@ -2792,7 +2792,15 @@ function hexToRgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-// ── SVG 인라인 차트 생성 ──
+// ── 글로벌 종목 레지스트리 (코드→이름 매핑) ──
+var STOCK_REGISTRY = {};
+
+function registerStock(code, name) {
+  if (code && name) STOCK_REGISTRY[code] = name;
+}
+function getStockName(code) {
+  return STOCK_REGISTRY[code] || code;
+}
 function makeSvgChart(data, color, filled) {
   const W = 280, H = 48, pad = 3;
   var nums = (data || []).map(function(v) {
@@ -2865,6 +2873,7 @@ function codeToSeed(code) {
 // BUILD CARD
 // ──────────────────────────────────────────────
 function buildCard(stock, rank) {
+  registerStock(stock.code, stock.name);  // 레지스트리에 등록
   const gradeClass = stock.grade === 'S' ? 'grade-s' : stock.grade === 'A' ? 'grade-a' : 'grade-b';
   const scoreColor = stock.grade === 'S' ? '#ff4d6d' : stock.grade === 'A' ? 'var(--accent)' : 'var(--accent2)';
   const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : '#00ff88';
@@ -2922,14 +2931,12 @@ function buildCard(stock, rank) {
       </div>
       <div class="chart-block">
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          data-code="${stock.code}" data-market="kr" data-name="${stock.name.replace(/"/g,'&quot;')}"
-          onclick="openKisChart(this.dataset.code,'kr',this.dataset.name,event)">
+          onclick="openKisChart('${stock.code}','kr',event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          data-code="${stock.code}" data-market="kr" data-name="${stock.name.replace(/"/g,'&quot;')}"
-          onclick="openKisChart(this.dataset.code,'kr',this.dataset.name,event)">
+          onclick="openKisChart('${stock.code}','kr',event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -3163,14 +3170,12 @@ function buildUsCard(stock, rank) {
       </div>
       <div class="chart-block">
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          data-code="${stock.code}" data-market="us" data-name="${stock.name.replace(/"/g,'&quot;')}"
-          onclick="openKisChart(this.dataset.code,'us',this.dataset.name,event)">
+          onclick="openKisChart('${stock.code}','us',event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          data-code="${stock.code}" data-market="us" data-name="${stock.name.replace(/"/g,'&quot;')}"
-          onclick="openKisChart(this.dataset.code,'us',this.dataset.name,event)">
+          onclick="openKisChart('${stock.code}','us',event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -3917,15 +3922,18 @@ function clearApiKeys() {
 // ──────────────────────────────────────────────
 // 차트 링크 팝업
 // ──────────────────────────────────────────────
-function openKisChart(code, market, name, event) {
-  event && event.stopPropagation();
+function openKisChart(code, market, event) {
+  if (event) event.stopPropagation();
 
   const popup   = document.getElementById('chart-popup');
   const overlay = document.getElementById('chart-popup-overlay');
   const nameEl  = document.getElementById('chart-popup-stock-name');
   const codeEl  = document.getElementById('chart-popup-code');
   const linksEl = document.getElementById('chart-popup-links');
-  if (nameEl) nameEl.textContent = name || code;
+
+  // 레지스트리에서 정확한 이름 조회
+  var name = getStockName(code);
+  if (nameEl) nameEl.textContent = name;
   if (codeEl) codeEl.textContent = code;
 
   // 링크 목록 구성
