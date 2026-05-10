@@ -2792,8 +2792,16 @@ function hexToRgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-// ── 글로벌 종목 레지스트리 (코드→이름 매핑) ──
-var STOCK_REGISTRY = {};
+// 차트 wrap 클릭 → 부모 카드에서 종목 정보 직접 읽기
+function openKisChartFromEl(el, market, event) {
+  if (event) event.stopPropagation();
+  // 카드 루트까지 올라가서 data-code, data-name 읽기
+  var card = el.closest('[data-stock-code]');
+  var code = card ? card.getAttribute('data-stock-code') : '';
+  var name = card ? card.getAttribute('data-stock-name') : '';
+  if (!name) name = code;
+  openKisChart(code, market, name, event);
+}
 
 function registerStock(code, name) {
   if (code && name) STOCK_REGISTRY[code] = name;
@@ -2897,6 +2905,8 @@ function buildCard(stock, rank) {
   const div = document.createElement('div');
   div.className = 'card';
   div.dataset.cat = stock.cat;
+  div.setAttribute('data-stock-code', stock.code);
+  div.setAttribute('data-stock-name', stock.name);
   div.innerHTML = `
     <div class="card-rank">${rank}</div>
     <div class="card-header">
@@ -2931,12 +2941,12 @@ function buildCard(stock, rank) {
       </div>
       <div class="chart-block">
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChart('${stock.code}','kr',event)">
+          onclick="openKisChartFromEl(this,'kr',event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChart('${stock.code}','kr',event)">
+          onclick="openKisChartFromEl(this,'kr',event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -3142,6 +3152,8 @@ function buildUsCard(stock, rank) {
   const div = document.createElement('div');
   div.className = 'card';
   div.dataset.cat = stock.cat;
+  div.setAttribute('data-stock-code', stock.code);
+  div.setAttribute('data-stock-name', stock.name);
   div.style.borderColor = 'rgba(110,181,255,0.15)';
   div.innerHTML = `
     <div class="card-rank">${rank}</div>
@@ -3170,12 +3182,12 @@ function buildUsCard(stock, rank) {
       </div>
       <div class="chart-block">
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChart('${stock.code}','us',event)">
+          onclick="openKisChartFromEl(this,'us',event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
         <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
-          onclick="openKisChart('${stock.code}','us',event)">
+          onclick="openKisChartFromEl(this,'us',event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>

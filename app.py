@@ -746,32 +746,31 @@ if st.session_state.kis_token:
         bucket=int(time.time()//(iv_min*60))
         if bucket!=st.session_state.get('_tg_bucket',-1):
             st.session_state['_tg_bucket']=bucket
-            top_main = (cats['swing']+cats['surge'])[:5]
+            top_main  = (cats['swing']+cats['surge'])[:5]
             top_small = cats.get('smallmid',[])[:5]
-
             lines=[f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{price_ts}]\n"
-                   f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n━━━━━━━━━━━━━━━━"]
-
+                   f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n"
+                   "━━━━━━━━━━━━━━━━"]
+            def fmt_stock(s, cat):
+                pct=s.get('changePct',0); sign='+' if pct>=0 else ''
+                card=build_card(s,cat)
+                reasons=[r['text'][:35] for r in card.get('reasons',[])][:2]
+                reason_str=' | '.join(reasons) if reasons else '분석중'
+                icon='🔴' if s.get('grade')=='S' else '🟡'
+                return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
+                        f"   💰 현재가: <b>{s['price']:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
+                        f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}\n"
+                        f"   📋 {reason_str}")
             if top_main:
                 lines.append("🔥 <b>[실시간 스윙/급등 TOP5]</b>")
-                for s in top_main:
-                    pct=s.get('changePct',0); sign='+' if pct>=0 else ''
-                    lines.append(f"{'🔴' if s.get('grade')=='S' else '🟡'} "
-                                 f"<b>{s['name']}</b> ({s['code']})\n"
-                                 f"   {s['price']:,}원 {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억")
-
+                for s in top_main: lines.append(fmt_stock(s, s.get('cat','swing')))
             if top_small:
                 lines.append("\n⬟ <b>[내일의 중소형주 TOP5]</b>")
-                for s in top_small:
-                    pct=s.get('changePct',0); sign='+' if pct>=0 else ''
-                    lines.append(f"{'🔴' if s.get('grade')=='S' else '🟡'} "
-                                 f"<b>{s['name']}</b> ({s['code']})\n"
-                                 f"   {s['price']:,}원 {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억")
-
+                for s in top_small: lines.append(fmt_stock(s, 'smallmid'))
             lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료")
             try:
                 requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=8)
+                    json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=10)
             except: pass
 
 # ════ 5. HTML 터미널 ════
