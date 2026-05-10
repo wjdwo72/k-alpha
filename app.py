@@ -86,13 +86,33 @@ if qp.get('tg') and not st.session_state.get('tg_token'):
         st.session_state['tg_token']=tg_data.get('t','')
         st.session_state['tg_chat']=tg_data.get('c','')
     except: pass
+
+# 인증 후 URL에 저장된 키 자동 불러오기 + 자동 연결
+# (PIN 입력 완료 OR no-pin 모드 OR 이미 인증됨)
+if qp.get('ck') and st.session_state.auth and not st.session_state.kis_token:
+    if not st.session_state.kis_ak:  # 아직 키 안 불러온 경우
+        try:
+            d = py_load(qp.get('ck',''), PASSWORD)
+            st.session_state.kis_ak  = d.get('ak','')
+            st.session_state.kis_sec = d.get('sec','')
+            st.session_state.kis_acc = d.get('acc','')
+            st.session_state.kis_env = d.get('env','실전투자')
+            st.session_state['_do_auto_connect'] = True
+            st.rerun()
+        except: pass
+    elif not st.session_state.get('_auto_conn_tried'):
+        # 키는 있는데 아직 연결 안 됨 → 자동 연결
+        st.session_state['_auto_conn_tried'] = True
+        st.session_state['_do_auto_connect'] = True
+        st.rerun()
+
 if qp.get('auth')=='1' and not st.session_state.auth:
     st.session_state.auth=True
     try: del qp['auth']
     except: pass
     st.rerun()
 
-# 자동 불러오기 (PIN via URL)
+# 자동 불러오기 (HTML 컴포넌트 PIN via URL)
 if qp.get('_lpin') and qp.get('ck'):
     pin_a=qp.get('_lpin',''); ck_a=qp.get('ck',''); cp_a=qp.get('cp','')
     try: del qp['_lpin']
@@ -103,7 +123,7 @@ if qp.get('_lpin') and qp.get('ck'):
             st.session_state.kis_ak=d.get('ak',''); st.session_state.kis_sec=d.get('sec','')
             st.session_state.kis_acc=d.get('acc',''); st.session_state.kis_env=d.get('env','실전투자')
             st.session_state['_load_ok']=True
-            if st.session_state.auto_connect: st.session_state['_do_auto_connect']=True
+            st.session_state['_do_auto_connect']=True
             st.rerun()
         except: pass
 
@@ -127,6 +147,9 @@ def do_connect(ak, sec, acc, env):
 
 if st.session_state.get('_do_auto_connect') and st.session_state.kis_ak:
     del st.session_state['_do_auto_connect']
+    if st.session_state.get('_pin_connect_msg'):
+        del st.session_state['_pin_connect_msg']
+        st.toast("🔗 저장된 키로 자동 연결 중...", icon="⚡")
     do_connect(st.session_state.kis_ak, st.session_state.kis_sec,
                st.session_state.kis_acc, st.session_state.kis_env)
     st.rerun()
@@ -490,9 +513,12 @@ if st.session_state.use_pin and not st.session_state.auth:
                 if qp.get('ck'):
                     try:
                         d=py_load(qp.get('ck',''), PASSWORD)
-                        st.session_state.kis_ak=d.get('ak',''); st.session_state.kis_sec=d.get('sec','')
-                        st.session_state.kis_acc=d.get('acc',''); st.session_state.kis_env=d.get('env','실전투자')
-                        st.session_state['_do_auto_connect']=True
+                        st.session_state.kis_ak  = d.get('ak','')
+                        st.session_state.kis_sec = d.get('sec','')
+                        st.session_state.kis_acc = d.get('acc','')
+                        st.session_state.kis_env = d.get('env','실전투자')
+                        st.session_state['_do_auto_connect'] = True
+                        st.session_state['_pin_connect_msg'] = True
                     except: pass
             else: st.session_state.pin_err=True; st.session_state.pin_buf=''
     def press_del():
