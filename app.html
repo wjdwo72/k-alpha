@@ -1386,7 +1386,11 @@
   <!-- CONTENT -->
   <div class="content">
 
-    <div class="api-notice" id="api-notice">
+    <div id="live-banner" style="display:none;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);
+      border-radius:6px;padding:8px 12px;margin-bottom:8px;font-family:'Share Tech Mono',monospace;
+      font-size:11px;color:#00d4ff;letter-spacing:.5px"></div>
+
+    <div class="api-notice" id="demo-banner">
       ⚙ <strong>데모 모드:</strong> 현재 샘플 데이터로 구동 중입니다. KIS API 키를 사이드바 [설정]에 입력하면 실시간 전환됩니다. — K
     </div>
 
@@ -4398,10 +4402,71 @@ function applyInjectedPrices(prices) {
   addLog(ts, `[PRICE] Python 서버사이드 현재가 적용 완료 (${Object.keys(prices).length}종목)`, 'ok');
 }
 
-// 프록시 상태 자동 확인 (로컬에서만)
-if (!IS_STREAMLIT) {
-  setTimeout(() => checkProxyAndUpdate(), 600);
+// ── Python 실시간 스캔 결과 적용 ──
+function applyRealScanData() {
+  var scan = window.__SCAN_RESULT__;
+  if (!scan || !scan.ts) return;
+
+  // 스캔 배지 업데이트
+  var scanBadge = document.getElementById('scan-count');
+  if (scanBadge) {
+    scanBadge.textContent = (scan.total || 0) + '종목';
+  }
+  var scanTs = document.getElementById('scan-ts');
+  if (scanTs) scanTs.textContent = scan.ts;
+
+  // DEMO 데이터를 실시간 데이터로 교체
+  if (scan.swing && scan.swing.length > 0)    DEMO.swing    = convertScanCards(scan.swing,    'swing');
+  if (scan.surge && scan.surge.length > 0)    DEMO.surge    = convertScanCards(scan.surge,    'surge');
+  if (scan.tomorrow && scan.tomorrow.length > 0) DEMO.tomorrow = convertScanCards(scan.tomorrow, 'tomorrow');
+  if (scan.smallmid && scan.smallmid.length > 0) DEMO.smallmid = convertScanCards(scan.smallmid, 'smallmid');
+
+  renderCards();
+
+  // 배너 업데이트
+  var banner = document.getElementById('demo-banner');
+  if (banner) banner.style.display='none';
+  var live = document.getElementById('live-banner');
+  if (live) {
+    live.style.display='block';
+    live.innerHTML = '● LIVE · KOSPI+KOSDAQ ' + (scan.total||0) + '종목 실시간 스캔 · ' + scan.ts;
+  }
 }
+
+function convertScanCards(cards, cat) {
+  return cards.map(function(c) {
+    return {
+      name: c.name, code: c.code, score: c.score, grade: c.grade,
+      price: c.price, change: c.change, up: c.up,
+      buy: c.buy, target: c.target, stop: c.stop, rr: c.rr, vol: c.vol,
+      reasons: c.reasons || [], inds: c.inds || [],
+      chart3m: generateMiniChart(c.price, c.up),
+      chartD:  generateMiniChart(c.price, c.up, true),
+      cat: cat, mkt: c.mkt || 'kospi'
+    };
+  });
+}
+
+function generateMiniChart(price, up, daily) {
+  // 단순 가상 차트 데이터 생성 (실제 데이터 대체)
+  var pts = [], base = up ? price*0.97 : price*1.03;
+  var steps = daily ? 10 : 10;
+  for (var i=0; i<steps; i++) {
+    var r = 1 + (Math.random()-0.5)*0.01;
+    base = base * r;
+    pts.push(Math.round(base));
+  }
+  pts[pts.length-1] = price;
+  return pts;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    if (window.__SCAN_RESULT__ && window.__SCAN_RESULT__.ts) {
+      applyRealScanData();
+    }
+  }, 300);
+});
 if (localStorage.getItem('k_api_keys')) {
   const pinSt = document.getElementById('pin-status');
   if (pinSt) { pinSt.textContent = '💾 저장된 키 있음 — 비번 입력 후 불러오기'; pinSt.style.color = 'var(--accent4)'; }
