@@ -2792,39 +2792,73 @@ function hexToRgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-// ── SVG 인라인 차트 생성 (canvas 대신 — 항상 렌더됨) ──
+// ── SVG 인라인 차트 생성 ──
 function makeSvgChart(data, color, filled) {
-  const W = 280, H = 48, pad = 4;
-  // 데이터 파싱 및 검증
+  const W = 280, H = 48, pad = 3;
   var nums = (data || []).map(function(v) {
     return typeof v === 'string' ? parseFloat(v.replace(/,/g,'')) : Number(v);
   }).filter(function(v) { return !isNaN(v) && v > 0; });
 
-  // 데이터 없으면 더미 생성 (가격 정보 활용)
   if (nums.length < 2) {
-    nums = [95,97,96,98,97,99,98,100,99,100];
+    // 데이터 없으면 기본 상승 라인
+    nums = [97,96,97,98,97,98,99,98,99,100];
   }
 
   var min = Math.min.apply(null, nums);
   var max = Math.max.apply(null, nums);
   var range = max - min;
-  if (range < max * 0.001) range = max * 0.01; // 너무 작으면 확대
+  if (range < max * 0.005) {
+    // 범위가 너무 작으면 인위적으로 늘림
+    min = min * 0.995;
+    max = max * 1.005;
+    range = max - min;
+  }
 
   var pts = nums.map(function(v, i) {
     var x = pad + (i / (nums.length - 1)) * (W - pad * 2);
-    var y = H - pad - ((v - min) / range) * (H - pad * 2);
+    var y = (H - pad) - ((v - min) / range) * (H - pad * 2);
     return x.toFixed(1) + ',' + y.toFixed(1);
   });
 
-  var polyline = '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round"/>';
+  var col = color.startsWith('var(') ? '#00d4ff' : color;
+  var polyline = '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + col + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
   var fill = '';
   if (filled) {
-    var last = pts[pts.length-1].split(',');
-    var first = pts[0].split(',');
-    fill = '<polygon points="' + pts.join(' ') + ' ' + last[0] + ',' + H + ' ' + first[0] + ',' + H + '" fill="' + color + '" fill-opacity="0.15"/>';
+    var lastX = pts[pts.length-1].split(',')[0];
+    var firstX = pts[0].split(',')[0];
+    fill = '<polygon points="' + pts.join(' ') + ' ' + lastX + ',' + H + ' ' + firstX + ',' + H + '" fill="' + col + '" fill-opacity="0.18"/>';
   }
 
-  return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:100%;display:block;position:absolute;inset:0">' + fill + polyline + '</svg>';
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">' + fill + polyline + '</svg>';
+}
+
+function generateMiniChart(price, up, daily, seed) {
+  var p = typeof price === 'string' ? parseInt(price.replace(/,/g,'')) : Number(price);
+  if (!p || isNaN(p) || p <= 0) p = 50000;
+
+  // 종목코드 기반 시드로 고유 패턴 생성
+  var s = seed || 0;
+  var pts = [];
+  var base = up ? p * 0.965 : p * 1.035;
+  var trend = up ? 1.004 : 0.996;
+  for (var i = 0; i < 10; i++) {
+    // LCG 의사난수 (시드 기반 → 종목마다 다른 패턴)
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    var noise = ((s >>> 0) / 0xffffffff - 0.5) * 0.012;
+    base = base * (trend + noise);
+    pts.push(Math.round(base));
+  }
+  pts[pts.length - 1] = p;
+  return pts;
+}
+
+// 종목코드를 숫자 시드로 변환
+function codeToSeed(code) {
+  var s = 0;
+  for (var i = 0; i < code.length; i++) {
+    s = s * 31 + code.charCodeAt(i);
+  }
+  return s;
 }
 
 // ──────────────────────────────────────────────
@@ -2833,7 +2867,7 @@ function makeSvgChart(data, color, filled) {
 function buildCard(stock, rank) {
   const gradeClass = stock.grade === 'S' ? 'grade-s' : stock.grade === 'A' ? 'grade-a' : 'grade-b';
   const scoreColor = stock.grade === 'S' ? '#ff4d6d' : stock.grade === 'A' ? 'var(--accent)' : 'var(--accent2)';
-  const catColor = stock.cat === 'swing' ? 'var(--swing)' : stock.cat === 'surge' ? 'var(--surge)' : 'var(--tomorrow)';
+  const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : '#00ff88';
 
   const meta = DEMO_META[stock.code] || {};
   const mktBadge = meta.mktType === 'kosdaq'
@@ -2926,7 +2960,7 @@ function renderCards() {
 
     const stocks = cat === 'smallmid' ? DEMO.smallmid : DEMO[cat];
     const filtered = cat === 'smallmid' ? stocks : filterKrStocks(stocks);
-    const catColor = cat === 'smallmid' ? '#c084fc' : cat === 'swing' ? 'var(--swing)' : cat === 'surge' ? 'var(--surge)' : 'var(--tomorrow)';
+    const catColor = cat === 'smallmid' ? '#c084fc' : cat === 'swing' ? '#00d4ff' : cat === 'surge' ? '#ffa500' : '#00ff88';
 
     if (filtered.length === 0) {
       const diagLines = [];
@@ -3943,42 +3977,36 @@ function openKisChart(code, market, name, event) {
     </a>
   `).join('');
 
-  // 클릭 위치 기반 팝업 배치 (화면 경계 보정)
+  // 팝업 표시 + 클릭 위치 배치
+  popup.style.display = 'block';
   overlay.classList.add('show');
+
+  // 팝업 크기 측정 후 위치 결정
+  var pw = popup.offsetWidth  || 290;
+  var ph = popup.offsetHeight || 280;
+  var vw = window.innerWidth  || 360;
+  var vh = window.innerHeight || 640;
+  var cx = event ? event.clientX : vw / 2;
+  var cy = event ? event.clientY : vh / 2;
+
+  var left = cx + 10;
+  var top  = cy + 10;
+  if (left + pw > vw - 8)  left = cx - pw - 10;
+  if (left < 8)            left = 8;
+  if (top  + ph > vh - 8) top  = cy - ph - 10;
+  if (top  < 8)            top  = 8;
+
   popup.style.position = 'fixed';
-  popup.style.margin   = '0';
-
-  requestAnimationFrame(() => {
-    const pw = popup.offsetWidth  || 300;
-    const ph = popup.offsetHeight || 280;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    // 클릭 좌표 (event 없으면 중앙)
-    const cx = event ? event.clientX : vw / 2;
-    const cy = event ? event.clientY : vh / 2;
-
-    // 팝업이 클릭 위치 기준 약간 아래·오른쪽에 표시
-    var left = cx + 8;
-    var top  = cy + 8;
-
-    // 오른쪽 경계 초과 시 왼쪽으로
-    if (left + pw > vw - 8) left = cx - pw - 8;
-    // 왼쪽 경계
-    if (left < 8) left = 8;
-    // 하단 경계 초과 시 위로
-    if (top + ph > vh - 8) top = cy - ph - 8;
-    // 상단 경계
-    if (top < 8) top = 8;
-
-    popup.style.left = left + 'px';
-    popup.style.top  = top  + 'px';
-  });
+  popup.style.left     = left + 'px';
+  popup.style.top      = top  + 'px';
+  popup.style.width    = Math.min(290, vw - 16) + 'px';
 }
 
 function closeChartPopup() {
-  document.getElementById('chart-popup').style.display = 'none';
-  document.getElementById('chart-popup-overlay').classList.remove('show');
+  var popup = document.getElementById('chart-popup');
+  var overlay = document.getElementById('chart-popup-overlay');
+  if (popup) popup.style.display = 'none';
+  if (overlay) overlay.classList.remove('show');
 }
 
 async function connectApi() {
@@ -4565,8 +4593,8 @@ function convertScanCards(cards, cat) {
       price: c.price, change: c.change, up: c.up,
       buy: c.buy, target: c.target, stop: c.stop, rr: c.rr, vol: c.vol,
       reasons: c.reasons || [], inds: c.inds || [],
-      chart3m: generateMiniChart(c.price, c.up),
-      chartD:  generateMiniChart(c.price, c.up, true),
+      chart3m: generateMiniChart(c.price, c.up, false, codeToSeed(c.code)),
+      chartD:  generateMiniChart(c.price, c.up, true,  codeToSeed(c.code) + 999),
       cat: cat, mkt: c.mkt || 'kospi', _isLive: true
     };
   });
