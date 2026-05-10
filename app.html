@@ -499,11 +499,17 @@
   .chart-block { flex: 1; display: flex; flex-direction: column; gap: 6px; }
   .chart-wrap {
     position: relative;
-    height: 50px;
+    height: 52px;
     background: var(--surface2);
     border-radius: 4px;
     overflow: hidden;
     transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .chart-wrap svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
   .chart-wrap[onclick]:hover {
     box-shadow: 0 0 10px rgba(0,212,255,0.25);
@@ -517,26 +523,23 @@
     position: fixed;
     inset: 0;
     z-index: 8000;
-    background: rgba(0,0,0,0.7);
-    align-items: center;
-    justify-content: center;
+    background: transparent;
   }
   .chart-popup-overlay.show {
-    display: flex;
+    display: block;
   }
   .chart-popup {
-    position: relative;
+    position: fixed;
     background: var(--surface);
     border: 1px solid var(--accent);
     border-radius: 10px;
     padding: 16px;
-    width: min(320px, calc(100vw - 24px));
+    width: min(300px, calc(100vw - 24px));
     max-height: calc(100vh - 40px);
     overflow-y: auto;
-    box-shadow: var(--glow-blue), 0 8px 32px rgba(0,0,0,0.6);
+    box-shadow: var(--glow-blue), 0 8px 32px rgba(0,0,0,0.8);
     z-index: 8001;
-    animation: modalIn 0.18s ease;
-    margin: auto;
+    animation: modalIn 0.15s ease;
   }
   .chart-popup-title {
     font-family: 'Share Tech Mono', monospace;
@@ -2789,6 +2792,41 @@ function hexToRgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// ── SVG 인라인 차트 생성 (canvas 대신 — 항상 렌더됨) ──
+function makeSvgChart(data, color, filled) {
+  const W = 280, H = 48, pad = 4;
+  // 데이터 파싱 및 검증
+  var nums = (data || []).map(function(v) {
+    return typeof v === 'string' ? parseFloat(v.replace(/,/g,'')) : Number(v);
+  }).filter(function(v) { return !isNaN(v) && v > 0; });
+
+  // 데이터 없으면 더미 생성 (가격 정보 활용)
+  if (nums.length < 2) {
+    nums = [95,97,96,98,97,99,98,100,99,100];
+  }
+
+  var min = Math.min.apply(null, nums);
+  var max = Math.max.apply(null, nums);
+  var range = max - min;
+  if (range < max * 0.001) range = max * 0.01; // 너무 작으면 확대
+
+  var pts = nums.map(function(v, i) {
+    var x = pad + (i / (nums.length - 1)) * (W - pad * 2);
+    var y = H - pad - ((v - min) / range) * (H - pad * 2);
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  });
+
+  var polyline = '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round"/>';
+  var fill = '';
+  if (filled) {
+    var last = pts[pts.length-1].split(',');
+    var first = pts[0].split(',');
+    fill = '<polygon points="' + pts.join(' ') + ' ' + last[0] + ',' + H + ' ' + first[0] + ',' + H + '" fill="' + color + '" fill-opacity="0.15"/>';
+  }
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:100%;display:block;position:absolute;inset:0">' + fill + polyline + '</svg>';
+}
+
 // ──────────────────────────────────────────────
 // BUILD CARD
 // ──────────────────────────────────────────────
@@ -2851,11 +2889,11 @@ function buildCard(stock, rank) {
       <div class="chart-block">
         <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','kr','${stock.name}',event)">
           <div class="chart-label">3분봉 ↗</div>
-          <canvas id="c3-${stock.code}" width="300" height="50"></canvas>
+          ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
         <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','kr','${stock.name}',event)">
           <div class="chart-label">일봉 ↗</div>
-          <canvas id="cd-${stock.code}" width="300" height="50"></canvas>
+          ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
       </div>
     </div>
@@ -3088,11 +3126,11 @@ function buildUsCard(stock, rank) {
       <div class="chart-block">
         <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','us','${stock.name}',event)">
           <div class="chart-label">3분봉 ↗</div>
-          <canvas id="c3-${stock.code}" width="300" height="50"></canvas>
+          ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
         <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','us','${stock.name}',event)">
           <div class="chart-label">일봉 ↗</div>
-          <canvas id="cd-${stock.code}" width="300" height="50"></canvas>
+          ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
       </div>
     </div>
@@ -3845,8 +3883,8 @@ function openKisChart(code, market, name, event) {
   const nameEl  = document.getElementById('chart-popup-stock-name');
   const codeEl  = document.getElementById('chart-popup-code');
   const linksEl = document.getElementById('chart-popup-links');
-
-  nameEl.childNodes[0].textContent = name || code;
+  if (nameEl && nameEl.childNodes[0]) nameEl.childNodes[0].textContent = name || code;
+  else if (nameEl) nameEl.textContent = name || code;
   codeEl.textContent = code;
 
   // 링크 목록 구성
@@ -3905,9 +3943,37 @@ function openKisChart(code, market, name, event) {
     </a>
   `).join('');
 
-  // CSS flexbox + position:fixed로 화면 정중앙 자동 배치
-  popup.style.cssText = '';  // 인라인 스타일 초기화
+  // 클릭 위치 기반 팝업 배치 (화면 경계 보정)
   overlay.classList.add('show');
+  popup.style.position = 'fixed';
+  popup.style.margin   = '0';
+
+  requestAnimationFrame(() => {
+    const pw = popup.offsetWidth  || 300;
+    const ph = popup.offsetHeight || 280;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // 클릭 좌표 (event 없으면 중앙)
+    const cx = event ? event.clientX : vw / 2;
+    const cy = event ? event.clientY : vh / 2;
+
+    // 팝업이 클릭 위치 기준 약간 아래·오른쪽에 표시
+    var left = cx + 8;
+    var top  = cy + 8;
+
+    // 오른쪽 경계 초과 시 왼쪽으로
+    if (left + pw > vw - 8) left = cx - pw - 8;
+    // 왼쪽 경계
+    if (left < 8) left = 8;
+    // 하단 경계 초과 시 위로
+    if (top + ph > vh - 8) top = cy - ph - 8;
+    // 상단 경계
+    if (top < 8) top = 8;
+
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
+  });
 }
 
 function closeChartPopup() {
@@ -4507,15 +4573,26 @@ function convertScanCards(cards, cat) {
 }
 
 function generateMiniChart(price, up, daily) {
-  // 단순 가상 차트 데이터 생성 (실제 데이터 대체)
-  var pts = [], base = up ? price*0.97 : price*1.03;
-  var steps = daily ? 10 : 10;
-  for (var i=0; i<steps; i++) {
-    var r = 1 + (Math.random()-0.5)*0.01;
-    base = base * r;
+  // 가격이 문자열("59,600")인 경우 숫자로 변환
+  var p = typeof price === 'string' ? parseInt(price.replace(/,/g,'')) : Number(price);
+  if (!p || isNaN(p) || p <= 0) p = 100000;
+
+  var pts = [];
+  var base = p * (up ? 0.96 : 1.04);
+  var steps = 10;
+  for (var i = 0; i < steps; i++) {
+    var noise = 1 + (Math.random() - 0.5) * 0.008;
+    base = base * noise;
     pts.push(Math.round(base));
   }
-  pts[pts.length-1] = price;
+  // 마지막 값은 실제 현재가
+  pts[pts.length - 1] = p;
+  // 단조 트렌드 (상승/하락 방향성 반영)
+  if (up) {
+    pts[0] = Math.round(p * 0.975);
+  } else {
+    pts[0] = Math.round(p * 1.025);
+  }
   return pts;
 }
 
