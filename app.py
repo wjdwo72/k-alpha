@@ -67,71 +67,60 @@ DEFAULTS = {
     "kis_ak":"","kis_sec":"","kis_acc":"","kis_env":"실전투자",
     "use_pin":True,"auto_connect":True,
     "tg_token":"","tg_chat":"","tg_interval_min":10,"tg_interval_label":"10분",
-    "scan_blacklist":[],  # 제외 종목 코드 목록
-    "scan_vol_min":50,    # 최소 거래대금(억)
-    "scan_rsi_min":20,"scan_rsi_max":75,
+    "scan_blacklist":[],"scan_vol_min":50,"scan_rsi_min":20,"scan_rsi_max":75,
 }
 for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
 
+# ── 서버 메모리 저장소 (같은 프로세스 내 재시작에도 유지) ──
+@st.cache_resource
+def get_server_store():
+    return {"ck": None, "cp": None, "tg": None, "agreed": False}
+
+server_store = get_server_store()
+
 qp = st.query_params
-if qp.get('agreed')=='1': st.session_state.agreed=True
-if qp.get('no_pin')=='1': st.session_state.use_pin=False
-if qp.get('auto_conn')=='1': st.session_state.auto_connect=True
 
-# ── 페이지 최초 로드 시: localStorage → URL 파라미터 자동 주입 ──
-# (앱 재시작 시 URL params 없어도 localStorage에서 복원)
-if not qp.get('ck'):
-    components.html("""<script>
-(function(){
-  var CK='ka_ck_v9',CP='ka_cp_v9',TG='ka_tg_v1';
-  var lk=localStorage.getItem(CK);
-  var lp=localStorage.getItem(CP);
-  var lt=localStorage.getItem(TG);
-  if(lk){
-    try{
-      var url=new URL(window.parent.location.href);
-      url.searchParams.set('ck',lk);
-      if(lp) url.searchParams.set('cp',lp);
-      url.searchParams.set('agreed','1');
-      if(lt) url.searchParams.set('tg',lt);
-      window.parent.location.replace(url.toString());
-    }catch(e){}
-  }
-})();
-</script>""", height=0, scrolling=False)
+# URL 파라미터 없으면 서버 저장소에서 자동 복원
+if not qp.get("ck") and server_store.get("ck"):
+    qp["ck"] = server_store["ck"]
+    if server_store.get("cp"): qp["cp"] = server_store["cp"]
+    if server_store.get("tg"): qp["tg"] = server_store["tg"]
+    qp["agreed"] = "1"
+    st.rerun()
 
-# PIN 비활성화 시 자동 인증
-if not st.session_state.use_pin:
-    st.session_state.auth = True
+if qp.get("agreed")=="1" or server_store.get("agreed"):
+    st.session_state.agreed = True
+if qp.get("no_pin")=="1": st.session_state.use_pin = False
+if qp.get("auto_conn")=="1": st.session_state.auto_connect = True
+if not st.session_state.use_pin: st.session_state.auth = True
 
-# 텔레그램 설정 URL에서 자동 복원
-if qp.get('tg') and not st.session_state.get('tg_token'):
+# 텔레그램 복원
+if qp.get("tg") and not st.session_state.get("tg_token"):
     try:
-        tg_data=json.loads(base64.b64decode(qp.get('tg','')).decode())
-        st.session_state['tg_token']=tg_data.get('t','')
-        st.session_state['tg_chat']=tg_data.get('c','')
+        tg_data = json.loads(base64.b64decode(qp.get("tg","")).decode())
+        st.session_state["tg_token"] = tg_data.get("t","")
+        st.session_state["tg_chat"]  = tg_data.get("c","")
     except: pass
 
-# URL에 저장된 키 자동 불러오기 + 자동 연결
-# (인증된 상태이고, 토큰 없고, 아직 시도 안 한 경우)
-if (qp.get('ck') and st.session_state.auth
+# URL 키 자동 불러오기 + 연결
+if (qp.get("ck") and st.session_state.auth
         and not st.session_state.kis_token
-        and not st.session_state.get('_auto_loaded')):
-    st.session_state['_auto_loaded'] = True
+        and not st.session_state.get("_auto_loaded")):
+    st.session_state["_auto_loaded"] = True
     try:
-        d = py_load(qp.get('ck',''), PASSWORD)
-        st.session_state.kis_ak  = d.get('ak','')
-        st.session_state.kis_sec = d.get('sec','')
-        st.session_state.kis_acc = d.get('acc','')
-        st.session_state.kis_env = d.get('env','실전투자')
-        st.session_state['_do_auto_connect'] = True
+        d = py_load(qp.get("ck",""), PASSWORD)
+        st.session_state.kis_ak  = d.get("ak","")
+        st.session_state.kis_sec = d.get("sec","")
+        st.session_state.kis_acc = d.get("acc","")
+        st.session_state.kis_env = d.get("env","실전투자")
+        st.session_state["_do_auto_connect"] = True
         st.rerun()
     except: pass
 
-if qp.get('auth')=='1' and not st.session_state.auth:
-    st.session_state.auth=True
-    try: del qp['auth']
+if qp.get("auth")=="1" and not st.session_state.auth:
+    st.session_state.auth = True
+    try: del qp["auth"]
     except: pass
     st.rerun()
 
@@ -563,6 +552,9 @@ if st.session_state.use_pin and not st.session_state.auth:
                         st.session_state.kis_acc = d.get('acc','')
                         st.session_state.kis_env = d.get('env','실전투자')
                         st.session_state['_do_auto_connect'] = True
+                        server_store['ck'] = qp.get('ck','')
+                        server_store['cp'] = qp.get('cp','')
+                        server_store['agreed'] = True
                         st.session_state['_pin_connect_msg'] = True
                     except: pass
             else: st.session_state.pin_err=True; st.session_state.pin_buf=''
@@ -788,24 +780,16 @@ if(!SCK){{
                 with st.spinner("연결 중..."):
                     ok,err=do_connect(ak,sec,acc,env_label)
                     if ok:
-                        # 연결 성공 → URL 파라미터 + localStorage에 자동 저장
                         ck_v=py_save(ak,sec,acc,env_label,PASSWORD)
                         cp_v=base64.b64encode((PASSWORD+":kalpha").encode()).decode()
-                        qp['ck']=ck_v; qp['cp']=cp_v
-                        # localStorage 저장 (앱 재시작 시에도 유지)
+                        qp['ck']=ck_v; qp['cp']=cp_v; qp['agreed']='1'
+                        # 서버 저장소에 저장 (앱 재시작 시 자동 복원)
+                        server_store['ck'] = ck_v
+                        server_store['cp'] = cp_v
+                        server_store['agreed'] = True
                         components.html(f"""<script>
-try{{
-  localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
-  localStorage.setItem('ka_cp_v9',{json.dumps(cp_v)});
-}}catch(e){{}}
-// URL에 파라미터 추가 (현재 창)
-try{{
-  var u=new URL(window.parent.location.href);
-  u.searchParams.set('ck',{json.dumps(ck_v)});
-  u.searchParams.set('cp',{json.dumps(cp_v)});
-  u.searchParams.set('agreed','1');
-  window.parent.history.replaceState(null,'',u.toString());
-}}catch(e){{}}
+try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
+     localStorage.setItem('ka_cp_v9',{json.dumps(cp_v)});}}catch(e){{}}
 </script>""", height=0, scrolling=False)
                         st.success("✅ 연결 성공! 자동 저장됨")
                         st.rerun()
@@ -842,12 +826,10 @@ try{{
                         if r.json().get('ok'):
                             st.session_state['tg_token']=tg_token
                             st.session_state['tg_chat']=tg_chat
-                            # 텔레그램 정보도 URL + localStorage에 저장
                             tg_enc=base64.b64encode(json.dumps({'t':tg_token,'c':tg_chat}).encode()).decode()
                             qp['tg']=tg_enc
-                            components.html(f"""<script>
-try{{localStorage.setItem('ka_tg_v1',{json.dumps(tg_enc)});}}catch(e){{}}
-</script>""", height=0, scrolling=False)
+                            server_store['tg'] = tg_enc  # 서버 저장소
+                            components.html(f"<script>try{{localStorage.setItem('ka_tg_v1',{json.dumps(tg_enc)});}}catch(e){{}}</script>",height=0,scrolling=False)
                             st.success("✅ 전송 성공! 텔레그램 자동 저장됨")
                         else: st.error(f"❌ {r.json().get('description')}")
                     except Exception as e: st.error(f"❌ {e}")
@@ -934,7 +916,7 @@ if st.session_state.kis_token:
             st.session_state['_tg_bucket']=bucket
             top_main  = (cats['swing']+cats['surge'])[:5]
             top_small = cats.get('smallmid',[])[:5]
-            lines=[f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{price_ts}]\n"
+            lines=[f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{time.strftime('%H:%M:%S')}]\n"
                    f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n"
                    "━━━━━━━━━━━━━━━━"]
             def fmt_stock(s, cat):
