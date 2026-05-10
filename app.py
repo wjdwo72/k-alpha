@@ -101,56 +101,95 @@ if st.session_state.get('_do_auto_connect') and st.session_state.kis_ak:
     st.rerun()
 
 # ── 실시간 거래량 순위 스캔 (KOSPI + KOSDAQ) ──
+# ── KOSPI/KOSDAQ 주요 종목 코드 (ETF 제외, 시총 상위) ──
+KOSPI_CODES = [
+    '005930','000660','373220','207940','005380','005490','035420','000270','012330','051910',
+    '028260','034730','066570','003670','017670','086790','032830','105560','055550','316140',
+    '009150','011070','012450','047050','003490','018880','096770','010950','015760','034220',
+    '000810','011200','161390','267260','042660','035720','006400','005387','003550','010140',
+    '006360','011780','008770','001040','307950','088350','009830','271560','005940','036570',
+    '241560','326030','009540','011790','000720','078935','139480','047810','030200','010130',
+    '004020','002790','024110','069960','180640','036460','086280','004990','003090','023590',
+    '001450','013360','079550','008560','005850','002380','001520','007070','000100','082640',
+    '120110','004170','000880','032640','029780','005290','018260','003580','005870','000040',
+]
+KOSDAQ_CODES = [
+    '247540','086520','196170','352820','141080','263750','066970','357780','145020','256840',
+    '029960','039030','058470','140860','046080','091990','272210','122870','112040','054040',
+    '039440','064760','036830','084370','454910','320000','035900','095340','064760','122870',
+    '053800','041510','151910','085370','252990','067160','041510','079940','067900','009420',
+    '033780','214150','041830','086900','196170','108860','042700','139670','302920','204210',
+    '056080','253590','078070','040350','110020','137400','005290','049630','038680','041440',
+    '083930','025870','036180','035760','030350','084110','140670','058970','012510','052900',
+    '237690','211050','036800','048260','038110','086390','237750','352480','099800','108320',
+    '145720','263720','038500','200130','215200','051980','068760','046890','244880','036460',
+    '290650','006280','143240','026960','041510','222080','241560','063160','048830','034020',
+]
+
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=150):
-    """KIS 거래량 순위 API로 상위 종목 가져오기"""
+def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
+    """거래량 순위 API → 실패 시 개별 현재가 조회 fallback"""
     tr_id = 'FHPST01710000'
-    headers = {'Content-Type':'application/json', 'authorization':f'Bearer {token}',
-                'appkey':ak, 'appsecret':secret, 'tr_id':tr_id}
+    headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
+               'appkey':ak,'appsecret':secret,'tr_id':tr_id}
+    stocks = []
     try:
         r = requests.get(f"{base_url}/uapi/domestic-stock/v1/ranking/volume",
-            params={
-                'FID_COND_MRK_DIV_CODE': mkt_code,  # J=코스피, Q=코스닥
-                'FID_COND_SCR_DIV_CODE': '20171',
-                'FID_INPUT_ISCD': '0000',
-                'FID_DIV_CLS_CODE': '0',
-                'FID_BLNG_CLS_CODE': '0',
-                'FID_TRGT_CLS_CODE': '111111111',
-                'FID_TRGT_EXLS_CLS_CODE': '000000',
-                'FID_INPUT_PRICE_1': '',
-                'FID_INPUT_PRICE_2': '',
-                'FID_VOL_CNT': str(top_n),
-                'FID_INPUT_DATE_1': ''
-            },
+            params={'FID_COND_MRK_DIV_CODE':mkt_code,'FID_COND_SCR_DIV_CODE':'20171',
+                    'FID_INPUT_ISCD':'0000','FID_DIV_CLS_CODE':'0','FID_BLNG_CLS_CODE':'0',
+                    'FID_TRGT_CLS_CODE':'111111111','FID_TRGT_EXLS_CLS_CODE':'000000',
+                    'FID_INPUT_PRICE_1':'','FID_INPUT_PRICE_2':'',
+                    'FID_VOL_CNT':str(top_n),'FID_INPUT_DATE_1':''},
             headers=headers, verify=False, timeout=15)
-        data = r.json()
-        stocks = []
-        for item in (data.get('output','') or []):
+        raw = r.json().get('output','') or []
+        for item in raw:
+            # 종목코드: mksc_shrn_iscd 또는 stck_shrn_iscd
+            code = item.get('mksc_shrn_iscd','') or item.get('stck_shrn_iscd','')
             name = item.get('hts_kor_isnm','')
-            code = item.get('stck_shrn_iscd','')
-            if not code or not name: continue
-            if is_etf(name): continue
+            if not code or not name or is_etf(name): continue
             try:
-                price    = int(item.get('stck_prpr','0') or 0)
-                change   = int(item.get('prdy_vrss','0') or 0)
-                sign     = item.get('prdy_vrss_sign','3')
-                chg_pct  = float(item.get('prdy_ctrt','0') or 0)
-                vol      = int(item.get('acml_vol','0') or 0)
-                tr_amt   = int(item.get('acml_tr_pbmn','0') or 0)  # 거래대금(원)
-                tr_amt_억 = tr_amt // 100000000
+                price   = int(item.get('stck_prpr','0') or 0)
+                sign    = item.get('prdy_vrss_sign','3')
+                change  = int(item.get('prdy_vrss','0') or 0)
+                chg_pct = float(item.get('prdy_ctrt','0') or 0)
+                tr_amt  = int(item.get('acml_tr_pbmn','0') or 0) // 100000000
                 if price <= 0: continue
-                stocks.append({
-                    'code': code, 'name': name,
-                    'price': price, 'change': change, 'sign': sign,
-                    'changePct': -chg_pct if sign in ['4','5'] else chg_pct,
-                    'up': sign in ['1','2'],
-                    'vol': vol, 'trAmt': tr_amt_억,
-                    'mkt': 'kospi' if mkt_code=='J' else 'kosdaq',
-                })
+                stocks.append({'code':code,'name':name,'price':price,
+                    'change':change,'sign':sign,
+                    'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
+                    'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
+                    'mkt':'kospi' if mkt_code=='J' else 'kosdaq'})
             except: continue
-        return stocks
-    except Exception as e:
-        return []
+    except: pass
+
+    # Fallback: 개별 현재가 조회
+    if not stocks:
+        codes = KOSPI_CODES if mkt_code=='J' else KOSDAQ_CODES
+        price_headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
+                         'appkey':ak,'appsecret':secret,'tr_id':'FHKST01010100'}
+        for code in codes[:top_n]:
+            try:
+                rp = requests.get(f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
+                    params={'FID_COND_MRKT_DIV_CODE':'J','FID_INPUT_ISCD':code},
+                    headers=price_headers, verify=False, timeout=4)
+                o = rp.json().get('output',{})
+                if not o.get('stck_prpr'): continue
+                name = o.get('hts_kor_isnm','')
+                if is_etf(name): continue
+                sign    = o.get('prdy_vrss_sign','3')
+                price   = int(o.get('stck_prpr','0') or 0)
+                change  = int(o.get('prdy_vrss','0') or 0)
+                chg_pct = float(o.get('prdy_ctrt','0') or 0)
+                tr_amt  = int(o.get('acml_tr_pbmn','0') or 0) // 100000000
+                if price <= 0: continue
+                stocks.append({'code':code,'name':name,'price':price,
+                    'change':change,'sign':sign,
+                    'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
+                    'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
+                    'mkt':'kospi' if mkt_code=='J' else 'kosdaq'})
+                time.sleep(0.08)
+            except: continue
+    return stocks
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_balance(token, base_url, ak, secret, acc):
