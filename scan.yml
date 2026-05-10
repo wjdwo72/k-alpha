@@ -1,0 +1,40 @@
+name: K-ALPHA 자동 스캔
+
+on:
+  schedule:
+    # 평일 장중 5분마다 실행 (9:00~15:30 KST = 0:00~6:30 UTC)
+    # 워커 내부에서 사용자 설정 간격 체크
+    - cron: '0,5,10,15,20,25,30,35,40,45,50,55 0,1,2,3,4,5 * * 1-5'
+    - cron: '0,5,10,15,20,25,30 6 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      interval:
+        description: '전송 간격 (분): 5, 10, 15, 20, 30'
+        required: false
+        default: ''
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 패키지 설치
+        run: pip install requests urllib3
+
+      - name: K-ALPHA 스캔 실행
+        env:
+          KIS_AK:   ${{ secrets.KIS_AK }}
+          KIS_SEC:  ${{ secrets.KIS_SEC }}
+          KIS_ACC:  ${{ secrets.KIS_ACC }}
+          KIS_ENV:  ${{ secrets.KIS_ENV }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT:  ${{ secrets.TG_CHAT }}
+          INTERVAL: ${{ secrets.INTERVAL }}
+          MANUAL_INTERVAL: ${{ github.event.inputs.interval }}
+        run: python scan_worker.py
