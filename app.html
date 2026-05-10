@@ -2921,11 +2921,15 @@ function buildCard(stock, rank) {
         </div>
       </div>
       <div class="chart-block">
-        <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','kr','${stock.name}',event)">
+        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
+          data-code="${stock.code}" data-market="kr" data-name="${stock.name.replace(/"/g,'&quot;')}"
+          onclick="openKisChart(this.dataset.code,'kr',this.dataset.name,event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
-        <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','kr','${stock.name}',event)">
+        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
+          data-code="${stock.code}" data-market="kr" data-name="${stock.name.replace(/"/g,'&quot;')}"
+          onclick="openKisChart(this.dataset.code,'kr',this.dataset.name,event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -3158,11 +3162,15 @@ function buildUsCard(stock, rank) {
         </div>
       </div>
       <div class="chart-block">
-        <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','us','${stock.name}',event)">
+        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
+          data-code="${stock.code}" data-market="us" data-name="${stock.name.replace(/"/g,'&quot;')}"
+          onclick="openKisChart(this.dataset.code,'us',this.dataset.name,event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
-        <div class="chart-wrap" style="cursor:pointer" title="차트 보기" onclick="openKisChart('${stock.code}','us','${stock.name}',event)">
+        <div class="chart-wrap chart-clickable" style="cursor:pointer" title="차트 보기"
+          data-code="${stock.code}" data-market="us" data-name="${stock.name.replace(/"/g,'&quot;')}"
+          onclick="openKisChart(this.dataset.code,'us',this.dataset.name,event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -3917,9 +3925,8 @@ function openKisChart(code, market, name, event) {
   const nameEl  = document.getElementById('chart-popup-stock-name');
   const codeEl  = document.getElementById('chart-popup-code');
   const linksEl = document.getElementById('chart-popup-links');
-  if (nameEl && nameEl.childNodes[0]) nameEl.childNodes[0].textContent = name || code;
-  else if (nameEl) nameEl.textContent = name || code;
-  codeEl.textContent = code;
+  if (nameEl) nameEl.textContent = name || code;
+  if (codeEl) codeEl.textContent = code;
 
   // 링크 목록 구성
   let links = [];
@@ -4685,8 +4692,9 @@ setTimeout(function() {
     📊 차트 보기
     <button class="chart-popup-close" onclick="closeChartPopup()">✕</button>
   </div>
-  <div class="chart-popup-stock" id="chart-popup-stock-name">
-    종목명 <span class="chart-popup-code" id="chart-popup-code"></span>
+  <div class="chart-popup-stock">
+    <span id="chart-popup-stock-name" style="font-weight:700;color:var(--text-bright)"></span>
+    <span class="chart-popup-code" id="chart-popup-code"></span>
   </div>
   <div class="chart-popup-links" id="chart-popup-links"></div>
 </div>
