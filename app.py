@@ -596,19 +596,29 @@ if(!SCK){{
 }}
 </script></body></html>""", height=115, scrolling=False)
 
-    # 처음 저장 버튼
-    if st.session_state.kis_ak and not saved_ck:
-        with st.expander("💾 처음 저장하기"):
-            sv_pin=st.text_input("저장용 비번(4자리)",max_chars=4,placeholder="4자리",type="password",key="sv_pin_d")
-            if st.button("💾 지금 저장",use_container_width=True,key="btn_save_d"):
-                pv=(sv_pin or '').strip()
-                if len(pv)==4 and pv.isdigit():
-                    ck_v=py_save(st.session_state.kis_ak,st.session_state.kis_sec,
-                                 st.session_state.kis_acc,st.session_state.kis_env,pv)
-                    cp_v=base64.b64encode((pv+":kalpha").encode()).decode()
-                    qp['ck']=ck_v; qp['cp']=cp_v
-                    st.success("✅ URL에 저장! 이 URL을 북마크하세요.")
-                else: st.error("4자리 숫자 입력")
+    # 저장 버튼 (연결 전후 모두 사용 가능)
+    with st.expander("💾 API 키 저장하기", expanded=not bool(saved_ck)):
+        sv_pin=st.text_input("비번(4자리)",max_chars=4,placeholder="4자리 숫자",
+                              type="password",key="sv_pin_d")
+        if st.button("💾 지금 저장",use_container_width=True,key="btn_save_d",type="primary"):
+            pv=(sv_pin or '').strip()
+            # 입력창 값 우선, 없으면 연결된 값 사용
+            ak_v = st.session_state.get('kis_ak_inp','') or st.session_state.kis_ak
+            sec_v= st.session_state.get('kis_sec_inp','') or st.session_state.kis_sec
+            acc_v= st.session_state.get('kis_acc_inp','') or st.session_state.kis_acc
+            env_v= st.session_state.get('kis_env_sel','실전투자') or st.session_state.kis_env
+            if not ak_v or not sec_v:
+                st.error("앱키와 시크릿을 먼저 입력하세요")
+            elif len(pv)!=4 or not pv.isdigit():
+                st.error("4자리 숫자 비번을 입력하세요")
+            else:
+                ck_v=py_save(ak_v,sec_v,acc_v,env_v,pv)
+                cp_v=base64.b64encode((pv+":kalpha").encode()).decode()
+                qp['ck']=ck_v; qp['cp']=cp_v
+                # localStorage에도 백업
+                st.session_state['_saved_ck']=ck_v; st.session_state['_saved_cp']=cp_v
+                st.success("✅ 저장 완료! 이 URL을 북마크하세요.")
+                st.info("💡 팁: 브라우저 URL을 북마크하면 다음에 자동 복원됩니다.")
 
     st.divider()
 

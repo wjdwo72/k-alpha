@@ -2793,13 +2793,23 @@ function hexToRgba(hex, a) {
 }
 
 // 차트 wrap 클릭 → 부모 카드에서 종목 정보 직접 읽기
+var STOCK_REGISTRY = {};  // 코드→이름 매핑 (fallback용)
+
+function registerStock(code, name) {
+  if (code && name) STOCK_REGISTRY[code] = name;
+}
+function getStockName(code) {
+  return STOCK_REGISTRY[code] || code;
+}
+
 function openKisChartFromEl(el, market, event) {
   if (event) event.stopPropagation();
-  // 카드 루트까지 올라가서 data-code, data-name 읽기
-  var card = el.closest('[data-stock-code]');
+  // 부모 카드의 data 속성에서 직접 읽기 (가장 신뢰성 높음)
+  var card = el.closest ? el.closest('[data-stock-code]') : null;
+  if (!card) { card = el; while(card && !card.getAttribute('data-stock-code')) card = card.parentElement; }
   var code = card ? card.getAttribute('data-stock-code') : '';
-  var name = card ? card.getAttribute('data-stock-name') : '';
-  if (!name) name = code;
+  var name = card ? card.getAttribute('data-stock-name') : getStockName(code);
+  if (!name || name === code) name = getStockName(code);
   openKisChart(code, market, name, event);
 }
 
@@ -3934,18 +3944,15 @@ function clearApiKeys() {
 // ──────────────────────────────────────────────
 // 차트 링크 팝업
 // ──────────────────────────────────────────────
-function openKisChart(code, market, event) {
+function openKisChart(code, market, name, event) {
   if (event) event.stopPropagation();
-
   const popup   = document.getElementById('chart-popup');
   const overlay = document.getElementById('chart-popup-overlay');
   const nameEl  = document.getElementById('chart-popup-stock-name');
   const codeEl  = document.getElementById('chart-popup-code');
   const linksEl = document.getElementById('chart-popup-links');
-
-  // 레지스트리에서 정확한 이름 조회
-  var name = getStockName(code);
-  if (nameEl) nameEl.textContent = name;
+  var displayName = name || getStockName(code) || code;
+  if (nameEl) nameEl.textContent = displayName;
   if (codeEl) codeEl.textContent = code;
 
   // 링크 목록 구성
