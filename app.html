@@ -2796,7 +2796,7 @@ function hexToRgba(hex, a) {
 var STOCK_REGISTRY = {};  // 코드→이름 매핑 (fallback용)
 
 function registerStock(code, name) {
-  if (code && name) STOCK_REGISTRY[code] = name;
+  if (code && name && name !== code) STOCK_REGISTRY[code] = name;
 }
 function getStockName(code) {
   return STOCK_REGISTRY[code] || code;
@@ -2825,7 +2825,7 @@ function openKisChartFromEl(el, market, event) {
 }
 
 function registerStock(code, name) {
-  if (code && name) STOCK_REGISTRY[code] = name;
+  if (code && name && name !== code) STOCK_REGISTRY[code] = name;
 }
 function getStockName(code) {
   return STOCK_REGISTRY[code] || code;
