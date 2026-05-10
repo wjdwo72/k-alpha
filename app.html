@@ -2723,10 +2723,24 @@ function loadMarket() {
 // MINI CHART
 // ──────────────────────────────────────────────
 function drawMiniChart(canvas, data, color, filled) {
+  if (!canvas) return;
+  // 숨겨진 탭에서도 차트 그리기 위해 크기 강제 설정
+  var w = canvas.clientWidth || canvas.parentElement?.clientWidth || 260;
+  var h = canvas.clientHeight || 52;
+  if (w < 10) w = 260;
+  if (h < 10) h = 52;
+  canvas.width = w;
+  canvas.height = h;
+
   const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
   ctx.clearRect(0,0,w,h);
-  if (!data || data.length < 2) return;
+  if (!data || data.length < 2) {
+    // 데이터 없으면 더미 라인
+    ctx.strokeStyle = color + '44';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0,h*0.6); ctx.lineTo(w,h*0.4); ctx.stroke();
+    return;
+  }
   const min = Math.min(...data), max = Math.max(...data);
   const range = max - min || 1;
   const pts = data.map((v,i) => ({
@@ -2882,22 +2896,23 @@ function renderCards() {
   updateFilterCounts();
 
   setTimeout(() => {
-    ['swing','surge','tomorrow'].forEach(cat => {
-      filterKrStocks(DEMO[cat]).forEach(stock => {
+    function drawCat(cat, color) {
+      var stocks = cat === 'smallmid' ? DEMO.smallmid : filterKrStocks(DEMO[cat]);
+      stocks.forEach(stock => {
         const c3 = document.getElementById(`c3-${stock.code}`);
         const cd = document.getElementById(`cd-${stock.code}`);
-        const color = cat === 'swing' ? '#00d4ff' : cat === 'surge' ? '#ffa500' : '#00ff88';
-        if (c3) drawMiniChart(c3, stock.chart3m, color, true);
-        if (cd) drawMiniChart(cd, stock.chartD, color, false);
+        if (c3) drawMiniChart(c3, stock.chart3m || [], color, true);
+        if (cd) drawMiniChart(cd, stock.chartD  || [], color, false);
       });
-    });
-    DEMO.smallmid.forEach(stock => {
-      const c3 = document.getElementById(`c3-${stock.code}`);
-      const cd = document.getElementById(`cd-${stock.code}`);
-      if (c3) drawMiniChart(c3, stock.chart3m, '#c084fc', true);
-      if (cd) drawMiniChart(cd, stock.chartD, '#c084fc', false);
-    });
-  }, 50);
+    }
+    drawCat('swing',    '#00d4ff');
+    drawCat('surge',    '#ffa500');
+    drawCat('tomorrow', '#00ff88');
+    drawCat('smallmid', '#c084fc');
+  }, 200);
+
+  // 탭 전환 시에도 재드로우
+  window._chartRedrawPending = true;
 }
 
 
@@ -2968,6 +2983,22 @@ function switchTab(tab, btn, market) {
     if (IS_STREAMLIT) { panel.style.height = 'auto'; panel.style.overflow = 'visible'; }
   }
   if (IS_STREAMLIT && typeof sendHeight === 'function') setTimeout(sendHeight, 200);
+
+  // 탭 전환 시 차트 재드로우
+  setTimeout(() => {
+    var colorMap = {swing:'#00d4ff',surge:'#ffa500',tomorrow:'#00ff88',smallmid:'#c084fc'};
+    var target = tab === 'portfolio' ? null : tab;
+    if (target && DEMO[target]) {
+      var stocks = target === 'smallmid' ? DEMO.smallmid : filterKrStocks(DEMO[target]);
+      stocks.forEach(stock => {
+        const c3 = document.getElementById(`c3-${stock.code}`);
+        const cd = document.getElementById(`cd-${stock.code}`);
+        const col = colorMap[target] || '#00d4ff';
+        if (c3) drawMiniChart(c3, stock.chart3m || [], col, true);
+        if (cd) drawMiniChart(cd, stock.chartD  || [], col, false);
+      });
+    }
+  }, 150);
 }
 
 // ──────────────────────────────────────────────

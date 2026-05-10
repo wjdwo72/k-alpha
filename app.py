@@ -44,6 +44,17 @@ STOCK_NAMES = {
     '001450':'현대해상','013360':'일진머티리얼즈','079550':'LIG넥스원','008560':'메리츠화재',
     '005850':'에스엘','002380':'KCC','001520':'동양','007070':'GS리테일',
     '000100':'유한양행','082640':'동원산업',
+    # 추가 KOSPI
+    '005290':'삼성엔지니어링','010620':'현대미포조선','020560':'아시아나항공',
+    '003580':'HLB생명과학','012750':'에스원','003240':'태광산업',
+    '001740':'SK네트웍스','047040':'대우건설','000670':'영풍',
+    '023530':'롯데쇼핑','004000':'롯데정밀화학','002350':'넥센타이어',
+    '006120':'SK디스커버리','016360':'삼성증권','000240':'한국앤컴퍼니',
+    '017800':'현대엘리베이터','004210':'삼천리','005180':'빙그레',
+    '003410':'쌍용C&E','000540':'흥국화재','007660':'이수페타시스',
+    '010060':'OCI홀딩스','014680':'한솔케미칼','092200':'케이씨',
+    '011330':'유니켐','003960':'사조대림','001830':'삼화콘덴서',
+    '033240':'자화전자','005010':'휴스틸','006800':'미래에셋증권',
     # KOSDAQ
     '247540':'에코프로비엠','086520':'에코프로','196170':'알테오젠','352820':'하이브',
     '141080':'레고켐바이오','263750':'펄어비스','066970':'엘앤에프','357780':'솔브레인',
@@ -725,20 +736,32 @@ if st.session_state.kis_token:
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개
 </div>""", unsafe_allow_html=True)
 
-    # 텔레그램 자동 알림
-    tg_token=st.session_state.get('tg_token',''); tg_chat=st.session_state.get('tg_chat','')
-    if tg_token and tg_chat and cats.get('swing'):
+    if tg_token and tg_chat and (cats.get('swing') or cats.get('smallmid')):
         bucket=int(time.time()//(iv_min*60))
         if bucket!=st.session_state.get('_tg_bucket',-1):
             st.session_state['_tg_bucket']=bucket
-            top5 = (cats['swing']+cats['surge'])[:5]
+            top_main = (cats['swing']+cats['surge'])[:5]
+            top_small = cats.get('smallmid',[])[:5]
+
             lines=[f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{price_ts}]\n"
                    f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n━━━━━━━━━━━━━━━━"]
-            for s in top5:
-                pct=s.get('changePct',0); sign='+' if pct>=0 else ''
-                lines.append(f"{'🔴' if s.get('grade')=='S' else '🟡'} "
-                             f"<b>[{s.get('grade','B')}·{s.get('score',70)}점] {s['name']}</b>\n"
-                             f"   {s['price']:,}원 {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억")
+
+            if top_main:
+                lines.append("🔥 <b>[실시간 스윙/급등 TOP5]</b>")
+                for s in top_main:
+                    pct=s.get('changePct',0); sign='+' if pct>=0 else ''
+                    lines.append(f"{'🔴' if s.get('grade')=='S' else '🟡'} "
+                                 f"<b>{s['name']}</b> ({s['code']})\n"
+                                 f"   {s['price']:,}원 {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억")
+
+            if top_small:
+                lines.append("\n⬟ <b>[내일의 중소형주 TOP5]</b>")
+                for s in top_small:
+                    pct=s.get('changePct',0); sign='+' if pct>=0 else ''
+                    lines.append(f"{'🔴' if s.get('grade')=='S' else '🟡'} "
+                                 f"<b>{s['name']}</b> ({s['code']})\n"
+                                 f"   {s['price']:,}원 {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억")
+
             lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료")
             try:
                 requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
