@@ -3154,13 +3154,77 @@ function sendTelegramMsg(text) {
   }).catch(function(){});
 }
 
+// ── 10분마다 텔레그램 자동 알림 (JS setInterval) ──
+function startTelegramScheduler() {
+  var token = window.__TG_TOKEN__ || '';
+  var chat  = window.__TG_CHAT__  || '';
+  if (!token || !chat) return;
+
+  function buildAlertMsg() {
+    var now = new Date();
+    var ts = String(now.getHours()).padStart(2,'0') + ':' +
+             String(now.getMinutes()).padStart(2,'0') + ':' +
+             String(now.getSeconds()).padStart(2,'0');
+
+    // S/A급 종목 목록 (DEMO + smallmid 포함)
+    var allStocks = [
+      {name:'리노공업',code:'058470',score:94,grade:'S',buy:'182,000',target:'205,000',stop:'176,500',rr:'4.1'},
+      {name:'파크시스템스',code:'140860',score:91,grade:'S',buy:'211,000',target:'238,000',stop:'204,500',rr:'4.2'},
+      {name:'삼성전기',code:'009150',score:91,grade:'S',buy:'168,000',target:'182,000',stop:'163,100',rr:'2.6'},
+      {name:'LG이노텍',code:'011070',score:88,grade:'S',buy:'182,000',target:'210,000',stop:'176,000',rr:'4.7'},
+      {name:'한화에어로스페이스',code:'012450',score:87,grade:'S',buy:'550,000',target:'640,000',stop:'530,000',rr:'4.5'},
+      {name:'에스티아이',code:'039440',score:88,grade:'A',buy:'38,500',target:'43,500',stop:'37,300',rr:'4.2'},
+      {name:'유진테크',code:'084370',score:85,grade:'A',buy:'42,600',target:'48,000',stop:'41,200',rr:'3.9'},
+    ];
+
+    var lines = ['📡 <b>K-ALPHA 10분 스캔 알림</b> [' + ts + ']\n━━━━━━━━━━━━━━━━'];
+    var count = 0;
+    allStocks.forEach(function(s) {
+      if (count >= 5) return;
+      // 실시간 가격 반영
+      var p = (window.__KIS_PRICES__ || {})[s.code];
+      var cur = p && p.price ? p.price.toLocaleString('ko-KR') : s.buy;
+      var chg = p && p.changePct ? (p.changePct >= 0 ? '+' : '') + p.changePct.toFixed(2) + '%' : '';
+      var icon = s.grade === 'S' ? '🔴' : '🟡';
+      lines.push(icon + ' <b>[' + s.grade + '·' + s.score + '점] ' + s.name + '</b>\n' +
+                 '   현재가 ' + cur + '원 ' + chg + ' | RR ' + s.rr + '\n' +
+                 '   매입 ' + s.buy + ' → 목표 ' + s.target + ' | 손절 ' + s.stop);
+      count++;
+    });
+    lines.push('━━━━━━━━━━━━━━━━\n📊 스캔 완료 · 다음 알림 10분 후');
+    return lines.join('\n\n');
+  }
+
+  function sendAlert() {
+    var msg = buildAlertMsg();
+    fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({chat_id: chat, text: msg, parse_mode: 'HTML'})
+    }).then(function(r) {
+      if (r.ok) addLog(new Date().toLocaleTimeString('ko-KR'), '[TG] 10분 알림 전송 완료', 'ok');
+    }).catch(function() {});
+  }
+
+  // 10분(600000ms)마다 실행
+  setInterval(sendAlert, 600000);
+  console.log('[K-ALPHA] 텔레그램 10분 스케줄러 시작');
+}
+
+// 페이지 로드 후 스케줄러 시작
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(startTelegramScheduler, 2000);
+});
+
 // K-자동매매 승인 버튼 클릭 시 텔레그램 발송
 function onAutoTradeApprove(name, code, buy, target, stop, rr, score) {
   var token = window.__TG_TOKEN__ || '';
   var chat  = window.__TG_CHAT__  || '';
   if (!token || !chat) return;
   var now = new Date();
-  var ts = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  var ts = String(now.getHours()).padStart(2,'0') + ':' +
+           String(now.getMinutes()).padStart(2,'0') + ':' +
+           String(now.getSeconds()).padStart(2,'0');
   var msg = '🚀 <b>[K-자동매매 승인]</b> ' + ts + '\n'
           + '━━━━━━━━━━━━━━\n'
           + '📌 종목: <b>' + name + '</b> (' + code + ')\n'
@@ -3178,9 +3242,6 @@ function onAutoTradeApprove(name, code, buy, target, stop, rr, score) {
   }).catch(function(){});
 }
 
-// ──────────────────────────────────────────────
-// CONTROLS
-// ──────────────────────────────────────────────
 function toggleMode() {
   testMode = !testMode;
   document.getElementById('mode-display').textContent = testMode ? 'DEMO / TEST' : 'LIVE (주의!)';
