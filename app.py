@@ -377,6 +377,19 @@ if(!SCK){{
                               key="tg_chat_inp",
                               help="@userinfobot 에서 확인")
 
+    # 전송 간격 설정
+    interval_opts = {"5분": 5, "10분": 10, "15분": 15, "30분": 30, "1시간": 60}
+    cur_interval = st.session_state.get('tg_interval_label', '10분')
+    interval_label = st.select_slider(
+        "⏱ 자동 전송 간격",
+        options=list(interval_opts.keys()),
+        value=cur_interval,
+        key="tg_interval_sel"
+    )
+    interval_min = interval_opts[interval_label]
+    st.session_state['tg_interval_label'] = interval_label
+    st.session_state['tg_interval_min'] = interval_min
+
     col_tg1, col_tg2 = st.columns([2,1])
     with col_tg1:
         if st.button("📱 테스트 알림 전송", use_container_width=True, key="btn_tg_test"):
@@ -494,6 +507,7 @@ window.__KIS_BALANCE__  = {balance_json};
 window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
 window.__TG_TOKEN__     = {json.dumps(st.session_state.get('tg_token',''))};
 window.__TG_CHAT__      = {json.dumps(st.session_state.get('tg_chat',''))};
+window.__TG_INTERVAL__  = {st.session_state.get('tg_interval_min', 10) * 60 * 1000};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
 components.html(html,height=5000,scrolling=False)

@@ -3191,7 +3191,7 @@ function startTelegramScheduler() {
                  '   매입 ' + s.buy + ' → 목표 ' + s.target + ' | 손절 ' + s.stop);
       count++;
     });
-    lines.push('━━━━━━━━━━━━━━━━\n📊 스캔 완료 · 다음 알림 10분 후');
+    lines.push('━━━━━━━━━━━━━━━━\n📊 스캔 완료 · 다음 알림 ' + Math.round((window.__TG_INTERVAL__||600000)/60000) + '분 후');
     return lines.join('\n\n');
   }
 
@@ -3206,9 +3206,11 @@ function startTelegramScheduler() {
     }).catch(function() {});
   }
 
-  // 10분(600000ms)마다 실행
-  setInterval(sendAlert, 600000);
-  console.log('[K-ALPHA] 텔레그램 10분 스케줄러 시작');
+  // 설정된 간격마다 실행 (기본 10분)
+  var intervalMs = window.__TG_INTERVAL__ || 600000;
+  setInterval(sendAlert, intervalMs);
+  var intervalMin = Math.round(intervalMs / 60000);
+  console.log('[K-ALPHA] 텔레그램 ' + intervalMin + '분 스케줄러 시작');
 }
 
 // 페이지 로드 후 스케줄러 시작
