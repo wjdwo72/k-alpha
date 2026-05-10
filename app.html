@@ -3361,33 +3361,40 @@ function startTelegramScheduler() {
     var ts = String(now.getHours()).padStart(2,'0') + ':' +
              String(now.getMinutes()).padStart(2,'0') + ':' +
              String(now.getSeconds()).padStart(2,'0');
+    var intervalMin = Math.round((window.__TG_INTERVAL__||600000)/60000);
 
-    // S/A급 종목 목록 (DEMO + smallmid 포함)
-    var allStocks = [
-      {name:'리노공업',code:'058470',score:94,grade:'S',buy:'182,000',target:'205,000',stop:'176,500',rr:'4.1'},
-      {name:'파크시스템스',code:'140860',score:91,grade:'S',buy:'211,000',target:'238,000',stop:'204,500',rr:'4.2'},
-      {name:'삼성전기',code:'009150',score:91,grade:'S',buy:'168,000',target:'182,000',stop:'163,100',rr:'2.6'},
-      {name:'LG이노텍',code:'011070',score:88,grade:'S',buy:'182,000',target:'210,000',stop:'176,000',rr:'4.7'},
-      {name:'한화에어로스페이스',code:'012450',score:87,grade:'S',buy:'550,000',target:'640,000',stop:'530,000',rr:'4.5'},
-      {name:'에스티아이',code:'039440',score:88,grade:'A',buy:'38,500',target:'43,500',stop:'37,300',rr:'4.2'},
-      {name:'유진테크',code:'084370',score:85,grade:'A',buy:'42,600',target:'48,000',stop:'41,200',rr:'3.9'},
-    ];
+    // 실시간 스캔 결과 사용 (DEMO.swing + DEMO.surge → TOP5, DEMO.smallmid → TOP5)
+    var mainStocks = [].concat(DEMO.swing||[], DEMO.surge||[]).slice(0,5);
+    var smallStocks = (DEMO.smallmid||[]).slice(0,5);
 
-    var lines = ['📡 <b>K-ALPHA 10분 스캔 알림</b> [' + ts + ']\n━━━━━━━━━━━━━━━━'];
-    var count = 0;
-    allStocks.forEach(function(s) {
-      if (count >= 5) return;
-      // 실시간 가격 반영
+    var kospiCount = (window.__SCAN_RESULT__ && window.__SCAN_RESULT__.total) || 0;
+
+    var lines = ['📡 <b>K-ALPHA ' + intervalMin + '분 자동 스캔</b> [' + ts + ']\n' +
+                 'KOSPI+KOSDAQ ' + kospiCount + '종목\n━━━━━━━━━━━━━━━━'];
+
+    function fmtOne(s) {
       var p = (window.__KIS_PRICES__ || {})[s.code];
-      var cur = p && p.price ? p.price.toLocaleString('ko-KR') : s.buy;
-      var chg = p && p.changePct ? (p.changePct >= 0 ? '+' : '') + p.changePct.toFixed(2) + '%' : '';
+      var price = p && p.price ? p.price.toLocaleString('ko-KR') : s.price;
+      var pct = p && p.changePct != null ? p.changePct : 0;
+      var sign = pct >= 0 ? '+' : '';
+      var trAmt = s.vol || 0;
       var icon = s.grade === 'S' ? '🔴' : '🟡';
-      lines.push(icon + ' <b>[' + s.grade + '·' + s.score + '점] ' + s.name + '</b>\n' +
-                 '   현재가 ' + cur + '원 ' + chg + ' | RR ' + s.rr + '\n' +
-                 '   매입 ' + s.buy + ' → 목표 ' + s.target + ' | 손절 ' + s.stop);
-      count++;
-    });
-    lines.push('━━━━━━━━━━━━━━━━\n📊 스캔 완료 · 다음 알림 ' + Math.round((window.__TG_INTERVAL__||600000)/60000) + '분 후');
+      return (icon + ' <b>' + s.name + '</b> (' + s.code + ')\n' +
+              '   💰 현재가: <b>' + price + '원</b> ' + sign + pct.toFixed(2) + '%' +
+              (trAmt ? ' | 거래대금 ' + trAmt.toLocaleString('ko-KR') + '억' : '') + '\n' +
+              '   📈 매입가: ' + s.buy + '원 | 손절: ' + s.stop + '원 | RR ' + s.rr);
+    }
+
+    if (mainStocks.length > 0) {
+      lines.push('🔥 <b>[실시간 스윙/급등 TOP5]</b>');
+      mainStocks.forEach(function(s) { lines.push(fmtOne(s)); });
+    }
+    if (smallStocks.length > 0) {
+      lines.push('\n⬟ <b>[내일의 중소형주 TOP5]</b>');
+      smallStocks.forEach(function(s) { lines.push(fmtOne(s)); });
+    }
+
+    lines.push('━━━━━━━━━━━━━━━━\n📊 스캔 완료 · 다음 알림 ' + intervalMin + '분 후');
     return lines.join('\n\n');
   }
 
@@ -3398,15 +3405,13 @@ function startTelegramScheduler() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({chat_id: chat, text: msg, parse_mode: 'HTML'})
     }).then(function(r) {
-      if (r.ok) addLog(new Date().toLocaleTimeString('ko-KR'), '[TG] 10분 알림 전송 완료', 'ok');
+      if (r.ok) addLog(new Date().toLocaleTimeString('ko-KR'), '[TG] 자동 알림 전송 완료', 'ok');
     }).catch(function() {});
   }
 
-  // 설정된 간격마다 실행 (기본 10분)
   var intervalMs = window.__TG_INTERVAL__ || 600000;
   setInterval(sendAlert, intervalMs);
-  var intervalMin = Math.round(intervalMs / 60000);
-  console.log('[K-ALPHA] 텔레그램 ' + intervalMin + '분 스케줄러 시작');
+  console.log('[K-ALPHA] 텔레그램 스케줄러 시작 (' + Math.round(intervalMs/60000) + '분)');
 }
 
 // 페이지 로드 후 스케줄러 시작
