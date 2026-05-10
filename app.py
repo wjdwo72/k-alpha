@@ -78,6 +78,14 @@ qp = st.query_params
 if qp.get('agreed')=='1': st.session_state.agreed=True
 if qp.get('no_pin')=='1': st.session_state.use_pin=False
 if qp.get('auto_conn')=='1': st.session_state.auto_connect=True
+
+# 텔레그램 설정 URL 파라미터에서 자동 복원
+if qp.get('tg') and not st.session_state.get('tg_token'):
+    try:
+        tg_data=json.loads(base64.b64decode(qp.get('tg','')).decode())
+        st.session_state['tg_token']=tg_data.get('t','')
+        st.session_state['tg_chat']=tg_data.get('c','')
+    except: pass
 if qp.get('auth')=='1' and not st.session_state.auth:
     st.session_state.auth=True
     try: del qp['auth']
@@ -171,6 +179,7 @@ def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
                     item.get('iscd') or item.get('code') or '').strip()
             # 종목명: API 이름 + fallback 테이블
             api_name = (item.get('hts_kor_isnm') or item.get('stck_kor_isnm') or
+                        item.get('prdt_abrv_name') or item.get('prdt_name') or
                         item.get('kor_isnm') or '').strip()
             name = get_stock_name(code, api_name)
             if not code or is_etf(name): continue
@@ -189,19 +198,32 @@ def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
             except: continue
     except: pass
 
-    # Fallback: 개별 현재가 조회
+    # Fallback: 개별 현재가 조회 (J와 Q 둘 다 시도 → 이름 반드시 확보)
     if not stocks:
-        codes = KOSPI_CODES if mkt_code=='J' else KOSDAQ_CODES
+        codes = KOSPI_CODES if mkt_code == 'J' else KOSDAQ_CODES
         price_headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
                          'appkey':ak,'appsecret':secret,'tr_id':'FHKST01010100'}
         for code in codes[:top_n]:
             try:
-                rp = requests.get(f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
-                    params={'FID_COND_MRKT_DIV_CODE':'J','FID_INPUT_ISCD':code},
-                    headers=price_headers, verify=False, timeout=4)
-                o = rp.json().get('output',{})
-                if not o.get('stck_prpr'): continue
-                name_raw = o.get('hts_kor_isnm','') or o.get('stck_kor_isnm','')
+                # J, Q 순으로 시도 (이름 있는 응답 사용)
+                found = None
+                for mkt_try in (['J','Q'] if mkt_code=='J' else ['Q','J']):
+                    rp = requests.get(f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
+                        params={'FID_COND_MRKT_DIV_CODE': mkt_try,'FID_INPUT_ISCD':code},
+                        headers=price_headers, verify=False, timeout=4)
+                    o = rp.json().get('output',{})
+                    if not o.get('stck_prpr'): continue
+                    # 이름 필드: 여러 가지 시도
+                    name_raw = (o.get('hts_kor_isnm') or o.get('prdt_abrv_name') or
+                                o.get('prdt_name') or o.get('stck_kor_isnm') or '').strip()
+                    if name_raw:  # 이름 있는 응답 발견
+                        found = (o, name_raw)
+                        break
+                    elif not found and o.get('stck_prpr'):
+                        found = (o, '')  # 이름은 없지만 가격은 있음
+
+                if not found: continue
+                o, name_raw = found
                 name = get_stock_name(code, name_raw)
                 if is_etf(name): continue
                 sign    = o.get('prdy_vrss_sign','3')
@@ -366,6 +388,14 @@ if st.session_state.use_pin and not st.session_state.auth:
         if len(st.session_state.pin_buf)==4:
             if st.session_state.pin_buf==PASSWORD:
                 st.session_state.auth=True; st.session_state.pin_buf=''; st.session_state.pin_err=False
+                # PIN 정확 → 저장된 키 자동 불러오기 + 자동 연결
+                if qp.get('ck'):
+                    try:
+                        d=py_load(qp.get('ck',''), PASSWORD)
+                        st.session_state.kis_ak=d.get('ak',''); st.session_state.kis_sec=d.get('sec','')
+                        st.session_state.kis_acc=d.get('acc',''); st.session_state.kis_env=d.get('env','실전투자')
+                        st.session_state['_do_auto_connect']=True
+                    except: pass
             else: st.session_state.pin_err=True; st.session_state.pin_buf=''
     def press_del():
         if st.session_state.pin_err: st.session_state.pin_err=False
@@ -557,29 +587,17 @@ if(!SCK){{
 }}
 </script></body></html>""", height=115, scrolling=False)
 
-    # 저장 버튼 (연결 전후 모두 사용 가능)
-    with st.expander("💾 API 키 저장하기", expanded=not bool(saved_ck)):
-        sv_pin=st.text_input("비번(4자리)",max_chars=4,placeholder="4자리 숫자",
-                              type="password",key="sv_pin_d")
-        if st.button("💾 지금 저장",use_container_width=True,key="btn_save_d",type="primary"):
-            pv=(sv_pin or '').strip()
-            # 입력창 값 우선, 없으면 연결된 값 사용
-            ak_v = st.session_state.get('kis_ak_inp','') or st.session_state.kis_ak
-            sec_v= st.session_state.get('kis_sec_inp','') or st.session_state.kis_sec
-            acc_v= st.session_state.get('kis_acc_inp','') or st.session_state.kis_acc
-            env_v= st.session_state.get('kis_env_sel','실전투자') or st.session_state.kis_env
-            if not ak_v or not sec_v:
-                st.error("앱키와 시크릿을 먼저 입력하세요")
-            elif len(pv)!=4 or not pv.isdigit():
-                st.error("4자리 숫자 비번을 입력하세요")
-            else:
-                ck_v=py_save(ak_v,sec_v,acc_v,env_v,pv)
-                cp_v=base64.b64encode((pv+":kalpha").encode()).decode()
-                qp['ck']=ck_v; qp['cp']=cp_v
-                # localStorage에도 백업
-                st.session_state['_saved_ck']=ck_v; st.session_state['_saved_cp']=cp_v
-                st.success("✅ 저장 완료! 이 URL을 북마크하세요.")
-                st.info("💡 팁: 브라우저 URL을 북마크하면 다음에 자동 복원됩니다.")
+    # 저장 상태 표시 (자동 저장됨)
+    if saved_ck:
+        st.markdown("""<div style="font-family:'Share Tech Mono',monospace;font-size:11px;
+          color:#00ff88;padding:6px 10px;background:rgba(0,255,136,0.08);
+          border:1px solid rgba(0,255,136,0.2);border-radius:6px;margin-bottom:4px">
+          ✅ API 키 저장됨 — PIN 입력 시 자동 연결</div>""", unsafe_allow_html=True)
+    else:
+        st.markdown("""<div style="font-family:'Share Tech Mono',monospace;font-size:11px;
+          color:#ffc800;padding:6px 10px;background:rgba(255,200,0,0.08);
+          border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin-bottom:4px">
+          ⚡ KIS API 연결 성공 시 자동 저장됩니다</div>""", unsafe_allow_html=True)
 
     st.divider()
 
@@ -600,7 +618,13 @@ if(!SCK){{
             else:
                 with st.spinner("연결 중..."):
                     ok,err=do_connect(ak,sec,acc,env_label)
-                    if ok: st.success("✅ 연결 성공!"); st.rerun()
+                    if ok:
+                        # ✅ 연결 성공 시 PIN으로 자동 저장
+                        ck_v=py_save(ak,sec,acc,env_label,PASSWORD)
+                        cp_v=base64.b64encode((PASSWORD+":kalpha").encode()).decode()
+                        qp['ck']=ck_v; qp['cp']=cp_v
+                        st.success("✅ 연결 성공! 자동 저장됨 — URL을 북마크하세요")
+                        st.rerun()
                     else: st.error(f"❌ {err}")
     with cb:
         if st.session_state.kis_token:
@@ -632,8 +656,13 @@ if(!SCK){{
                         r=requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
                             json={"chat_id":tg_chat,"text":"✅ K-ALPHA 알림 연결 성공!","parse_mode":"HTML"},timeout=8)
                         if r.json().get('ok'):
-                            st.session_state['tg_token']=tg_token; st.session_state['tg_chat']=tg_chat
-                            st.success("✅ 전송 성공!")
+                            st.session_state['tg_token']=tg_token
+                            st.session_state['tg_chat']=tg_chat
+                            # 텔레그램 정보도 URL에 저장
+                            import urllib.parse
+                            tg_enc=base64.b64encode(json.dumps({'t':tg_token,'c':tg_chat}).encode()).decode()
+                            qp['tg']=tg_enc
+                            st.success("✅ 전송 성공! 텔레그램 자동 저장됨")
                         else: st.error(f"❌ {r.json().get('description')}")
                     except Exception as e: st.error(f"❌ {e}")
                 else: st.error("Token과 Chat ID 입력")
