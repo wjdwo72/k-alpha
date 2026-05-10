@@ -1419,7 +1419,7 @@
 
       <div class="scan-indicator">
         <div class="dot live"></div>
-        <span>KOSPI/KOSDAQ 전 종목 실시간 스캔 중 · 거래대금 <span id="scan-vol-label">1,000억+</span> 필터</span>
+        <span>KOSPI/KOSDAQ 전 종목 실시간 스캔 중 · 거래대금 <span id="scan-vol-label">--억+</span> 필터</span>
         <div class="scan-bar"><div class="scan-bar-fill"></div></div>
         <span id="filter-count">조건 충족: 73 종목</span>
         <button onclick="openSettings()" style="margin-left:8px;padding:3px 10px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:10px;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px">⚙ 필터설정</button>
@@ -2572,11 +2572,11 @@ let riskActive = false;
 // 스캔 필터 설정
 // ──────────────────────────────────────────────
 let scanSettings = {
-  volMin: 100,       // 억원 (낮게 설정해 더 많은 종목 표시)
-  cap: 'all',        // all / large / mid / small
-  mkt: 'all',        // all / kospi / kosdaq
-  rsiMin: 20,        // 더 넓은 RSI 범위
-  rsiMax: 70,
+  volMin: window.__SCAN_VOL_MIN__ || 100,
+  cap: 'all',
+  mkt: 'all',
+  rsiMin: window.__SCAN_RSI_MIN__ || 20,
+  rsiMax: window.__SCAN_RSI_MAX__ || 70,
 };
 
 function openSettings() {
@@ -4630,7 +4630,18 @@ function applyRealScanData() {
   var live = document.getElementById('live-banner');
   if (live) {
     live.style.display='block';
-    live.innerHTML = '● LIVE · KOSPI+KOSDAQ ' + (scan.total||0) + '종목 실시간 스캔 · ' + scan.ts;
+    // 실시간 시계로 시간 업데이트
+    var scanTotal = scan.total || 0;
+    function updateLiveBanner() {
+      var now = new Date();
+      var ts = String(now.getHours()).padStart(2,'0') + ':' +
+               String(now.getMinutes()).padStart(2,'0') + ':' +
+               String(now.getSeconds()).padStart(2,'0');
+      live.innerHTML = '● LIVE · KOSPI+KOSDAQ ' + scanTotal + '종목 실시간 스캔 · ' + ts;
+    }
+    updateLiveBanner();
+    if (window._liveBannerTimer) clearInterval(window._liveBannerTimer);
+    window._liveBannerTimer = setInterval(updateLiveBanner, 1000);
   }
 }
 
@@ -4678,6 +4689,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.__SCAN_RESULT__ && window.__SCAN_RESULT__.ts) {
       applyRealScanData();
     }
+    // 거래대금 필터 배지 업데이트
+    var volLabel = document.getElementById('scan-vol-label');
+    if (volLabel) volLabel.textContent = fmtNum(scanSettings.volMin) + '억+';
   }, 300);
 });
 if (localStorage.getItem('k_api_keys')) {

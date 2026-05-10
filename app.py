@@ -956,6 +956,9 @@ window.__SCAN_COUNT__   = {scan_count};
 window.__TG_TOKEN__     = {json.dumps(st.session_state.get('tg_token',''))};
 window.__TG_CHAT__      = {json.dumps(st.session_state.get('tg_chat',''))};
 window.__TG_INTERVAL__  = {st.session_state.get('tg_interval_min',10)*60*1000};
+window.__SCAN_VOL_MIN__ = {st.session_state.get('scan_vol_min',50)};
+window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
+window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
 components.html(html,height=5000,scrolling=False)
