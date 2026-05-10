@@ -79,7 +79,33 @@ if qp.get('agreed')=='1': st.session_state.agreed=True
 if qp.get('no_pin')=='1': st.session_state.use_pin=False
 if qp.get('auto_conn')=='1': st.session_state.auto_connect=True
 
-# 텔레그램 설정 URL 파라미터에서 자동 복원
+# ── 페이지 최초 로드 시: localStorage → URL 파라미터 자동 주입 ──
+# (앱 재시작 시 URL params 없어도 localStorage에서 복원)
+if not qp.get('ck'):
+    components.html("""<script>
+(function(){
+  var CK='ka_ck_v9',CP='ka_cp_v9',TG='ka_tg_v1';
+  var lk=localStorage.getItem(CK);
+  var lp=localStorage.getItem(CP);
+  var lt=localStorage.getItem(TG);
+  if(lk){
+    try{
+      var url=new URL(window.parent.location.href);
+      url.searchParams.set('ck',lk);
+      if(lp) url.searchParams.set('cp',lp);
+      url.searchParams.set('agreed','1');
+      if(lt) url.searchParams.set('tg',lt);
+      window.parent.location.replace(url.toString());
+    }catch(e){}
+  }
+})();
+</script>""", height=0, scrolling=False)
+
+# PIN 비활성화 시 자동 인증
+if not st.session_state.use_pin:
+    st.session_state.auth = True
+
+# 텔레그램 설정 URL에서 자동 복원
 if qp.get('tg') and not st.session_state.get('tg_token'):
     try:
         tg_data=json.loads(base64.b64decode(qp.get('tg','')).decode())
@@ -87,24 +113,21 @@ if qp.get('tg') and not st.session_state.get('tg_token'):
         st.session_state['tg_chat']=tg_data.get('c','')
     except: pass
 
-# 인증 후 URL에 저장된 키 자동 불러오기 + 자동 연결
-# (PIN 입력 완료 OR no-pin 모드 OR 이미 인증됨)
-if qp.get('ck') and st.session_state.auth and not st.session_state.kis_token:
-    if not st.session_state.kis_ak:  # 아직 키 안 불러온 경우
-        try:
-            d = py_load(qp.get('ck',''), PASSWORD)
-            st.session_state.kis_ak  = d.get('ak','')
-            st.session_state.kis_sec = d.get('sec','')
-            st.session_state.kis_acc = d.get('acc','')
-            st.session_state.kis_env = d.get('env','실전투자')
-            st.session_state['_do_auto_connect'] = True
-            st.rerun()
-        except: pass
-    elif not st.session_state.get('_auto_conn_tried'):
-        # 키는 있는데 아직 연결 안 됨 → 자동 연결
-        st.session_state['_auto_conn_tried'] = True
+# URL에 저장된 키 자동 불러오기 + 자동 연결
+# (인증된 상태이고, 토큰 없고, 아직 시도 안 한 경우)
+if (qp.get('ck') and st.session_state.auth
+        and not st.session_state.kis_token
+        and not st.session_state.get('_auto_loaded')):
+    st.session_state['_auto_loaded'] = True
+    try:
+        d = py_load(qp.get('ck',''), PASSWORD)
+        st.session_state.kis_ak  = d.get('ak','')
+        st.session_state.kis_sec = d.get('sec','')
+        st.session_state.kis_acc = d.get('acc','')
+        st.session_state.kis_env = d.get('env','실전투자')
         st.session_state['_do_auto_connect'] = True
         st.rerun()
+    except: pass
 
 if qp.get('auth')=='1' and not st.session_state.auth:
     st.session_state.auth=True
@@ -112,7 +135,7 @@ if qp.get('auth')=='1' and not st.session_state.auth:
     except: pass
     st.rerun()
 
-# 자동 불러오기 (HTML 컴포넌트 PIN via URL)
+# HTML 컴포넌트 PIN via URL
 if qp.get('_lpin') and qp.get('ck'):
     pin_a=qp.get('_lpin',''); ck_a=qp.get('ck',''); cp_a=qp.get('cp','')
     try: del qp['_lpin']
@@ -743,11 +766,26 @@ if(!SCK){{
                 with st.spinner("연결 중..."):
                     ok,err=do_connect(ak,sec,acc,env_label)
                     if ok:
-                        # ✅ 연결 성공 시 PIN으로 자동 저장
+                        # 연결 성공 → URL 파라미터 + localStorage에 자동 저장
                         ck_v=py_save(ak,sec,acc,env_label,PASSWORD)
                         cp_v=base64.b64encode((PASSWORD+":kalpha").encode()).decode()
                         qp['ck']=ck_v; qp['cp']=cp_v
-                        st.success("✅ 연결 성공! 자동 저장됨 — URL을 북마크하세요")
+                        # localStorage 저장 (앱 재시작 시에도 유지)
+                        components.html(f"""<script>
+try{{
+  localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
+  localStorage.setItem('ka_cp_v9',{json.dumps(cp_v)});
+}}catch(e){{}}
+// URL에 파라미터 추가 (현재 창)
+try{{
+  var u=new URL(window.parent.location.href);
+  u.searchParams.set('ck',{json.dumps(ck_v)});
+  u.searchParams.set('cp',{json.dumps(cp_v)});
+  u.searchParams.set('agreed','1');
+  window.parent.history.replaceState(null,'',u.toString());
+}}catch(e){{}}
+</script>""", height=0, scrolling=False)
+                        st.success("✅ 연결 성공! 자동 저장됨")
                         st.rerun()
                     else: st.error(f"❌ {err}")
     with cb:
@@ -782,10 +820,12 @@ if(!SCK){{
                         if r.json().get('ok'):
                             st.session_state['tg_token']=tg_token
                             st.session_state['tg_chat']=tg_chat
-                            # 텔레그램 정보도 URL에 저장
-                            import urllib.parse
+                            # 텔레그램 정보도 URL + localStorage에 저장
                             tg_enc=base64.b64encode(json.dumps({'t':tg_token,'c':tg_chat}).encode()).decode()
                             qp['tg']=tg_enc
+                            components.html(f"""<script>
+try{{localStorage.setItem('ka_tg_v1',{json.dumps(tg_enc)});}}catch(e){{}}
+</script>""", height=0, scrolling=False)
                             st.success("✅ 전송 성공! 텔레그램 자동 저장됨")
                         else: st.error(f"❌ {r.json().get('description')}")
                     except Exception as e: st.error(f"❌ {e}")
