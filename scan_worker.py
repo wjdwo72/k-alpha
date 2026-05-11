@@ -36,16 +36,21 @@ ETF_KW = ['ETF','KODEX','TIGER','KBSTAR','ARIRANG','HANARO','KOSEF','ACE ',
 
 def is_etf(n): return any(k in n.upper() for k in ETF_KW)
 
-def should_send_now():
-    """현재 시각이 전송 간격의 배수인지 확인"""
-    now = time.localtime(time.time() + 9*3600)  # KST
-    total_min = now.tm_hour * 60 + now.tm_min
-    # 9:00(540) ~ 15:30(930) 장중만
+def kst_now():
+    """KST 현재 시각 반환"""
+    import datetime
+    return datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+
+def get_kst_ts():
+    t = kst_now()
+    return f"{t.hour:02d}:{t.minute:02d}:{t.second:02d}"
+    """KST 기준 장중 + 전송 간격 체크"""
+    t = kst_now()
+    total_min = t.hour * 60 + t.minute
     if not (540 <= total_min <= 930): return False
-    # 주말 제외
-    if now.tm_wday >= 5: return False
-    # 간격 체크 (5분 단위 실행이므로 현재 분이 간격의 배수인지)
-    return (now.tm_min % INTERVAL) < 5
+    if t.weekday() >= 5: return False
+    return (t.minute % INTERVAL) < 5
+
 
 def get_token():
     r = requests.post(f"{BASE_URL}/oauth2/tokenP",
@@ -133,14 +138,15 @@ def main():
     if not all([KIS_AK, KIS_SEC, TG_TOKEN, TG_CHAT]):
         print("❌ 환경변수 미설정"); return
 
-    kst = time.localtime(time.time() + 9*3600)
-    ts  = f"{kst.tm_hour:02d}:{kst.tm_min:02d}:{kst.tm_sec:02d}"
+    ts = get_kst_ts()
+    kst = kst_now()
     print(f"[{ts} KST] 간격:{INTERVAL}분 | 환경:{KIS_ENV}")
 
     # 수동 실행(workflow_dispatch)이면 무조건 전송
     is_manual = bool(os.environ.get('MANUAL_INTERVAL','').strip())
     if not is_manual and not should_send_now():
-        print(f"⏭ 스킵 — 장외시간 또는 전송 간격 미해당 (간격:{INTERVAL}분, 현재분:{kst.tm_min})")
+        t = kst_now()
+        print(f"⏭ 스킵 — 장외시간 또는 전송 간격 미해당 (간격:{INTERVAL}분, KST:{t.hour:02d}:{t.minute:02d})")
         return
 
     print("🔍 KIS API 토큰 발급 중...")
@@ -164,7 +170,7 @@ def main():
         main_s = sorted(all_s, key=lambda x: x.get('trAmt',0), reverse=True)[:5]
         for s in main_s: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
 
-    is_market = 9 <= kst.tm_hour <= 15
+    is_market = 9 <= kst.hour <= 15
     mkt_label = "🟢 장중" if is_market else "🔴 장 마감"
     section_title = "🔥 <b>[실시간 스윙/급등 TOP5]</b>" if any(s.get('cat')=='swing' for s in main_s) else "📊 <b>[거래대금 상위 TOP5]</b>"
 
