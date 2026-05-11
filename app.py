@@ -229,77 +229,6 @@ def fetch_gist_scan(gist_id):
         content = r.json().get('files',{}).get('kalpha_scan.json',{}).get('content','')
         return json.loads(content) if content else None
     except: return None
-    """거래량 순위 API → 실패 시 개별 현재가 조회 fallback"""
-    headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
-               'appkey':ak,'appsecret':secret,'tr_id':'FHPST01710000'}
-    stocks = []
-    try:
-        r = requests.get(f"{base_url}/uapi/domestic-stock/v1/ranking/volume",
-            params={'FID_COND_MRK_DIV_CODE':mkt_code,'FID_COND_SCR_DIV_CODE':'20171',
-                    'FID_INPUT_ISCD':'0000','FID_DIV_CLS_CODE':'0','FID_BLNG_CLS_CODE':'0',
-                    'FID_TRGT_CLS_CODE':'111111111','FID_TRGT_EXLS_CLS_CODE':'000000',
-                    'FID_INPUT_PRICE_1':'','FID_INPUT_PRICE_2':'',
-                    'FID_VOL_CNT':str(top_n),'FID_INPUT_DATE_1':''},
-            headers=headers, verify=False, timeout=15)
-        raw = r.json().get('output','') or []
-        for item in raw:
-            code = (item.get('mksc_shrn_iscd') or item.get('stck_shrn_iscd') or '').strip()
-            api_name = (item.get('hts_kor_isnm') or item.get('stck_kor_isnm') or
-                        item.get('prdt_abrv_name') or item.get('prdt_name') or
-                        item.get('kor_isnm') or '').strip()
-            name = get_stock_name(code, api_name)
-            if name == code and token:
-                name = fetch_stock_name(token, base_url, ak, secret, code)
-            if not code or is_etf(name): continue
-            try:
-                price   = int(item.get('stck_prpr','0') or 0)
-                sign    = item.get('prdy_vrss_sign','3')
-                change  = int(item.get('prdy_vrss','0') or 0)
-                chg_pct = float(item.get('prdy_ctrt','0') or 0)
-                tr_amt  = int(item.get('acml_tr_pbmn','0') or 0) // 100000000
-                if price <= 0: continue
-                stocks.append({'code':code,'name':name,'price':price,
-                    'change':change,'sign':sign,
-                    'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
-                    'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
-                    'mkt':'kospi' if mkt_code=='J' else 'kosdaq'})
-            except: continue
-    except: pass
-
-    # Fallback: 개별 현재가 병렬 조회 (장외시간)
-    if not stocks:
-        import concurrent.futures
-        codes = KOSPI_CODES if mkt_code == 'J' else KOSDAQ_CODES
-        ph = {'Content-Type':'application/json','authorization':f'Bearer {token}',
-              'appkey':ak,'appsecret':secret,'tr_id':'FHKST01010100'}
-        mkt_str = mkt_code  # J or Q
-
-        def _fetch_one(code):
-            try:
-                rp = requests.get(f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
-                    params={'FID_COND_MRKT_DIV_CODE':mkt_str,'FID_INPUT_ISCD':code},
-                    headers=ph, verify=False, timeout=3)
-                o = rp.json().get('output',{})
-                if not o.get('stck_prpr'): return None
-                name_raw = (o.get('hts_kor_isnm') or o.get('prdt_abrv_name') or '').strip()
-                name = get_stock_name(code, name_raw) if name_raw else code
-                if is_etf(name): return None
-                sign    = o.get('prdy_vrss_sign','3')
-                price   = int(o.get('stck_prpr','0') or 0)
-                chg_pct = float(o.get('prdy_ctrt','0') or 0)
-                tr_amt  = int(o.get('acml_tr_pbmn','0') or 0) // 100000000
-                if price <= 0: return None
-                return {'code':code,'name':name,'price':price,
-                        'change':int(o.get('prdy_vrss','0') or 0),'sign':sign,
-                        'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
-                        'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
-                        'mkt':'kospi' if mkt_code=='J' else 'kosdaq'}
-            except: return None
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-            results = list(ex.map(_fetch_one, codes[:top_n]))
-        stocks = [s for s in results if s]
-    return stocks
 
 @st.cache_data(ttl=86400, show_spinner=False)  # 하루 캐시
 def fetch_stock_name(token, base_url, ak, secret, code):
@@ -316,6 +245,9 @@ def fetch_stock_name(token, base_url, ak, secret, code):
         return name if name else code
     except:
         return code
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_volume_ranking(token, base_url, ak, secret, mkt_code='J', top_n=100):
     """거래량 순위 API → 실패 시 개별 현재가 조회 fallback"""
     tr_id = 'FHPST01710000'
     headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
