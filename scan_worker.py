@@ -1,32 +1,23 @@
 """
 K-ALPHA 백그라운드 스캔 워커
-GitHub Actions에서 실행 — 앱이 꺼져도 자동 스캔 & 텔레그램 발송
-
-Secrets 설정 (GitHub → Settings → Secrets → Actions):
-  KIS_AK    = 앱키
-  KIS_SEC   = 시크릿
-  KIS_ACC   = 계좌번호 (예: 69108332-01)
-  KIS_ENV   = real  (실전) 또는 vts (모의)
-  TG_TOKEN  = 텔레그램 봇 토큰
-  TG_CHAT   = 텔레그램 Chat ID
-  INTERVAL  = 전송 간격 분 (5/10/15/20/30, 기본값 10)
+GitHub Actions 실행 → 결과를 GitHub Gist에 저장
+→ Streamlit 앱이 열리면 Gist에서 즉시 읽기 (0초)
 """
-import os, json, time, math, requests, urllib3
+import os, json, time, datetime, requests, urllib3
 urllib3.disable_warnings()
 
-# ── 환경변수 ──
 KIS_AK   = os.environ.get('KIS_AK','').strip()
 KIS_SEC  = os.environ.get('KIS_SEC','').strip()
 KIS_ACC  = os.environ.get('KIS_ACC','').strip()
 KIS_ENV  = os.environ.get('KIS_ENV','real').strip()
 TG_TOKEN = os.environ.get('TG_TOKEN','').strip()
 TG_CHAT  = os.environ.get('TG_CHAT','').strip()
+GIST_ID  = os.environ.get('GIST_ID','').strip()   # GitHub Gist ID
+GH_TOKEN = os.environ.get('GH_TOKEN','').strip()  # GitHub Personal Access Token
 
-# 전송 간격: 수동 입력 우선, 없으면 Secret, 없으면 기본 10분
 _iv = os.environ.get('MANUAL_INTERVAL','').strip() or os.environ.get('INTERVAL','10').strip()
-try: INTERVAL = int(_iv)
+try:    INTERVAL = max(5, min(60, int(_iv)))
 except: INTERVAL = 10
-INTERVAL = max(5, min(60, INTERVAL))  # 5~60분 범위
 
 BASE_URL = ("https://openapi.koreainvestment.com:9443" if KIS_ENV=='real'
             else "https://openapivts.koreainvestment.com:29443")
@@ -37,20 +28,16 @@ ETF_KW = ['ETF','KODEX','TIGER','KBSTAR','ARIRANG','HANARO','KOSEF','ACE ',
 def is_etf(n): return any(k in n.upper() for k in ETF_KW)
 
 def kst_now():
-    """KST 현재 시각 반환"""
-    import datetime
     return datetime.datetime.utcnow() + datetime.timedelta(hours=9)
 
-def get_kst_ts():
+def should_send():
+    is_manual = bool(os.environ.get('MANUAL_INTERVAL','').strip())
+    if is_manual: return True
     t = kst_now()
-    return f"{t.hour:02d}:{t.minute:02d}:{t.second:02d}"
-    """KST 기준 장중 + 전송 간격 체크"""
-    t = kst_now()
-    total_min = t.hour * 60 + t.minute
-    if not (540 <= total_min <= 930): return False
+    total = t.hour*60 + t.minute
+    if not (540 <= total <= 930): return False
     if t.weekday() >= 5: return False
     return (t.minute % INTERVAL) < 5
-
 
 def get_token():
     r = requests.post(f"{BASE_URL}/oauth2/tokenP",
@@ -58,7 +45,7 @@ def get_token():
         verify=False, timeout=12)
     return r.json().get('access_token','')
 
-def fetch_ranking(token, mkt, top_n=150):
+def fetch_ranking(token, mkt, top_n):
     h = {'Content-Type':'application/json','authorization':f'Bearer {token}',
          'appkey':KIS_AK,'appsecret':KIS_SEC,'tr_id':'FHPST01710000'}
     stocks = []
@@ -86,7 +73,7 @@ def fetch_ranking(token, mkt, top_n=150):
                     'mkt':'kospi' if mkt=='J' else 'kosdaq'})
             except: continue
     except Exception as e:
-        print(f"거래량순위 오류 ({mkt}): {e}")
+        print(f"랭킹 API 오류({mkt}): {e}")
     return stocks
 
 def categorize(stocks):
@@ -95,32 +82,76 @@ def categorize(stocks):
     for s in stocks:
         if s['code'] in seen: continue
         seen.add(s['code'])
-        pct = s.get('changePct',0)
-        tr  = s.get('trAmt',0)
+        pct, tr = s.get('changePct',0), s.get('trAmt',0)
         if tr < 50: continue
         if 0.5 <= pct <= 4.0 and tr >= 200:
-            sc = min(95, 70+int(pct*5)+min(15, tr//500))
-            s2=dict(s); s2['score']=sc; s2['grade']='S' if sc>=85 else 'A'; s2['cat']='swing'
+            sc = min(95, 70+int(pct*5)+min(15,tr//500))
+            s2=dict(s); s2.update({'score':sc,'grade':'S' if sc>=85 else 'A','cat':'swing'})
             swing.append(s2)
         elif pct >= 4.0 and tr >= 100:
-            sc = min(95, 65+int(pct*3)+min(20, tr//300))
-            s2=dict(s); s2['score']=sc; s2['grade']='S' if sc>=85 else 'A'; s2['cat']='surge'
+            sc = min(95, 65+int(pct*3)+min(20,tr//300))
+            s2=dict(s); s2.update({'score':sc,'grade':'S' if sc>=85 else 'A','cat':'surge'})
             surge.append(s2)
+        elif -1.0 <= pct <= 1.5 and tr >= 50:
+            sc = min(90, 60+min(20,tr//200)+int(abs(pct)*3))
+            s2=dict(s); s2.update({'score':sc,'grade':'S' if sc>=80 else 'A','cat':'tomorrow'})
+            # tomorrow list not used for gist but keep for completeness
         if 50 <= tr <= 500 and -2.0 <= pct <= 3.0:
-            sc = min(90, 65+min(15, tr//50)+int(pct*5))
-            s2=dict(s); s2['score']=sc; s2['grade']='S' if sc>=80 else 'A'; s2['cat']='smallmid'
+            sc = min(90, 65+min(15,tr//50)+int(pct*5))
+            s2=dict(s); s2.update({'score':sc,'grade':'S' if sc>=80 else 'A','cat':'smallmid'})
             smallmid.append(s2)
 
     def top(lst, n):
         seen2=set(); res=[]
-        for x in sorted(lst, key=lambda x: x.get('score',0), reverse=True):
-            if x['code'] not in seen2:
-                seen2.add(x['code']); res.append(x)
+        for x in sorted(lst, key=lambda x:x.get('score',0), reverse=True):
+            if x['code'] not in seen2: seen2.add(x['code']); res.append(x)
             if len(res)>=n: break
         return res
-    return top(swing,5)+top(surge,5), top(smallmid,5)
+    return {'swing':top(swing,5),'surge':top(surge,5),'smallmid':top(smallmid,10)}
 
-def fmt(s):
+def build_card(s, cat):
+    p = s['price']
+    buy=int(p*0.995); stop=int(p*0.97); tgt=int(p*1.10)
+    rr=round((tgt-p)/(p-stop+1),1)
+    pct=s.get('changePct',0); sign='+' if pct>=0 else ''
+    return {
+        'name':s['name'],'code':s['code'],
+        'score':s.get('score',70),'grade':s.get('grade','B'),
+        'price':f"{p:,}",'change':f"{sign}{pct:.2f}%",'up':s['up'],
+        'buy':f"{buy:,}",'target':f"{tgt:,}",'stop':f"{stop:,}",
+        'rr':str(rr),'vol':s.get('trAmt',0),'mkt':s.get('mkt','kospi'),
+        'rsiApprox':round(50+pct*2.5,1),'cat':cat,
+        'reasons':[
+            {'icon':'◈','cat':'green','text':f"거래대금 {s.get('trAmt',0):,}억 · 거래량순위 상위"},
+            {'icon':'◉','cat':'','text':f"등락률 {sign}{pct:.2f}% · RSI 추정 {round(50+pct*2.5)}"},
+            {'icon':'▲','cat':'orange','text':f"매입가 {buy:,}원 → 목표 {tgt:,}원 · 손절 {stop:,}원"},
+        ],
+        'inds':[
+            {'label':s.get('mkt','KOSPI').upper(),'cat':'green'},
+            {'label':f"RR {rr}",'cat':''},
+            {'label':f"거래대금 {s.get('trAmt',0):,}억",'cat':'orange'},
+        ],
+        'chart3m':[],'chartD':[]
+    }
+
+def save_to_gist(data):
+    """결과를 GitHub Gist에 저장"""
+    if not GIST_ID or not GH_TOKEN:
+        print("⚠ GIST_ID 또는 GH_TOKEN 없음 — Gist 저장 건너뜀")
+        return False
+    try:
+        r = requests.patch(
+            f"https://api.github.com/gists/{GIST_ID}",
+            headers={'Authorization':f'token {GH_TOKEN}','Accept':'application/vnd.github.v3+json'},
+            json={"files":{"kalpha_scan.json":{"content":json.dumps(data,ensure_ascii=False)}}},
+            timeout=15)
+        ok = r.status_code == 200
+        print(f"{'✅ Gist 저장 완료' if ok else f'❌ Gist 저장 실패 {r.status_code}'}")
+        return ok
+    except Exception as e:
+        print(f"❌ Gist 오류: {e}"); return False
+
+def fmt_tg(s):
     pct=s.get('changePct',0); sign='+' if pct>=0 else ''
     p=s['price']; buy=int(p*0.995); stop=int(p*0.97); tgt=int(p*1.10)
     rr=round((tgt-p)/(p-stop+1),1)
@@ -129,63 +160,71 @@ def fmt(s):
             f"   💰 현재가: <b>{p:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
             f"   📈 매입가: {buy:,}원 | 손절: {stop:,}원 | RR {rr}")
 
-def send(msg):
+def send_telegram(msg):
     r = requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
         json={"chat_id":TG_CHAT,"text":msg,"parse_mode":"HTML"}, timeout=10)
-    return r.json().get('ok', False)
+    return r.json().get('ok',False)
 
 def main():
-    if not all([KIS_AK, KIS_SEC, TG_TOKEN, TG_CHAT]):
-        print("❌ 환경변수 미설정"); return
+    if not all([KIS_AK, KIS_SEC]):
+        print("❌ KIS 환경변수 미설정"); return
 
-    ts = get_kst_ts()
-    kst = kst_now()
+    t = kst_now()
+    ts = f"{t.hour:02d}:{t.minute:02d}:{t.second:02d}"
     print(f"[{ts} KST] 간격:{INTERVAL}분 | 환경:{KIS_ENV}")
 
-    # 수동 실행(workflow_dispatch)이면 무조건 전송
-    is_manual = bool(os.environ.get('MANUAL_INTERVAL','').strip())
-    if not is_manual and not should_send_now():
-        t = kst_now()
-        print(f"⏭ 스킵 — 장외시간 또는 전송 간격 미해당 (간격:{INTERVAL}분, KST:{t.hour:02d}:{t.minute:02d})")
-        return
+    if not should_send():
+        print(f"⏭ 스킵 (장외/간격미해당)"); return
 
-    print("🔍 KIS API 토큰 발급 중...")
+    print("🔑 토큰 발급 중...")
     token = get_token()
-    if not token:
-        print("❌ 토큰 발급 실패"); return
+    if not token: print("❌ 토큰 발급 실패"); return
 
-    print("📊 거래량 순위 조회 중...")
-    kospi  = fetch_ranking(token, 'J', 150)
+    print("📊 거래량 순위 조회...")
+    kospi  = fetch_ranking(token, 'J', 300)
     kosdaq = fetch_ranking(token, 'Q', 100)
     all_s  = kospi + kosdaq
-    print(f"KOSPI {len(kospi)}종목 + KOSDAQ {len(kosdaq)}종목")
+    print(f"KOSPI {len(kospi)} + KOSDAQ {len(kosdaq)} = {len(all_s)}종목")
 
-    if not all_s:
-        print("❌ 스캔 결과 없음"); return
+    if not all_s: print("❌ 결과 없음"); return
 
-    main_s, small_s = categorize(all_s)
+    cats = categorize(all_s)
 
-    # 분류 결과 없으면 거래대금 상위 fallback
-    if not main_s:
-        main_s = sorted(all_s, key=lambda x: x.get('trAmt',0), reverse=True)[:5]
-        for s in main_s: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
+    # 카드 데이터 생성
+    scan_result = {
+        'swing':    [build_card(s,'swing')    for s in cats['swing']],
+        'surge':    [build_card(s,'surge')    for s in cats['surge']],
+        'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
+        'tomorrow': [],
+        'ts': ts, 'total': len(all_s),
+        'kospi_n': len(kospi), 'kosdaq_n': len(kosdaq),
+        'updated_at': time.time()
+    }
 
-    is_market = 9 <= kst.hour <= 15
-    mkt_label = "🟢 장중" if is_market else "🔴 장 마감"
-    section_title = "🔥 <b>[실시간 스윙/급등 TOP5]</b>" if any(s.get('cat')=='swing' for s in main_s) else "📊 <b>[거래대금 상위 TOP5]</b>"
+    # Gist에 저장 (앱이 즉시 읽음)
+    save_to_gist(scan_result)
 
-    lines = [f"📡 <b>K-ALPHA {INTERVAL}분 자동 스캔</b> [{ts}] {mkt_label}\n"
-             f"KOSPI {len(kospi)}종목 + KOSDAQ {len(kosdaq)}종목\n━━━━━━━━━━━━━━━━",
-             section_title]
-    for s in main_s: lines.append(fmt(s))
-    if small_s:
-        lines.append("\n⬟ <b>[내일의 중소형주 TOP5]</b>")
-        for s in small_s: lines.append(fmt(s))
-    lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔 완료 · 다음 알림 {INTERVAL}분 후")
+    # 텔레그램 발송
+    if TG_TOKEN and TG_CHAT:
+        top_main  = (cats['swing']+cats['surge'])[:5]
+        top_small = cats['smallmid'][:5]
+        if not top_main:
+            top_main = sorted(all_s, key=lambda x:x.get('trAmt',0), reverse=True)[:5]
+            for s in top_main: s.setdefault('score',75); s.setdefault('grade','B')
 
-    msg = "\n\n".join(lines)
-    ok = send(msg)
-    print(f"{'✅ 텔레그램 전송 성공' if ok else '❌ 텔레그램 전송 실패'}")
+        is_market = 9 <= t.hour <= 15
+        lines = [f"📡 <b>K-ALPHA {INTERVAL}분 자동 스캔</b> [{ts}] {'🟢장중' if is_market else '🔴장마감'}\n"
+                 f"KOSPI {len(kospi)}종목 + KOSDAQ {len(kosdaq)}종목\n━━━━━━━━━━━━━━━━",
+                 "🔥 <b>[실시간 스윙/급등 TOP5]</b>" if cats['swing'] else "📊 <b>[거래대금 상위 TOP5]</b>"]
+        for s in top_main: lines.append(fmt_tg(s))
+        if top_small:
+            lines.append("\n⬟ <b>[내일의 중소형주 TOP5]</b>")
+            for s in top_small: lines.append(fmt_tg(s))
+        lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔완료 · 다음 {INTERVAL}분 후")
+        ok = send_telegram("\n\n".join(lines))
+        print(f"{'✅ 텔레그램 전송' if ok else '❌ 텔레그램 실패'}")
+
+    print("✅ 완료")
 
 if __name__ == '__main__':
     main()

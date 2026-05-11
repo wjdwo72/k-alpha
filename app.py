@@ -1,5 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit_autorefresh import st_autorefresh
 import requests, json, os, base64, urllib3, time, math
 urllib3.disable_warnings()
 
@@ -75,7 +76,8 @@ for k,v in DEFAULTS.items():
 # ── 서버 메모리 저장소 (같은 프로세스 내 재시작에도 유지) ──
 @st.cache_resource
 def get_server_store():
-    return {"ck": None, "cp": None, "tg": None, "agreed": False}
+    return {"ck": None, "cp": None, "tg": None, "agreed": False,
+            "scan_data": None, "scan_ts": 0, "scan_str": ""}
 
 server_store = get_server_store()
 
@@ -214,8 +216,19 @@ KOSDAQ_CODES = [
     '036810','048870','053300','060310','069510','073570','078600','080160','086060','086520',
 ]
 
-@st.cache_data(ttl=600, show_spinner=False)
-def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
+@st.cache_data(ttl=30, show_spinner=False)  # 30초 캐시
+def fetch_gist_scan(gist_id):
+    """GitHub Gist에서 최신 스캔 결과 즉시 로드"""
+    if not gist_id: return None
+    try:
+        r = requests.get(
+            f"https://api.github.com/gists/{gist_id}",
+            headers={'Accept':'application/vnd.github.v3+json'},
+            timeout=5)
+        if r.status_code != 200: return None
+        content = r.json().get('files',{}).get('kalpha_scan.json',{}).get('content','')
+        return json.loads(content) if content else None
+    except: return None
     """거래량 순위 API → 실패 시 개별 현재가 조회 fallback"""
     headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
                'appkey':ak,'appsecret':secret,'tr_id':'FHPST01710000'}
@@ -253,45 +266,39 @@ def fetch_volume_ranking(token, base_url, ak, secret, mkt_code, top_n=100):
             except: continue
     except: pass
 
-    # Fallback: 개별 현재가 조회 (J와 Q 둘 다 시도)
+    # Fallback: 개별 현재가 병렬 조회 (장외시간)
     if not stocks:
+        import concurrent.futures
         codes = KOSPI_CODES if mkt_code == 'J' else KOSDAQ_CODES
-        price_headers = {'Content-Type':'application/json','authorization':f'Bearer {token}',
-                         'appkey':ak,'appsecret':secret,'tr_id':'FHKST01010100'}
-        for code in codes[:top_n]:
+        ph = {'Content-Type':'application/json','authorization':f'Bearer {token}',
+              'appkey':ak,'appsecret':secret,'tr_id':'FHKST01010100'}
+        mkt_str = mkt_code  # J or Q
+
+        def _fetch_one(code):
             try:
-                found = None
-                for mkt_try in (['J','Q'] if mkt_code=='J' else ['Q','J']):
-                    rp = requests.get(f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
-                        params={'FID_COND_MRKT_DIV_CODE':mkt_try,'FID_INPUT_ISCD':code},
-                        headers=price_headers, verify=False, timeout=4)
-                    o = rp.json().get('output',{})
-                    if not o.get('stck_prpr'): continue
-                    name_raw = (o.get('hts_kor_isnm') or o.get('prdt_abrv_name') or
-                                o.get('prdt_name') or o.get('stck_kor_isnm') or '').strip()
-                    if name_raw:
-                        found = (o, name_raw); break
-                    elif not found and o.get('stck_prpr'):
-                        found = (o, '')
-                if not found: continue
-                o, name_raw = found
-                name = get_stock_name(code, name_raw)
-                if name == code:
-                    name = fetch_stock_name(token, base_url, ak, secret, code)
-                if is_etf(name): continue
+                rp = requests.get(f"{base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
+                    params={'FID_COND_MRKT_DIV_CODE':mkt_str,'FID_INPUT_ISCD':code},
+                    headers=ph, verify=False, timeout=3)
+                o = rp.json().get('output',{})
+                if not o.get('stck_prpr'): return None
+                name_raw = (o.get('hts_kor_isnm') or o.get('prdt_abrv_name') or '').strip()
+                name = get_stock_name(code, name_raw) if name_raw else code
+                if is_etf(name): return None
                 sign    = o.get('prdy_vrss_sign','3')
                 price   = int(o.get('stck_prpr','0') or 0)
-                change  = int(o.get('prdy_vrss','0') or 0)
                 chg_pct = float(o.get('prdy_ctrt','0') or 0)
                 tr_amt  = int(o.get('acml_tr_pbmn','0') or 0) // 100000000
-                if price <= 0: continue
-                stocks.append({'code':code,'name':name,'price':price,
-                    'change':change,'sign':sign,
-                    'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
-                    'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
-                    'mkt':'kospi' if mkt_code=='J' else 'kosdaq'})
-                time.sleep(0.08)
-            except: continue
+                if price <= 0: return None
+                return {'code':code,'name':name,'price':price,
+                        'change':int(o.get('prdy_vrss','0') or 0),'sign':sign,
+                        'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
+                        'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
+                        'mkt':'kospi' if mkt_code=='J' else 'kosdaq'}
+            except: return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+            results = list(ex.map(_fetch_one, codes[:top_n]))
+        stocks = [s for s in results if s]
     return stocks
 
 @st.cache_data(ttl=86400, show_spinner=False)  # 하루 캐시
@@ -600,7 +607,17 @@ div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,
     st.markdown('</div>',unsafe_allow_html=True)
     st.stop()
 
-# ════ 3. 메인 패널 ════
+# ════ 3. 자동 새로고침 (KIS 연결 시에만) ════
+if st.session_state.auth and st.session_state.kis_token:
+    iv_min = st.session_state.get('tg_interval_min', 10)
+    # 설정된 간격마다 자동 재실행 (스캔 + 텔레그램)
+    _refresh_count = st_autorefresh(
+        interval=iv_min * 60 * 1000,  # ms
+        limit=None,
+        key="auto_scan_refresh"
+    )
+
+# ════ 4. 메인 패널 ════
 if st.session_state.pop('_load_ok',False):
     st.success("✅ 불러오기 완료! 연결 버튼을 누르세요")
 
@@ -848,64 +865,156 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
             except: pass
             st.rerun()
 
-# ════ 4. 실시간 스캔 & 데이터 준비 ════
+# ════ 5. 실시간 스캔 & 데이터 준비 ════
 prices_json="{}"; balance_json="{}"; price_ts=""
 scan_json="{}"; scan_count=0
 
 if st.session_state.kis_token:
-    ca,cb=st.columns([5,1])
+    iv_min = st.session_state.get('tg_interval_min', 10)
+    GIST_ID = os.environ.get('GIST_ID','')
+
+    ca, cb = st.columns([5,1])
     with cb:
-        if st.button("↻",key="btn_ref",help="즉시 갱신"):
-            for fn in [fetch_volume_ranking, fetch_balance]: fn.clear()
+        if st.button("↻", key="btn_ref", help="즉시 갱신"):
+            server_store['scan_ts'] = 0
+            fetch_gist_scan.clear()
             st.rerun()
     with ca:
-        iv_min=st.session_state.get('tg_interval_min',10)
-        with st.spinner(f"KOSPI 300종목 + KOSDAQ 100종목 실시간 스캔 중..."):
-            # KOSPI 상위 300 + KOSDAQ 상위 100
-            kospi_stocks = fetch_volume_ranking(
-                st.session_state.kis_token, st.session_state.kis_base_url,
-                st.session_state.kis_ak, st.session_state.kis_sec, 'J', 300)
-            kosdaq_stocks = fetch_volume_ranking(
-                st.session_state.kis_token, st.session_state.kis_base_url,
-                st.session_state.kis_ak, st.session_state.kis_sec, 'Q', 100)
-            balance = fetch_balance(
-                st.session_state.kis_token, st.session_state.kis_base_url,
-                st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
+        st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#4a5568;padding:2px 0">'
+                    f'⟳ {iv_min}분 자동갱신 · <span style="color:#00ff88">{time.strftime("%H:%M:%S")}</span></div>',
+                    unsafe_allow_html=True)
 
-        all_stocks = kospi_stocks + kosdaq_stocks
-        price_ts = time.strftime("%H:%M:%S")  # 현재 시각
+    # ── 1순위: GitHub Gist (즉시, 0초) ──
+    gist_data = fetch_gist_scan(GIST_ID) if GIST_ID else None
 
-        # 스캔 결과 분류
-        cats = categorize_stocks(
-            all_stocks,
-            st.session_state.scan_blacklist,
-            st.session_state.scan_vol_min,
-            st.session_state.scan_rsi_min,
-            st.session_state.scan_rsi_max,
-        )
-        scan_count = len(all_stocks)
+    if gist_data:
+        # Gist 데이터로 즉시 표시
+        scan_result = gist_data
+        scan_json   = json.dumps(scan_result, ensure_ascii=False)
+        scan_count  = gist_data.get('total', 0)
+        price_ts    = gist_data.get('ts', time.strftime("%H:%M:%S"))
+        prices_json = "{}"
+        balance_json = "{}"
+        kospi_n  = gist_data.get('kospi_n', 0)
+        kosdaq_n = gist_data.get('kosdaq_n', 0)
+        age_sec  = int(time.time() - gist_data.get('updated_at', time.time()))
+        st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
+                    f'⚡ Gist 즉시 로드 · KOSPI {kospi_n}+KOSDAQ {kosdaq_n}종목 · '
+                    f'{age_sec//60}분 {age_sec%60}초 전 스캔</div>', unsafe_allow_html=True)
 
-        # 카드 데이터 생성
+    else:
+        # ── 2순위: 직접 KIS 스캔 (Gist 없을 때) ──
+        cache_stale = (time.time() - server_store.get('scan_ts', 0)) > iv_min*60
+        cached = server_store.get('scan_data')
+
+        if cached and not cache_stale:
+            kospi_stocks  = cached['kospi']
+            kosdaq_stocks = cached['kosdaq']
+            all_stocks    = cached['all']
+            balance       = cached['balance']
+            price_ts      = server_store['scan_str']
+        else:
+            with st.spinner("📡 KIS 직접 스캔 중..."):
+                kospi_stocks = fetch_volume_ranking(
+                    st.session_state.kis_token, st.session_state.kis_base_url,
+                    st.session_state.kis_ak, st.session_state.kis_sec, 'J', 300)
+                kosdaq_stocks = fetch_volume_ranking(
+                    st.session_state.kis_token, st.session_state.kis_base_url,
+                    st.session_state.kis_ak, st.session_state.kis_sec, 'Q', 100)
+                balance = fetch_balance(
+                    st.session_state.kis_token, st.session_state.kis_base_url,
+                    st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
+            all_stocks = kospi_stocks + kosdaq_stocks
+            price_ts   = time.strftime("%H:%M:%S")
+            server_store['scan_data'] = {'kospi':kospi_stocks,'kosdaq':kosdaq_stocks,
+                                          'all':all_stocks,'balance':balance}
+            server_store['scan_ts']  = time.time()
+            server_store['scan_str'] = price_ts
+
+        cats = categorize_stocks(all_stocks, st.session_state.scan_blacklist,
+                                  st.session_state.scan_vol_min,
+                                  st.session_state.scan_rsi_min, st.session_state.scan_rsi_max)
+        scan_count  = len(all_stocks)
         scan_result = {
             'swing':    [build_card(s,'swing')    for s in cats['swing']],
             'surge':    [build_card(s,'surge')    for s in cats['surge']],
             'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
             'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
-            'ts': price_ts,
-            'total': scan_count,
+            'ts': price_ts, 'total': scan_count,
         }
-        scan_json = json.dumps(scan_result, ensure_ascii=False)
+        scan_json    = json.dumps(scan_result, ensure_ascii=False)
+        prices       = {s['code']:{'price':s['price'],'change':s.get('change',0),
+                                    'changePct':s['changePct'],'up':s['up']} for s in all_stocks}
+        prices_json  = json.dumps(prices)
+        balance_json = json.dumps(balance) if balance and not balance.get('error') else "{}"
 
-        # 현재가 딕셔너리
-        prices = {s['code']:{'price':s['price'],'change':s['change'],
-                              'changePct':s['changePct'],'up':s['up']}
-                  for s in all_stocks}
-        prices_json = json.dumps(prices)
+        st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
+                    f'📊 KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목 · {price_ts}</div>',
+                    unsafe_allow_html=True)
 
-        if balance and not balance.get('error'): balance_json=json.dumps(balance)
+        # 텔레그램
+        tg_token = st.session_state.get('tg_token','')
+        tg_chat  = st.session_state.get('tg_chat','')
+        if tg_token and tg_chat and all_stocks:
+            bucket = int(time.time() // (iv_min*60))
+            if bucket != st.session_state.get('_tg_bucket',-1):
+                st.session_state['_tg_bucket'] = bucket
+                top_main  = (cats['swing']+cats['surge'])[:5]
+                top_small = cats.get('smallmid',[])[:5]
+                if not top_main:
+                    top_main = sorted(all_stocks, key=lambda x:x.get('trAmt',0), reverse=True)[:5]
+                    for s in top_main: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
+                now_ts = time.strftime('%H:%M:%S')
+                is_mkt = 9 <= int(time.strftime('%H')) <= 15
+                def fmt_s(s, cat):
+                    pct=s.get('changePct',0); sign='+' if pct>=0 else ''
+                    card=build_card(s,cat); icon='🔴' if s.get('grade')=='S' else '🟡'
+                    return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
+                            f"   💰 {s['price']:,}원 {sign}{pct:.2f}% | {s.get('trAmt',0):,}억\n"
+                            f"   📈 매입:{card['buy']} | 손절:{card['stop']} | RR {card['rr']}")
+                lines=[f"📡 <b>K-ALPHA {iv_min}분 스캔</b> [{now_ts}] {'🟢장중' if is_mkt else '🔴장마감'}\n"
+                       f"KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목\n━━━━━━━━━━━━━━━━"]
+                lines.append("🔥 <b>[스윙/급등 TOP5]</b>" if cats.get('swing') else "📊 <b>[거래대금 상위]</b>")
+                for s in top_main: lines.append(fmt_s(s,s.get('cat','swing')))
+                if top_small:
+                    lines.append("\n⬟ <b>[중소형주 TOP5]</b>")
+                    for s in top_small: lines.append(fmt_s(s,'smallmid'))
+                lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 완료")
+                try: requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=10)
+                except: pass
 
-        # 상태 표시
-        st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
+    # 스캔 결과 분류
+    cats = categorize_stocks(
+        all_stocks,
+        st.session_state.scan_blacklist,
+        st.session_state.scan_vol_min,
+        st.session_state.scan_rsi_min,
+        st.session_state.scan_rsi_max,
+    )
+    scan_count = len(all_stocks)
+
+    # 카드 데이터 생성
+    scan_result = {
+        'swing':    [build_card(s,'swing')    for s in cats['swing']],
+        'surge':    [build_card(s,'surge')    for s in cats['surge']],
+        'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
+        'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
+        'ts': price_ts,
+        'total': scan_count,
+    }
+    scan_json = json.dumps(scan_result, ensure_ascii=False)
+
+    # 현재가 딕셔너리
+    prices = {s['code']:{'price':s['price'],'change':s['change'],
+                          'changePct':s['changePct'],'up':s['up']}
+              for s in all_stocks}
+    prices_json = json.dumps(prices)
+
+    if balance and not balance.get('error'): balance_json=json.dumps(balance)
+
+    # 상태 표시
+    st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
 📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 스캔 완료 · <span style="color:#00ff88">{time.strftime('%H:%M:%S')}</span><br>
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개
 </div>""", unsafe_allow_html=True)
@@ -961,7 +1070,7 @@ if st.session_state.kis_token:
             except Exception as e:
                 st.caption(f"텔레그램 오류: {e}")
 
-# ════ 5. HTML 터미널 ════
+# ════ 6. HTML 터미널 ════
 if not os.path.exists("app.html"):
     st.error("app.html 파일을 GitHub 저장소에 업로드하세요."); st.stop()
 with open("app.html","r",encoding="utf-8") as f: html=f.read()
