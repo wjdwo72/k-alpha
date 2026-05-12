@@ -2,6 +2,11 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_autorefresh import st_autorefresh
 import requests, json, os, base64, urllib3, time, math
+from datetime import datetime, timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
+def kst_now(): return datetime.now(KST)
+def kst_strftime(fmt): return kst_now().strftime(fmt)
 urllib3.disable_warnings()
 
 st.set_page_config(page_title="K-ALPHA Terminal", page_icon="📈",
@@ -813,7 +818,7 @@ if st.session_state.kis_token:
             st.rerun()
     with ca:
         st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#4a5568;padding:2px 0">'
-                    f'⟳ {iv_min}분 자동갱신 · <span style="color:#00ff88">{time.strftime("%H:%M:%S")}</span></div>',
+                    f'⟳ {iv_min}분 자동갱신 · <span style="color:#00ff88">{kst_strftime("%H:%M:%S")}</span></div>',
                     unsafe_allow_html=True)
 
     # ── 1순위: GitHub Gist (즉시, 0초) ──
@@ -824,7 +829,7 @@ if st.session_state.kis_token:
         scan_result = gist_data
         scan_json   = json.dumps(scan_result, ensure_ascii=False)
         scan_count  = gist_data.get('total', 0)
-        price_ts    = gist_data.get('ts', time.strftime("%H:%M:%S"))
+        price_ts    = gist_data.get('ts', kst_strftime("%H:%M:%S"))
         prices_json = "{}"
         balance_json = "{}"
         kospi_n  = gist_data.get('kospi_n', 0)
@@ -857,7 +862,7 @@ if st.session_state.kis_token:
                     st.session_state.kis_token, st.session_state.kis_base_url,
                     st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
             all_stocks = kospi_stocks + kosdaq_stocks
-            price_ts   = time.strftime("%H:%M:%S")
+            price_ts   = kst_strftime("%H:%M:%S")
             server_store['scan_data'] = {'kospi':kospi_stocks,'kosdaq':kosdaq_stocks,
                                           'all':all_stocks,'balance':balance}
             server_store['scan_ts']  = time.time()
@@ -896,8 +901,8 @@ if st.session_state.kis_token:
                 if not top_main:
                     top_main = sorted(all_stocks, key=lambda x:x.get('trAmt',0), reverse=True)[:5]
                     for s in top_main: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
-                now_ts = time.strftime('%H:%M:%S')
-                is_mkt = 9 <= int(time.strftime('%H')) <= 15
+                now_ts = kst_strftime('%H:%M:%S')
+                is_mkt = 9 <= int(kst_strftime('%H')) <= 15
                 def fmt_s(s, cat):
                     pct=s.get('changePct',0); sign='+' if pct>=0 else ''
                     card=build_card(s,cat); icon='🔴' if s.get('grade')=='S' else '🟡'
@@ -912,12 +917,8 @@ if st.session_state.kis_token:
                     lines.append("\n⬟ <b>[중소형주 TOP5]</b>")
                     for s in top_small: lines.append(fmt_s(s,'smallmid'))
                 lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 완료")
-                try:
-                    msg_body = {"text":"\n\n".join(lines),"parse_mode":"HTML"}
-                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                        json={"chat_id":tg_chat,**msg_body},timeout=10)
-                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                        json={"chat_id":"-1003985375563",**msg_body},timeout=10)
+                try: requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=10)
                 except: pass
 
     # 스캔 결과 분류
@@ -951,7 +952,7 @@ if st.session_state.kis_token:
 
     # 상태 표시
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
-📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 스캔 완료 · <span style="color:#00ff88">{time.strftime('%H:%M:%S')}</span><br>
+📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 스캔 완료 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span><br>
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개
 </div>""", unsafe_allow_html=True)
 
@@ -970,8 +971,8 @@ if st.session_state.kis_token:
                 for s in top_main: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
             top_small = cats.get('smallmid', [])[:5]
 
-            now_ts = time.strftime('%H:%M:%S')
-            is_market = 9 <= int(time.strftime('%H')) <= 15
+            now_ts = kst_strftime('%H:%M:%S')
+            is_market = 9 <= int(kst_strftime('%H')) <= 15
 
             def fmt_stock(s, cat):
                 pct = s.get('changePct', 0); sign = '+' if pct >= 0 else ''
@@ -997,14 +998,9 @@ if st.session_state.kis_token:
             lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료 · 다음 알림 {iv_min}분 후")
 
             try:
-                msg_body = {"text": "\n\n".join(lines), "parse_mode": "HTML"}
                 resp = requests.post(
                     f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id": tg_chat, **msg_body},
-                    timeout=10)
-                requests.post(
-                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id": "-1003985375563", **msg_body},
+                    json={"chat_id": tg_chat, "text": "\n\n".join(lines), "parse_mode": "HTML"},
                     timeout=10)
                 if resp.json().get('ok'):
                     st.toast(f"📱 텔레그램 전송 완료 ({now_ts})", icon="✅")
