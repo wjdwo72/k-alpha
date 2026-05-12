@@ -418,20 +418,25 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
 
 def build_card(s, cat):
     """카드 데이터 포맷팅"""
-    price = s['price']
-    chg   = s['changePct']
-    sign  = '+' if chg >= 0 else ''
-    buy_p = int(price * 0.995)
-    stop_p= int(price * 0.97)
-    tgt_p = int(price * 1.10)
-    rr    = round((tgt_p-price)/(price-stop_p+1), 1)
+    price  = s['price']
+    chg    = s['changePct']
+    sign   = '+' if chg >= 0 else ''
+    BUY_R  = 1.001   # 현재가 +0.1%
+    STOP_R = 0.970   # 현재가 -3.0%
+    TGT_R  = 1.100   # 현재가 +10%
+    buy_p  = int(price * BUY_R)
+    stop_p = int(price * STOP_R)
+    tgt_p  = int(price * TGT_R)
+    rr     = round((tgt_p - price) / max(price - stop_p, 1), 1)
     return {
         'name': s['name'], 'code': s['code'],
         'score': s.get('score',70), 'grade': s.get('grade','B'),
         'price': f"{price:,}",
+        'rawPrice': price,
         'change': f"{sign}{chg:.2f}%",
         'up': s['up'],
         'buy': f"{buy_p:,}", 'target': f"{tgt_p:,}", 'stop': f"{stop_p:,}",
+        'buyR': BUY_R, 'stopR': STOP_R, 'tgtR': TGT_R,
         'rr': str(rr), 'vol': s.get('trAmt',0),
         'mkt': s.get('mkt','kospi'),
         'rsiApprox': s.get('rsiApprox', 50),
