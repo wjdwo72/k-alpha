@@ -494,9 +494,9 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         return result
 
     return {
-        'swing':    top(swing, 5),
-        'surge':    top(surge, 5),
-        'tomorrow': top(tomorrow, 5),
+        'swing':    top(swing, 10),
+        'surge':    top(surge, 10),
+        'tomorrow': top(tomorrow, 10),
         'smallmid': top(smallmid, 10),
     }
 
@@ -980,26 +980,42 @@ if st.session_state.kis_token:
             bucket = int(time.time() // (iv_min*60))
             if bucket != st.session_state.get('_tg_bucket',-1):
                 st.session_state['_tg_bucket'] = bucket
-                top_main  = (cats['swing']+cats['surge'])[:5]
-                top_small = cats.get('smallmid',[])[:5]
-                if not top_main:
-                    top_main = sorted(all_stocks, key=lambda x:x.get('trAmt',0), reverse=True)[:5]
-                    for s in top_main: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
                 now_ts = kst_strftime('%H:%M:%S')
                 is_mkt = 9 <= int(kst_strftime('%H')) <= 15
+                mkt_label = '🟢장중' if is_mkt else '🔴장마감'
+
                 def fmt_s(s, cat):
                     pct=s.get('changePct',0); sign='+' if pct>=0 else ''
                     card=build_card(s,cat); icon='🔴' if s.get('grade')=='S' else '🟡'
                     return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
                             f"   💰 {s['price']:,}원 {sign}{pct:.2f}% | {s.get('trAmt',0):,}억\n"
                             f"   📈 매입:{card['buy']} | 손절:{card['stop']} | RR {card['rr']}")
-                lines=[f"📡 <b>K-ALPHA {iv_min}분 스캔</b> [{now_ts}] {'🟢장중' if is_mkt else '🔴장마감'}\n"
-                       f"KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목\n━━━━━━━━━━━━━━━━"]
-                lines.append("🔥 <b>[스윙/급등 TOP5]</b>" if cats.get('swing') else "📊 <b>[거래대금 상위]</b>")
-                for s in top_main: lines.append(fmt_s(s,s.get('cat','swing')))
-                if top_small:
-                    lines.append("\n⬟ <b>[중소형주 TOP5]</b>")
-                    for s in top_small: lines.append(fmt_s(s,'smallmid'))
+
+                lines = [f"📡 <b>K-ALPHA {iv_min}분 스캔</b> [{now_ts}] {mkt_label}\n"
+                         f"KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목\n━━━━━━━━━━━━━━━━"]
+
+                swing_list    = cats.get('swing', [])[:10]
+                surge_list    = cats.get('surge', [])[:10]
+                tomorrow_list = cats.get('tomorrow', [])[:10]
+                smallmid_list = cats.get('smallmid', [])[:10]
+
+                if swing_list:
+                    lines.append(f"🔥 <b>[실시간스윙 TOP{len(swing_list)}]</b>")
+                    for s in swing_list: lines.append(fmt_s(s,'swing'))
+                if surge_list:
+                    lines.append(f"\n⚡ <b>[급등전야 TOP{len(surge_list)}]</b>")
+                    for s in surge_list: lines.append(fmt_s(s,'surge'))
+                if tomorrow_list:
+                    lines.append(f"\n🔭 <b>[내일관심 TOP{len(tomorrow_list)}]</b>")
+                    for s in tomorrow_list: lines.append(fmt_s(s,'tomorrow'))
+                if smallmid_list:
+                    lines.append(f"\n⬟ <b>[중소형주 TOP{len(smallmid_list)}]</b>")
+                    for s in smallmid_list: lines.append(fmt_s(s,'smallmid'))
+                if not any([swing_list, surge_list, tomorrow_list, smallmid_list]):
+                    fallback = sorted(all_stocks, key=lambda x:x.get('trAmt',0), reverse=True)[:10]
+                    lines.append("📊 <b>[거래대금 상위 TOP10]</b>")
+                    for s in fallback: lines.append(fmt_s(s,'swing'))
+
                 lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 완료")
                 try: requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
                         json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=10)
@@ -1048,15 +1064,9 @@ if st.session_state.kis_token:
         if bucket != st.session_state.get('_tg_bucket', -1):
             st.session_state['_tg_bucket'] = bucket
 
-            # 카테고리 결과 우선, 없으면 거래대금 상위 fallback
-            top_main = (cats['swing'] + cats['surge'])[:5]
-            if not top_main:
-                top_main = sorted(all_stocks, key=lambda x: x.get('trAmt',0), reverse=True)[:5]
-                for s in top_main: s.setdefault('score',75); s.setdefault('grade','B'); s.setdefault('cat','swing')
-            top_small = cats.get('smallmid', [])[:5]
-
-            now_ts = kst_strftime('%H:%M:%S')
+            now_ts    = kst_strftime('%H:%M:%S')
             is_market = 9 <= int(kst_strftime('%H')) <= 15
+            mkt_label = "🟢 장중" if is_market else "🔴 장 마감"
 
             def fmt_stock(s, cat):
                 pct = s.get('changePct', 0); sign = '+' if pct >= 0 else ''
@@ -1066,26 +1076,42 @@ if st.session_state.kis_token:
                         f"   💰 현재가: <b>{s['price']:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
                         f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}")
 
-            mkt_label = "🟢 장중" if is_market else "🔴 장 마감"
-            section_title = "🔥 <b>[실시간 스윙/급등 TOP5]</b>" if cats.get('swing') else "📊 <b>[거래대금 상위 TOP5]</b>"
+            swing_list    = cats.get('swing', [])[:10]
+            surge_list    = cats.get('surge', [])[:10]
+            tomorrow_list = cats.get('tomorrow', [])[:10]
+            smallmid_list = cats.get('smallmid', [])[:10]
 
             lines = [f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{now_ts}] {mkt_label}\n"
                      f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n"
-                     "━━━━━━━━━━━━━━━━",
-                     section_title]
-            for s in top_main:
-                lines.append(fmt_stock(s, s.get('cat','swing')))
-            if top_small:
-                lines.append("\n⬟ <b>[내일의 중소형주 TOP5]</b>")
-                for s in top_small:
-                    lines.append(fmt_stock(s, 'smallmid'))
+                     "━━━━━━━━━━━━━━━━"]
+
+            if swing_list:
+                lines.append(f"🔥 <b>[실시간스윙 TOP{len(swing_list)}]</b>")
+                for s in swing_list: lines.append(fmt_stock(s, 'swing'))
+            if surge_list:
+                lines.append(f"\n⚡ <b>[급등전야 TOP{len(surge_list)}]</b>")
+                for s in surge_list: lines.append(fmt_stock(s, 'surge'))
+            if tomorrow_list:
+                lines.append(f"\n🔭 <b>[내일관심 TOP{len(tomorrow_list)}]</b>")
+                for s in tomorrow_list: lines.append(fmt_stock(s, 'tomorrow'))
+            if smallmid_list:
+                lines.append(f"\n⬟ <b>[중소형주 TOP{len(smallmid_list)}]</b>")
+                for s in smallmid_list: lines.append(fmt_stock(s, 'smallmid'))
+            if not any([swing_list, surge_list, tomorrow_list, smallmid_list]):
+                fallback = sorted(all_stocks, key=lambda x: x.get('trAmt',0), reverse=True)[:10]
+                lines.append("📊 <b>[거래대금 상위 TOP10]</b>")
+                for s in fallback: lines.append(fmt_stock(s, 'swing'))
+
             lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료 · 다음 알림 {iv_min}분 후")
 
             try:
+                msg_body = {"text": "\n\n".join(lines), "parse_mode": "HTML"}
                 resp = requests.post(
                     f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id": tg_chat, "text": "\n\n".join(lines), "parse_mode": "HTML"},
-                    timeout=10)
+                    json={"chat_id": tg_chat, **msg_body}, timeout=10)
+                requests.post(
+                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                    json={"chat_id": "-1003985375563", **msg_body}, timeout=10)
                 if resp.json().get('ok'):
                     st.toast(f"📱 텔레그램 전송 완료 ({now_ts})", icon="✅")
             except Exception as e:
