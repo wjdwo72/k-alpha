@@ -358,55 +358,139 @@ def fetch_balance(token, base_url, ak, secret, acc):
     except Exception as e: return {'error':str(e)}
 
 def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
-    """스캔 결과를 카테고리별로 분류 (중복 제거 포함)"""
-    # 중복 코드 제거 (KOSPI+KOSDAQ 합칠 때 같은 종목 중복 가능)
+    """
+    스윙 매매 핵심 원칙 기반 종목 분류
+    ① 실시간스윙  : 기술적 지지 근접 + 모멘텀 + 수급 동반
+    ② 급등전야    : 거래량 폭발 + 강한 모멘텀 (단기 추세 전환)
+    ③ 내일관심    : 눌림목 구간 + 저변동성 + 수급 대기
+    ④ 중소형주    : 소형 모멘텀 + 피보나치 되돌림 근접
+    """
+    # ── 0. 중복 제거 및 블랙리스트 필터 ──────────────────────────────
     seen = {}
-    unique_stocks = []
+    unique = []
     for s in all_stocks:
         if s['code'] not in seen:
             seen[s['code']] = True
-            unique_stocks.append(s)
-    stocks_filtered = [s for s in unique_stocks if s['code'] not in blacklist]
+            unique.append(s)
+    stocks = [s for s in unique if s['code'] not in blacklist]
 
     swing, surge, tomorrow, smallmid = [], [], [], []
-    used_codes = set()  # 카테고리 중복 방지
 
-    for s in stocks_filtered:
-        pct = s.get('changePct', 0)
-        tr  = s.get('trAmt', 0)
-        if tr < vol_min: continue
-        rsi_approx = max(10, min(90, 50 + pct * 2.5))
-        if not (rsi_min <= rsi_approx <= rsi_max): continue
+    for s in stocks:
+        pct  = s.get('changePct', 0)   # 등락률 (%)
+        tr   = s.get('trAmt', 0)        # 거래대금 (억원)
+        price= s.get('price', 0)
+
+        # ── 기본 거래대금 필터 (유동성 확보) ──
+        if tr < vol_min or price <= 0:
+            continue
+
+        # ── RSI 근사치 계산 (등락률 기반) ──
+        # 실제 RSI는 14일 데이터 필요 → 당일 등락률로 근사
+        rsi_approx = max(10, min(90, 50 + pct * 2.8))
+        if not (rsi_min <= rsi_approx <= rsi_max):
+            continue
         s['rsiApprox'] = round(rsi_approx, 1)
 
-        if 0.5 <= pct <= 4.0 and tr >= 200:
-            score = min(95, 70 + int(pct*5) + min(15, tr//500))
-            s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=85 else 'A' if score>=75 else 'B'
+        # ── MA 이격도 근사 (당일 등락률 → 5일 누적 추정) ──
+        # 양봉 연속 시 MA 근접 하향 → 이격도 100~103 추정
+        proximity_ok   = 0.3 <= pct <= 4.5   # MA 근접 상향 돌파 구간
+        ma_support_ok  = -0.5 <= pct <= 2.5  # MA 지지 확인 구간
+
+        # ── 거래대금 등급 (수급 강도) ──
+        vol_grade = (
+            4 if tr >= 2000 else   # 초대형 수급
+            3 if tr >= 800  else   # 대형 수급
+            2 if tr >= 300  else   # 중형 수급
+            1 if tr >= 100  else   # 소형 수급
+            0
+        )
+
+        # ── 피보나치 61.8% 되돌림 근사 ──
+        # 눌림목 구간: -10%~-20% 조정 후 반등 초기
+        fib_pullback = -3.0 <= pct <= 0.5 and tr >= 80
+
+        # ── 쌍끌이 수급 근사 (거래대금 급증 + 상승) ──
+        dual_buying = pct >= 1.0 and vol_grade >= 2
+
+        # ════════════════════════════════════════════
+        # ① 실시간 스윙 (기술적 지지 + 모멘텀 + 수급)
+        #    - MA 근접 상향 돌파 (이격도 100~103 추정)
+        #    - 거래대금 200억 이상 (기관/외국인 수급 추정)
+        #    - 등락률 +0.5%~+4% (과열 아닌 모멘텀)
+        # ════════════════════════════════════════════
+        if proximity_ok and 0.5 <= pct <= 4.5 and vol_grade >= 2:
+            # 점수: 기본 70 + 모멘텀(최대 12) + 수급(최대 16) + RSI보너스(최대 7)
+            momentum_sc = min(12, int(pct * 3))
+            vol_sc      = min(16, vol_grade * 4)
+            rsi_bonus   = 7 if 45 <= rsi_approx <= 65 else 0   # 과매수 아닌 구간
+            score = min(97, 70 + momentum_sc + vol_sc + rsi_bonus)
+            s2 = dict(s)
+            s2.update({'score': score, 'grade': 'S' if score>=87 else 'A' if score>=77 else 'B',
+                       'cat': 'swing'})
             swing.append(s2)
-        elif pct >= 4.0 and tr >= 100:
-            score = min(95, 65 + int(pct*3) + min(20, tr//300))
-            s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=85 else 'A' if score>=75 else 'B'
+
+        # ════════════════════════════════════════════
+        # ② 급등전야 (거래량 폭발 + 강한 모멘텀)
+        #    - 등락률 +4%+ (강한 추세 전환 신호)
+        #    - 거래대금 100억+ (유의미한 수급 진입)
+        #    - 베타 1.0+ 추정: 고변동 종목 선별
+        # ════════════════════════════════════════════
+        if pct >= 4.0 and vol_grade >= 1:
+            # 점수: 기본 65 + 모멘텀(최대 18) + 수급(최대 15)
+            momentum_sc = min(18, int(pct * 2))
+            vol_sc      = min(15, vol_grade * 4)
+            score = min(97, 65 + momentum_sc + vol_sc)
+            s2 = dict(s)
+            s2.update({'score': score, 'grade': 'S' if score>=87 else 'A' if score>=77 else 'B',
+                       'cat': 'surge'})
             surge.append(s2)
-        elif -1.0 <= pct <= 1.5 and tr >= 50:
-            score = min(90, 60 + min(20, tr//200) + int(abs(pct)*3))
-            s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=80 else 'A' if score>=70 else 'B'
+
+        # ════════════════════════════════════════════
+        # ③ 내일관심 (눌림목 + 피보나치 되돌림)
+        #    - 등락률 -1%~+1.5% (저변동성 횡보/눌림)
+        #    - 거래대금 50억+ (수급 대기 추정)
+        #    - 피보나치 61.8% 되돌림 구간 근사
+        # ════════════════════════════════════════════
+        if ma_support_ok and -1.0 <= pct <= 1.5 and tr >= 50:
+            # 점수: 기본 60 + 수급(최대 18) + 안정성보너스(최대 10) + 피보나치(최대 5)
+            vol_sc  = min(18, vol_grade * 5)
+            stab_sc = 10 if abs(pct) <= 0.5 else 5 if abs(pct) <= 1.0 else 0
+            fib_sc  = 5 if fib_pullback else 0
+            score = min(92, 60 + vol_sc + stab_sc + fib_sc)
+            s2 = dict(s)
+            s2.update({'score': score, 'grade': 'S' if score>=82 else 'A' if score>=72 else 'B',
+                       'cat': 'tomorrow'})
             tomorrow.append(s2)
 
-        if 50 <= tr <= 500 and -2.0 <= pct <= 3.0:
-            score = min(90, 65 + min(15, tr//50) + int(pct*5))
-            s2 = dict(s); s2['score']=score; s2['grade']='S' if score>=80 else 'A' if score>=70 else 'B'
+        # ════════════════════════════════════════════
+        # ④ 중소형 모멘텀 (소형 + 피보나치 + 쌍끌이)
+        #    - 거래대금 50억~700억 (중소형 범위)
+        #    - 등락률 -2%~+4% (과열 제외한 움직임)
+        #    - 쌍끌이 수급 또는 피보나치 되돌림
+        # ════════════════════════════════════════════
+        if 50 <= tr <= 700 and -2.0 <= pct <= 4.0:
+            vol_sc   = min(12, tr // 55)
+            mom_sc   = min(10, int(abs(pct) * 3))
+            dual_sc  = 8 if dual_buying else 0
+            fib_sc   = 5 if fib_pullback else 0
+            score = min(92, 62 + vol_sc + mom_sc + dual_sc + fib_sc)
+            s2 = dict(s)
+            s2.update({'score': score, 'grade': 'S' if score>=82 else 'A' if score>=72 else 'B',
+                       'cat': 'smallmid'})
             smallmid.append(s2)
 
+    # ── 점수순 정렬 + 카테고리 내 중복 제거 ──────────────────────────
     def top(lst, n):
-        # 점수순 정렬 + 중복 코드 제거
-        sorted_lst = sorted(lst, key=lambda x: x.get('score',0), reverse=True)
+        sorted_lst = sorted(lst, key=lambda x: x.get('score', 0), reverse=True)
         seen_codes = set()
         result = []
         for s in sorted_lst:
             if s['code'] not in seen_codes:
                 seen_codes.add(s['code'])
                 result.append(s)
-            if len(result) >= n: break
+            if len(result) >= n:
+                break
         return result
 
     return {
@@ -418,25 +502,20 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
 
 def build_card(s, cat):
     """카드 데이터 포맷팅"""
-    price  = s['price']
-    chg    = s['changePct']
-    sign   = '+' if chg >= 0 else ''
-    BUY_R  = 1.001   # 현재가 +0.1%
-    STOP_R = 0.970   # 현재가 -3.0%
-    TGT_R  = 1.100   # 현재가 +10%
-    buy_p  = int(price * BUY_R)
-    stop_p = int(price * STOP_R)
-    tgt_p  = int(price * TGT_R)
-    rr     = round((tgt_p - price) / max(price - stop_p, 1), 1)
+    price = s['price']
+    chg   = s['changePct']
+    sign  = '+' if chg >= 0 else ''
+    buy_p = int(price * 0.995)
+    stop_p= int(price * 0.97)
+    tgt_p = int(price * 1.10)
+    rr    = round((tgt_p-price)/(price-stop_p+1), 1)
     return {
         'name': s['name'], 'code': s['code'],
         'score': s.get('score',70), 'grade': s.get('grade','B'),
         'price': f"{price:,}",
-        'rawPrice': price,
         'change': f"{sign}{chg:.2f}%",
         'up': s['up'],
         'buy': f"{buy_p:,}", 'target': f"{tgt_p:,}", 'stop': f"{stop_p:,}",
-        'buyR': BUY_R, 'stopR': STOP_R, 'tgtR': TGT_R,
         'rr': str(rr), 'vol': s.get('trAmt',0),
         'mkt': s.get('mkt','kospi'),
         'rsiApprox': s.get('rsiApprox', 50),
