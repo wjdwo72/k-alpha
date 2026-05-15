@@ -11,13 +11,24 @@ KIS_SEC  = os.environ.get('KIS_SEC','').strip()
 KIS_ACC  = os.environ.get('KIS_ACC','').strip()
 KIS_ENV  = os.environ.get('KIS_ENV','real').strip()
 TG_TOKEN = os.environ.get('TG_TOKEN','').strip()
-TG_CHAT  = os.environ.get('TG_CHAT','').strip()
-GIST_ID  = os.environ.get('GIST_ID','').strip()   # GitHub Gist ID
-GH_TOKEN = os.environ.get('GH_TOKEN','').strip()  # GitHub Personal Access Token
 
-_iv = os.environ.get('MANUAL_INTERVAL','').strip() or os.environ.get('INTERVAL','10').strip()
-try:    INTERVAL = max(5, min(60, int(_iv)))
-except: INTERVAL = 10
+# 개인방 채팅ID + 간격
+TG_CHAT        = os.environ.get('TG_CHAT','').strip()
+_iv_p_raw      = os.environ.get('MANUAL_INTERVAL','').strip() or os.environ.get('INTERVAL','10').strip()
+try:    TG_INTERVAL = max(10, min(240, int(_iv_p_raw)))
+except: TG_INTERVAL = 10
+
+# 그룹방 채팅ID + 간격 (별도 환경변수, 없으면 비활성)
+TG_GROUP_CHAT  = os.environ.get('TG_GROUP_CHAT','').strip()
+_iv_g_raw      = os.environ.get('TG_GROUP_INTERVAL','').strip()
+try:    TG_GROUP_INTERVAL = max(10, min(240, int(_iv_g_raw))) if _iv_g_raw else 0
+except: TG_GROUP_INTERVAL = 0   # 0 = 그룹방 미설정
+
+GIST_ID  = os.environ.get('GIST_ID','').strip()
+GH_TOKEN = os.environ.get('GH_TOKEN','').strip()
+
+# 하위 호환: INTERVAL 변수는 개인방 기준
+INTERVAL = TG_INTERVAL
 
 BASE_URL = ("https://openapi.koreainvestment.com:9443" if KIS_ENV=='real'
             else "https://openapivts.koreainvestment.com:29443")
@@ -30,14 +41,21 @@ def is_etf(n): return any(k in n.upper() for k in ETF_KW)
 def kst_now():
     return datetime.datetime.utcnow() + datetime.timedelta(hours=9)
 
-def should_send():
+def _lbl(m):
+    """분 → '10분', '1시간', '1시간30분' 형태 레이블"""
+    if m < 60:   return f"{m}분"
+    if m % 60==0: return f"{m//60}시간"
+    return f"{m//60}시간{m%60}분"
+
+def should_send(interval_min):
+    """해당 간격 기준으로 지금 전송해야 하면 True"""
     is_manual = bool(os.environ.get('MANUAL_INTERVAL','').strip())
     if is_manual: return True
     t = kst_now()
     total = t.hour*60 + t.minute
-    if not (540 <= total <= 930): return False
-    if t.weekday() >= 5: return False
-    return (t.minute % INTERVAL) < 5
+    if not (540 <= total <= 930): return False   # 09:00~15:30
+    if t.weekday() >= 5: return False            # 주말 제외
+    return (total % interval_min) < 5           # 간격 단위 bucket
 
 def get_token():
     r = requests.post(f"{BASE_URL}/oauth2/tokenP",
@@ -160,9 +178,9 @@ def fmt_tg(s):
             f"   💰 현재가: <b>{p:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
             f"   📈 매입가: {buy:,}원 | 손절: {stop:,}원 | RR {rr}")
 
-def send_telegram(msg):
+def send_telegram(msg, chat_id):
     r = requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
-        json={"chat_id":TG_CHAT,"text":msg,"parse_mode":"HTML"}, timeout=10)
+        json={"chat_id":chat_id,"text":msg,"parse_mode":"HTML"}, timeout=10)
     return r.json().get('ok',False)
 
 def main():
@@ -171,10 +189,14 @@ def main():
 
     t = kst_now()
     ts = f"{t.hour:02d}:{t.minute:02d}:{t.second:02d}"
-    print(f"[{ts} KST] 간격:{INTERVAL}분 | 환경:{KIS_ENV}")
+    print(f"[{ts} KST] 개인간격:{TG_INTERVAL}분 | 그룹간격:{TG_GROUP_INTERVAL or 'OFF'}분 | 환경:{KIS_ENV}")
 
-    if not should_send():
-        print(f"⏭ 스킵 (장외/간격미해당)"); return
+    # 개인방 또는 그룹방 중 하나라도 전송 타이밍이면 스캔 실행
+    send_personal = TG_CHAT and should_send(TG_INTERVAL)
+    send_group    = TG_GROUP_CHAT and TG_GROUP_INTERVAL > 0 and should_send(TG_GROUP_INTERVAL)
+
+    if not send_personal and not send_group:
+        print("⏭ 스킵 (장외/간격미해당)"); return
 
     print("🔑 토큰 발급 중...")
     token = get_token()
@@ -190,7 +212,7 @@ def main():
 
     cats = categorize(all_s)
 
-    # 카드 데이터 생성
+    # Gist 저장 (앱이 즉시 읽음)
     scan_result = {
         'swing':    [build_card(s,'swing')    for s in cats['swing']],
         'surge':    [build_card(s,'surge')    for s in cats['surge']],
@@ -200,29 +222,44 @@ def main():
         'kospi_n': len(kospi), 'kosdaq_n': len(kosdaq),
         'updated_at': time.time()
     }
-
-    # Gist에 저장 (앱이 즉시 읽음)
     save_to_gist(scan_result)
 
-    # 텔레그램 발송
-    if TG_TOKEN and TG_CHAT:
+    if not TG_TOKEN:
+        print("⚠ TG_TOKEN 없음 — 텔레그램 전송 건너뜀"); return
+
+    is_market = 9 <= t.hour <= 15
+
+    def build_msg(iv_min):
+        iv_lbl = _lbl(iv_min)
+        mkt_lbl = '🟢장중' if is_market else '🔴장마감'
         top_main  = (cats['swing']+cats['surge'])[:5]
         top_small = cats['smallmid'][:5]
         if not top_main:
             top_main = sorted(all_s, key=lambda x:x.get('trAmt',0), reverse=True)[:5]
             for s in top_main: s.setdefault('score',75); s.setdefault('grade','B')
-
-        is_market = 9 <= t.hour <= 15
-        lines = [f"📡 <b>K-ALPHA {INTERVAL}분 자동 스캔</b> [{ts}] {'🟢장중' if is_market else '🔴장마감'}\n"
-                 f"KOSPI {len(kospi)}종목 + KOSDAQ {len(kosdaq)}종목\n━━━━━━━━━━━━━━━━",
-                 "🔥 <b>[실시간 스윙/급등 TOP5]</b>" if cats['swing'] else "📊 <b>[거래대금 상위 TOP5]</b>"]
+        lines = [
+            f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts}] {mkt_lbl}\n"
+            f"KOSPI {len(kospi)}종목 + KOSDAQ {len(kosdaq)}종목\n━━━━━━━━━━━━━━━━",
+            "🔥 <b>[실시간 스윙/급등 TOP5]</b>" if cats['swing'] else "📊 <b>[거래대금 상위 TOP5]</b>"
+        ]
         for s in top_main: lines.append(fmt_tg(s))
         if top_small:
-            lines.append("\n⬟ <b>[내일의 중소형주 TOP5]</b>")
+            lines.append("\n⬟ <b>[중소형주 TOP5]</b>")
             for s in top_small: lines.append(fmt_tg(s))
-        lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔완료 · 다음 {INTERVAL}분 후")
-        ok = send_telegram("\n\n".join(lines))
-        print(f"{'✅ 텔레그램 전송' if ok else '❌ 텔레그램 실패'}")
+        lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔완료 · 다음 {iv_lbl} 후")
+        return "\n\n".join(lines)
+
+    # 개인방 전송
+    if send_personal:
+        msg_p = build_msg(TG_INTERVAL)
+        ok_p = send_telegram(msg_p, TG_CHAT)
+        print(f"{'✅ 개인방 전송' if ok_p else '❌ 개인방 실패'}")
+
+    # 그룹방 전송
+    if send_group:
+        msg_g = build_msg(TG_GROUP_INTERVAL)
+        ok_g = send_telegram(msg_g, TG_GROUP_CHAT)
+        print(f"{'✅ 그룹방 전송' if ok_g else '❌ 그룹방 실패'}")
 
     print("✅ 완료")
 

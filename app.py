@@ -72,7 +72,11 @@ DEFAULTS = {
     "kis_token":None,"kis_base_url":None,
     "kis_ak":"","kis_sec":"","kis_acc":"","kis_env":"실전투자",
     "use_pin":True,"auto_connect":True,
+    # 텔레그램 — 개인방 (기존 호환)
     "tg_token":"","tg_chat":"","tg_interval_min":10,"tg_interval_label":"10분",
+    # 텔레그램 — 그룹방 (별도 설정)
+    "tg_group_chat":"","tg_group_enabled":False,
+    "tg_group_interval_min":30,"tg_group_interval_label":"30분",
     "scan_blacklist":[],"scan_vol_min":50,"scan_rsi_min":20,"scan_rsi_max":75,
 }
 for k,v in DEFAULTS.items():
@@ -81,7 +85,7 @@ for k,v in DEFAULTS.items():
 # ── 서버 메모리 저장소 (같은 프로세스 내 재시작에도 유지) ──
 @st.cache_resource
 def get_server_store():
-    return {"ck": None, "cp": None, "tg": None, "agreed": False,
+    return {"ck": None, "cp": None, "tg": None, "tg_grp": None, "agreed": False,
             "scan_data": None, "scan_ts": 0, "scan_str": ""}
 
 server_store = get_server_store()
@@ -102,12 +106,22 @@ if qp.get("no_pin")=="1": st.session_state.use_pin = False
 if qp.get("auto_conn")=="1": st.session_state.auto_connect = True
 if not st.session_state.use_pin: st.session_state.auth = True
 
-# 텔레그램 복원
+# 텔레그램 복원 — 개인방
 if qp.get("tg") and not st.session_state.get("tg_token"):
     try:
         tg_data = json.loads(base64.b64decode(qp.get("tg","")).decode())
         st.session_state["tg_token"] = tg_data.get("t","")
         st.session_state["tg_chat"]  = tg_data.get("c","")
+    except: pass
+
+# 텔레그램 복원 — 그룹방
+if qp.get("tg_grp") and not st.session_state.get("tg_group_chat"):
+    try:
+        tg_grp = json.loads(base64.b64decode(qp.get("tg_grp","")).decode())
+        st.session_state["tg_group_chat"]             = tg_grp.get("c","")
+        st.session_state["tg_group_enabled"]          = tg_grp.get("en", False)
+        st.session_state["tg_group_interval_min"]     = tg_grp.get("iv", 30)
+        st.session_state["tg_group_interval_label"]   = tg_grp.get("ivl","30분")
     except: pass
 
 # URL 키 자동 불러오기 + 연결
@@ -845,37 +859,148 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
 
     # ── 📱 텔레그램 ──────────────────────────────
     with st.expander("📱 텔레그램 알림 설정", expanded=False):
-        tg_token=st.text_input("Bot Token",type="password",value=st.session_state.get('tg_token',''),
-                                placeholder="숫자:영문",key="tg_token_inp")
-        tg_chat=st.text_input("Chat ID",value=st.session_state.get('tg_chat',''),
-                               placeholder="7863087287",key="tg_chat_inp")
-        interval_opts={"5분":5,"10분":10,"15분":15,"30분":30,"1시간":60}
-        iv_label=st.select_slider("⏱ 자동 전송 간격",options=list(interval_opts.keys()),
-                                    value=st.session_state.get('tg_interval_label','10분'),key="tg_iv_sel")
-        st.session_state['tg_interval_label']=iv_label
-        st.session_state['tg_interval_min']=interval_opts[iv_label]
-        c_t1,c_t2=st.columns([2,1])
-        with c_t1:
-            if st.button("📱 테스트 전송",use_container_width=True,key="btn_tg"):
-                if tg_token and tg_chat:
-                    try:
-                        r=requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                            json={"chat_id":tg_chat,"text":"✅ K-ALPHA 알림 연결 성공!","parse_mode":"HTML"},timeout=8)
-                        if r.json().get('ok'):
-                            st.session_state['tg_token']=tg_token
-                            st.session_state['tg_chat']=tg_chat
-                            tg_enc=base64.b64encode(json.dumps({'t':tg_token,'c':tg_chat}).encode()).decode()
-                            qp['tg']=tg_enc
-                            server_store['tg'] = tg_enc  # 서버 저장소
-                            components.html(f"<script>try{{localStorage.setItem('ka_tg_v1',{json.dumps(tg_enc)});}}catch(e){{}}</script>",height=0,scrolling=False)
-                            st.success("✅ 전송 성공! 텔레그램 자동 저장됨")
-                        else: st.error(f"❌ {r.json().get('description')}")
-                    except Exception as e: st.error(f"❌ {e}")
-                else: st.error("Token과 Chat ID 입력")
-        with c_t2:
-            ok=bool(st.session_state.get('tg_token') and st.session_state.get('tg_chat'))
-            st.markdown(f'<div style="padding:8px;text-align:center;font-family:monospace;font-size:12px;color:{"#00ff88" if ok else "#4a5568"}">{"🟢 연결됨" if ok else "⭕ 미연결"}</div>',
-                        unsafe_allow_html=True)
+
+        def _iv_map():
+            """10분 단위 10~240분 레이블↔분 딕셔너리 (순서 보장 리스트 쌍)"""
+            keys, vals = [], []
+            for m in range(10, 250, 10):
+                if m < 60:   lbl = f"{m}분"
+                elif m%60==0: lbl = f"{m//60}시간"
+                else:         lbl = f"{m//60}시간{m%60}분"
+                keys.append(lbl); vals.append(m)
+            return keys, vals
+        _iv_keys, _iv_vals = _iv_map()
+        _iv_dict = dict(zip(_iv_keys, _iv_vals))
+
+        tab_p, tab_g = st.tabs(["👤 개인 채팅방", "👥 그룹 채팅방"])
+
+        # ── 개인방 탭 ──────────────────────────────
+        with tab_p:
+            st.caption("봇 토큰과 내 개인 Chat ID를 입력하세요.")
+            tg_token = st.text_input("Bot Token", type="password",
+                                      value=st.session_state.get('tg_token',''),
+                                      placeholder="123456:ABCdef...", key="tg_token_inp")
+            tg_chat  = st.text_input("개인 Chat ID",
+                                      value=st.session_state.get('tg_chat',''),
+                                      placeholder="7863087287", key="tg_chat_inp")
+
+            _cur_p = st.session_state.get('tg_interval_label','10분')
+            if _cur_p not in _iv_keys: _cur_p = '10분'
+            iv_p_label = st.select_slider("⏱ 개인방 전송 간격",
+                                           options=_iv_keys, value=_cur_p, key="tg_iv_p")
+            st.session_state['tg_interval_label'] = iv_p_label
+            st.session_state['tg_interval_min']   = _iv_dict[iv_p_label]
+
+            cp1, cp2 = st.columns([2,1])
+            with cp1:
+                if st.button("📱 개인방 테스트 전송", use_container_width=True, key="btn_tg_p"):
+                    if tg_token and tg_chat:
+                        try:
+                            r = requests.post(
+                                f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                                json={"chat_id":tg_chat,
+                                      "text":"✅ K-ALPHA 개인방 알림 연결 성공!",
+                                      "parse_mode":"HTML"}, timeout=8)
+                            if r.json().get('ok'):
+                                st.session_state['tg_token'] = tg_token
+                                st.session_state['tg_chat']  = tg_chat
+                                tg_enc = base64.b64encode(
+                                    json.dumps({'t':tg_token,'c':tg_chat}).encode()).decode()
+                                qp['tg'] = tg_enc
+                                server_store['tg'] = tg_enc
+                                components.html(
+                                    f"<script>try{{localStorage.setItem('ka_tg_v1',{json.dumps(tg_enc)});}}catch(e){{}}</script>",
+                                    height=0, scrolling=False)
+                                st.success("✅ 개인방 연결 성공!")
+                            else:
+                                st.error(f"❌ {r.json().get('description')}")
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+                    else:
+                        st.error("Token과 Chat ID 입력")
+            with cp2:
+                ok_p = bool(st.session_state.get('tg_token') and st.session_state.get('tg_chat'))
+                st.markdown(
+                    f'<div style="padding:8px;text-align:center;font-family:monospace;font-size:12px;'
+                    f'color:{"#00ff88" if ok_p else "#4a5568"}">{"🟢 연결됨" if ok_p else "⭕ 미연결"}</div>',
+                    unsafe_allow_html=True)
+
+        # ── 그룹방 탭 ──────────────────────────────
+        with tab_g:
+            st.caption("같은 봇 토큰을 사용합니다. 그룹 Chat ID만 별도 입력하세요.")
+            st.info("그룹 Chat ID는 보통 `-100` 으로 시작하는 음수입니다.", icon="ℹ️")
+
+            grp_enabled = st.toggle("그룹방 알림 활성화",
+                                     value=st.session_state.get('tg_group_enabled', False),
+                                     key="tog_grp_en")
+            st.session_state['tg_group_enabled'] = grp_enabled
+
+            tg_group_chat = st.text_input("그룹 Chat ID",
+                                           value=st.session_state.get('tg_group_chat',''),
+                                           placeholder="-1001234567890",
+                                           disabled=not grp_enabled,
+                                           key="tg_grp_chat_inp")
+
+            _cur_g = st.session_state.get('tg_group_interval_label','30분')
+            if _cur_g not in _iv_keys: _cur_g = '30분'
+            iv_g_label = st.select_slider("⏱ 그룹방 전송 간격",
+                                           options=_iv_keys, value=_cur_g,
+                                           disabled=not grp_enabled, key="tg_iv_g")
+            st.session_state['tg_group_interval_label'] = iv_g_label
+            st.session_state['tg_group_interval_min']   = _iv_dict[iv_g_label]
+
+            cg1, cg2 = st.columns([2,1])
+            with cg1:
+                if st.button("👥 그룹방 테스트 전송", use_container_width=True,
+                              key="btn_tg_g", disabled=not grp_enabled):
+                    _tok = st.session_state.get('tg_token','')
+                    if _tok and tg_group_chat:
+                        try:
+                            r = requests.post(
+                                f"https://api.telegram.org/bot{_tok}/sendMessage",
+                                json={"chat_id": tg_group_chat,
+                                      "text":"✅ K-ALPHA 그룹방 알림 연결 성공!",
+                                      "parse_mode":"HTML"}, timeout=8)
+                            if r.json().get('ok'):
+                                st.session_state['tg_group_chat'] = tg_group_chat
+                                grp_enc = base64.b64encode(json.dumps({
+                                    'c': tg_group_chat,
+                                    'en': grp_enabled,
+                                    'iv': _iv_dict[iv_g_label],
+                                    'ivl': iv_g_label,
+                                }).encode()).decode()
+                                qp['tg_grp'] = grp_enc
+                                server_store['tg_grp'] = grp_enc
+                                components.html(
+                                    f"<script>try{{localStorage.setItem('ka_tg_grp_v1',{json.dumps(grp_enc)});}}catch(e){{}}</script>",
+                                    height=0, scrolling=False)
+                                st.success("✅ 그룹방 연결 성공!")
+                            else:
+                                st.error(f"❌ {r.json().get('description')}")
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+                    elif not _tok:
+                        st.error("개인방 탭에서 Bot Token을 먼저 등록하세요")
+                    else:
+                        st.error("그룹 Chat ID를 입력하세요")
+            with cg2:
+                ok_g = bool(grp_enabled and st.session_state.get('tg_group_chat'))
+                st.markdown(
+                    f'<div style="padding:8px;text-align:center;font-family:monospace;font-size:12px;'
+                    f'color:{"#00ff88" if ok_g else "#4a5568"}">{"🟢 연결됨" if ok_g else "⭕ 미연결"}</div>',
+                    unsafe_allow_html=True)
+
+            # 그룹방 URL 파라미터 자동 저장 (값 변경 시마다)
+            if tg_group_chat:
+                st.session_state['tg_group_chat'] = tg_group_chat
+                grp_enc = base64.b64encode(json.dumps({
+                    'c': tg_group_chat,
+                    'en': grp_enabled,
+                    'iv': _iv_dict[iv_g_label],
+                    'ivl': iv_g_label,
+                }).encode()).decode()
+                qp['tg_grp'] = grp_enc
+                server_store['tg_grp'] = grp_enc
 
     with st.expander("🔒 로그아웃"):
         if st.button("로그아웃",key="btn_logout"):
@@ -973,57 +1098,70 @@ if st.session_state.kis_token:
                     f'📊 KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목 · {price_ts}</div>',
                     unsafe_allow_html=True)
 
-        # 텔레그램
-        tg_token = st.session_state.get('tg_token','')
-        tg_chat  = st.session_state.get('tg_chat','')
-        if tg_token and tg_chat and all_stocks:
-            bucket = int(time.time() // (iv_min*60))
-            if bucket != st.session_state.get('_tg_bucket',-1):
-                st.session_state['_tg_bucket'] = bucket
-                now_ts = kst_strftime('%H:%M:%S')
-                is_mkt = 9 <= int(kst_strftime('%H')) <= 15
-                mkt_label = '🟢장중' if is_mkt else '🔴장마감'
+        # ── 텔레그램 자동 전송 (개인방 + 그룹방 각자 간격 독립) ──
+        def _build_tg_lines(iv_label_str, cats_d, all_s, k_n, kd_n, ts_str):
+            is_mkt  = 9 <= int(kst_strftime('%H')) <= 15
+            mkt_lbl = '🟢장중' if is_mkt else '🔴장마감'
+            def fmt_s(s, cat):
+                pct = s.get('changePct',0); sign = '+' if pct>=0 else ''
+                card = build_card(s, cat); icon = '🔴' if s.get('grade')=='S' else '🟡'
+                return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
+                        f"   💰 {s['price']:,}원 {sign}{pct:.2f}% | {s.get('trAmt',0):,}억\n"
+                        f"   📈 매입:{card['buy']} | 손절:{card['stop']} | RR {card['rr']}")
+            lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
+                     f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
+            sl = cats_d.get('swing',[])[:10]; ul = cats_d.get('surge',[])[:10]
+            tl = cats_d.get('tomorrow',[])[:10]; ml = cats_d.get('smallmid',[])[:10]
+            if sl:   lines.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>");   [lines.append(fmt_s(s,'swing'))    for s in sl]
+            if ul:   lines.append(f"\n⚡ <b>[급등전야 TOP{len(ul)}]</b>");   [lines.append(fmt_s(s,'surge'))    for s in ul]
+            if tl:   lines.append(f"\n🔭 <b>[내일관심 TOP{len(tl)}]</b>");   [lines.append(fmt_s(s,'tomorrow')) for s in tl]
+            if ml:   lines.append(f"\n⬟ <b>[중소형주 TOP{len(ml)}]</b>");   [lines.append(fmt_s(s,'smallmid')) for s in ml]
+            if not any([sl, ul, tl, ml]):
+                fb = sorted(all_s, key=lambda x:x.get('trAmt',0), reverse=True)[:10]
+                lines.append("📊 <b>[거래대금 상위 TOP10]</b>"); [lines.append(fmt_s(s,'swing')) for s in fb]
+            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 완료")
+            return "\n\n".join(lines)
 
-                def fmt_s(s, cat):
-                    pct=s.get('changePct',0); sign='+' if pct>=0 else ''
-                    card=build_card(s,cat); icon='🔴' if s.get('grade')=='S' else '🟡'
-                    return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
-                            f"   💰 {s['price']:,}원 {sign}{pct:.2f}% | {s.get('trAmt',0):,}억\n"
-                            f"   📈 매입:{card['buy']} | 손절:{card['stop']} | RR {card['rr']}")
+        _tg_tok   = st.session_state.get('tg_token','')
+        _tg_chat  = st.session_state.get('tg_chat','')
+        _iv_p     = st.session_state.get('tg_interval_min', 10)
+        _iv_p_lbl = st.session_state.get('tg_interval_label','10분')
 
-                lines = [f"📡 <b>K-ALPHA {iv_min}분 스캔</b> [{now_ts}] {mkt_label}\n"
-                         f"KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목\n━━━━━━━━━━━━━━━━"]
+        _grp_en   = st.session_state.get('tg_group_enabled', False)
+        _grp_chat = st.session_state.get('tg_group_chat','')
+        _iv_g     = st.session_state.get('tg_group_interval_min', 30)
+        _iv_g_lbl = st.session_state.get('tg_group_interval_label','30분')
 
-                swing_list    = cats.get('swing', [])[:10]
-                surge_list    = cats.get('surge', [])[:10]
-                tomorrow_list = cats.get('tomorrow', [])[:10]
-                smallmid_list = cats.get('smallmid', [])[:10]
+        _now_ts   = kst_strftime('%H:%M:%S')
+        _k_n = len(kospi_stocks); _kd_n = len(kosdaq_stocks)
 
-                if swing_list:
-                    lines.append(f"🔥 <b>[실시간스윙 TOP{len(swing_list)}]</b>")
-                    for s in swing_list: lines.append(fmt_s(s,'swing'))
-                if surge_list:
-                    lines.append(f"\n⚡ <b>[급등전야 TOP{len(surge_list)}]</b>")
-                    for s in surge_list: lines.append(fmt_s(s,'surge'))
-                if tomorrow_list:
-                    lines.append(f"\n🔭 <b>[내일관심 TOP{len(tomorrow_list)}]</b>")
-                    for s in tomorrow_list: lines.append(fmt_s(s,'tomorrow'))
-                if smallmid_list:
-                    lines.append(f"\n⬟ <b>[중소형주 TOP{len(smallmid_list)}]</b>")
-                    for s in smallmid_list: lines.append(fmt_s(s,'smallmid'))
-                if not any([swing_list, surge_list, tomorrow_list, smallmid_list]):
-                    fallback = sorted(all_stocks, key=lambda x:x.get('trAmt',0), reverse=True)[:10]
-                    lines.append("📊 <b>[거래대금 상위 TOP10]</b>")
-                    for s in fallback: lines.append(fmt_s(s,'swing'))
-
-                lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 완료")
+        # 개인방 — 독립 bucket
+        if _tg_tok and _tg_chat and all_stocks:
+            _bkt_p = int(time.time() // (_iv_p * 60))
+            if _bkt_p != st.session_state.get('_tg_bkt_p', -1):
+                st.session_state['_tg_bkt_p'] = _bkt_p
                 try:
-                    msg_body = {"text":"\n\n".join(lines),"parse_mode":"HTML"}
-                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                        json={"chat_id":tg_chat,**msg_body},timeout=10)
-                    requests.post(f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                        json={"chat_id":"-1003985375563",**msg_body},timeout=10)
-                except: pass
+                    msg = _build_tg_lines(_iv_p_lbl, cats, all_stocks, _k_n, _kd_n, _now_ts)
+                    r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
+                        json={"chat_id":_tg_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
+                    if r.json().get('ok'):
+                        st.toast(f"📱 개인방 전송 완료 ({_now_ts})", icon="✅")
+                except Exception as e:
+                    st.caption(f"개인방 텔레그램 오류: {e}")
+
+        # 그룹방 — 독립 bucket
+        if _tg_tok and _grp_en and _grp_chat and all_stocks:
+            _bkt_g = int(time.time() // (_iv_g * 60))
+            if _bkt_g != st.session_state.get('_tg_bkt_g', -1):
+                st.session_state['_tg_bkt_g'] = _bkt_g
+                try:
+                    msg = _build_tg_lines(_iv_g_lbl, cats, all_stocks, _k_n, _kd_n, _now_ts)
+                    r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
+                        json={"chat_id":_grp_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
+                    if r.json().get('ok'):
+                        st.toast(f"👥 그룹방 전송 완료 ({_now_ts})", icon="✅")
+                except Exception as e:
+                    st.caption(f"그룹방 텔레그램 오류: {e}")
 
     # 스캔 결과 분류
     cats = categorize_stocks(
@@ -1060,66 +1198,69 @@ if st.session_state.kis_token:
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개
 </div>""", unsafe_allow_html=True)
 
-    # ── 텔레그램 자동 알림 ──
-    tg_token = st.session_state.get('tg_token','')
-    tg_chat  = st.session_state.get('tg_chat','')
-    if tg_token and tg_chat and all_stocks:
-        bucket = int(time.time() // (iv_min * 60))
-        if bucket != st.session_state.get('_tg_bucket', -1):
-            st.session_state['_tg_bucket'] = bucket
+    # ── 텔레그램 자동 알림 (개인방 + 그룹방 각자 간격 독립) ──
+    _tg_tok2   = st.session_state.get('tg_token','')
+    _tg_chat2  = st.session_state.get('tg_chat','')
+    _iv_p2     = st.session_state.get('tg_interval_min', 10)
+    _iv_p2_lbl = st.session_state.get('tg_interval_label','10분')
+    _grp_en2   = st.session_state.get('tg_group_enabled', False)
+    _grp_chat2 = st.session_state.get('tg_group_chat','')
+    _iv_g2     = st.session_state.get('tg_group_interval_min', 30)
+    _iv_g2_lbl = st.session_state.get('tg_group_interval_label','30분')
+    _now2      = kst_strftime('%H:%M:%S')
+    _kn2  = len(kospi_stocks); _kdn2 = len(kosdaq_stocks)
 
-            now_ts    = kst_strftime('%H:%M:%S')
-            is_market = 9 <= int(kst_strftime('%H')) <= 15
-            mkt_label = "🟢 장중" if is_market else "🔴 장 마감"
+    def _fmt2(s, cat):
+        pct = s.get('changePct',0); sign = '+' if pct>=0 else ''
+        card = build_card(s, cat); icon = '🔴' if s.get('grade')=='S' else '🟡'
+        return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
+                f"   💰 현재가: <b>{s['price']:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
+                f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}")
 
-            def fmt_stock(s, cat):
-                pct = s.get('changePct', 0); sign = '+' if pct >= 0 else ''
-                card = build_card(s, cat)
-                icon = '🔴' if s.get('grade') == 'S' else '🟡'
-                return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
-                        f"   💰 현재가: <b>{s['price']:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
-                        f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}")
+    def _mk_msg2(iv_lbl, all_s, k_n, kd_n, ts_str):
+        is_mkt = 9 <= int(kst_strftime('%H')) <= 15
+        mkt_lbl = '🟢 장중' if is_mkt else '🔴 장 마감'
+        sl = cats.get('swing',[])[:10]; ul = cats.get('surge',[])[:10]
+        tl = cats.get('tomorrow',[])[:10]; ml = cats.get('smallmid',[])[:10]
+        ls = [f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts_str}] {mkt_lbl}\n"
+              f"KOSPI {k_n}종목 + KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
+        if sl:  ls.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>");  [ls.append(_fmt2(s,'swing'))    for s in sl]
+        if ul:  ls.append(f"\n⚡ <b>[급등전야 TOP{len(ul)}]</b>");  [ls.append(_fmt2(s,'surge'))    for s in ul]
+        if tl:  ls.append(f"\n🔭 <b>[내일관심 TOP{len(tl)}]</b>"); [ls.append(_fmt2(s,'tomorrow')) for s in tl]
+        if ml:  ls.append(f"\n⬟ <b>[중소형주 TOP{len(ml)}]</b>");  [ls.append(_fmt2(s,'smallmid')) for s in ml]
+        if not any([sl, ul, tl, ml]):
+            fb = sorted(all_s, key=lambda x:x.get('trAmt',0), reverse=True)[:10]
+            ls.append("📊 <b>[거래대금 상위 TOP10]</b>"); [ls.append(_fmt2(s,'swing')) for s in fb]
+        ls.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔 완료 · 다음 알림 {iv_lbl} 후")
+        return "\n\n".join(ls)
 
-            swing_list    = cats.get('swing', [])[:10]
-            surge_list    = cats.get('surge', [])[:10]
-            tomorrow_list = cats.get('tomorrow', [])[:10]
-            smallmid_list = cats.get('smallmid', [])[:10]
-
-            lines = [f"📡 <b>K-ALPHA {iv_min}분 자동 스캔</b> [{now_ts}] {mkt_label}\n"
-                     f"KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목\n"
-                     "━━━━━━━━━━━━━━━━"]
-
-            if swing_list:
-                lines.append(f"🔥 <b>[실시간스윙 TOP{len(swing_list)}]</b>")
-                for s in swing_list: lines.append(fmt_stock(s, 'swing'))
-            if surge_list:
-                lines.append(f"\n⚡ <b>[급등전야 TOP{len(surge_list)}]</b>")
-                for s in surge_list: lines.append(fmt_stock(s, 'surge'))
-            if tomorrow_list:
-                lines.append(f"\n🔭 <b>[내일관심 TOP{len(tomorrow_list)}]</b>")
-                for s in tomorrow_list: lines.append(fmt_stock(s, 'tomorrow'))
-            if smallmid_list:
-                lines.append(f"\n⬟ <b>[중소형주 TOP{len(smallmid_list)}]</b>")
-                for s in smallmid_list: lines.append(fmt_stock(s, 'smallmid'))
-            if not any([swing_list, surge_list, tomorrow_list, smallmid_list]):
-                fallback = sorted(all_stocks, key=lambda x: x.get('trAmt',0), reverse=True)[:10]
-                lines.append("📊 <b>[거래대금 상위 TOP10]</b>")
-                for s in fallback: lines.append(fmt_stock(s, 'swing'))
-
-            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {scan_count}종목 스캔 완료 · 다음 알림 {iv_min}분 후")
-
+    # 개인방 — 독립 bucket
+    if _tg_tok2 and _tg_chat2 and all_stocks:
+        _bkt_p2 = int(time.time() // (_iv_p2 * 60))
+        if _bkt_p2 != st.session_state.get('_tg_bkt_p', -1):
+            st.session_state['_tg_bkt_p'] = _bkt_p2
             try:
-                msg_body = {"text": "\n\n".join(lines), "parse_mode": "HTML"}
-                resp = requests.post(
-                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id": tg_chat, **msg_body}, timeout=10)
-                requests.post(
-                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                    json={"chat_id": "-1003985375563", **msg_body}, timeout=10)
-                if resp.json().get('ok'):
-                    st.toast(f"📱 텔레그램 전송 완료 ({now_ts})", icon="✅")
+                msg2 = _mk_msg2(_iv_p2_lbl, all_stocks, _kn2, _kdn2, _now2)
+                r2 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
+                    json={"chat_id":_tg_chat2,"text":msg2,"parse_mode":"HTML"}, timeout=10)
+                if r2.json().get('ok'):
+                    st.toast(f"📱 개인방 전송 완료 ({_now2})", icon="✅")
             except Exception as e:
-                st.caption(f"텔레그램 오류: {e}")
+                st.caption(f"개인방 텔레그램 오류: {e}")
+
+    # 그룹방 — 독립 bucket
+    if _tg_tok2 and _grp_en2 and _grp_chat2 and all_stocks:
+        _bkt_g2 = int(time.time() // (_iv_g2 * 60))
+        if _bkt_g2 != st.session_state.get('_tg_bkt_g', -1):
+            st.session_state['_tg_bkt_g'] = _bkt_g2
+            try:
+                msg2g = _mk_msg2(_iv_g2_lbl, all_stocks, _kn2, _kdn2, _now2)
+                r2g = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
+                    json={"chat_id":_grp_chat2,"text":msg2g,"parse_mode":"HTML"}, timeout=10)
+                if r2g.json().get('ok'):
+                    st.toast(f"👥 그룹방 전송 완료 ({_now2})", icon="✅")
+            except Exception as e:
+                st.caption(f"그룹방 텔레그램 오류: {e}")
 
 # ════ 6. HTML 터미널 ════
 if not os.path.exists("app.html"):
