@@ -9,6 +9,37 @@ def kst_now(): return datetime.now(KST)
 def kst_strftime(fmt): return kst_now().strftime(fmt)
 urllib3.disable_warnings()
 
+# ── 한국 공휴일 (YYYYMMDD) ──────────────────────────────────────────
+_KR_HOLIDAYS = {
+    # 2025
+    '20250101','20250127','20250128','20250129','20250130',
+    '20250301','20250505','20250506','20250606','20250815',
+    '20251003','20251004','20251005','20251006','20251007',
+    '20251009','20251225',
+    # 2026
+    '20260101','20260216','20260217','20260218','20260219',
+    '20260301','20260505','20260525','20260606','20260815',
+    '20260924','20260925','20260926','20260927',
+    '20261003','20261009','20261225',
+    # 2027
+    '20270101','20270205','20270206','20270207','20270208',
+    '20270301','20270505','20270513','20270606','20270816',
+    '20271014','20271015','20271016','20271017',
+    '20271011','20271225',
+}
+
+def is_kr_holiday(dt=None):
+    if dt is None: dt = kst_now()
+    return dt.strftime('%Y%m%d') in _KR_HOLIDAYS
+
+def is_market_open(dt=None):
+    """08:00~15:30 KST, 평일, 비공휴일이면 True"""
+    if dt is None: dt = kst_now()
+    if dt.weekday() >= 5: return False
+    if is_kr_holiday(dt): return False
+    total = dt.hour * 60 + dt.minute
+    return 480 <= total <= 930  # 08:00(480) ~ 15:30(930)
+
 st.set_page_config(page_title="K-ALPHA Terminal", page_icon="📈",
                    layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""<style>
@@ -516,8 +547,65 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         'smallmid': top(smallmid, 10),
     }
 
+def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
+    """기술적 분석 + 기본적 분석(기업 내부) + 외부요인(거시경제·산업) 사유"""
+    tr    = s.get('trAmt', 0)
+    price = s.get('price', 0)
+    mkt   = s.get('mkt', 'kospi')
+    sign  = '+' if chg >= 0 else ''
+    rsi   = s.get('rsiApprox', round(50 + chg * 2.8, 1))
+
+    # ── 기술적 분석 ──
+    tech = [
+        {'icon':'◈','cat':'green',
+         'text':f"거래대금 {tr:,}억 · 거래량순위 상위 종목"},
+        {'icon':'◉','cat':'',
+         'text':f"등락률 {sign}{chg:.2f}% · RSI 추정 {rsi:.0f}"},
+        {'icon':'▲','cat':'orange',
+         'text':f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원"},
+    ]
+
+    # ── 기본적 분석 — 기업 내부 요인 ──
+    fund = []
+    if tr >= 2000:   fund.append("기관·외국인 대규모 순매수 추정 (거래대금 2,000억+)")
+    elif tr >= 800:  fund.append("기관 매수세 유입 추정 (거래대금 800억+)")
+    elif tr >= 300:  fund.append("외국인·기관 중형 수급 진입 추정")
+    else:            fund.append("개인 중심 수급 · 단기 모멘텀 주도")
+
+    if chg >= 8:    fund.append("실적 서프라이즈 또는 긍정적 공시 가능성")
+    elif chg >= 4:  fund.append("단기 실적 개선·사업 확장 뉴스 반응")
+    elif chg >= 1:  fund.append("점진적 실적 개선 기대 · MA 상향 돌파 시도")
+    elif chg >= -1: fund.append("횡보 구간 · 저점 매집 가능성")
+    else:           fund.append("단기 조정 · 피보나치 지지선 반등 대기")
+
+    if mkt == 'kospi': fund.append("KOSPI 대형주 · 안정적 실적 기반 · 배당 가능성")
+    else:              fund.append("KOSDAQ 중소형주 · 고성장 섹터 · 변동성 주의")
+
+    # ── 외부요인 분석 — 거시경제·산업 환경 ──
+    macro = []
+    h = kst_now().hour
+    if 8 <= h < 9:    macro.append("프리마켓 구간 · 미국 선물·뉴스 반영 초기")
+    elif 9 <= h < 11: macro.append("오전 장 · 외국인·기관 방향성 확인 구간")
+    elif 11 <= h < 13:macro.append("점심 전후 · 유동성 감소 · 단기 변동성 주의")
+    else:             macro.append("오후 장 · 프로그램 매매·수급 정리 구간")
+
+    if tr >= 1000:   macro.append("시장 전체 활성화 · 외국인 관심 업종 추정")
+    elif tr >= 300:  macro.append("업종 테마 수급 집중 · 정책·뉴스 모멘텀")
+    else:            macro.append("개별 재료 중심 움직임")
+
+    if chg >= 3:    macro.append("금리·환율 우호 또는 섹터 호재 반응")
+    elif chg <= -3: macro.append("글로벌 리스크오프 또는 섹터 악재 가능성")
+    else:           macro.append("관망세 · 미국 FOMC·환율 방향성 주시")
+
+    return tech + [
+        {'icon':'🏢','cat':'blue',
+         'text':'[기본적 분석] ' + ' · '.join(fund)},
+        {'icon':'🌐','cat':'purple',
+         'text':'[외부요인] ' + ' · '.join(macro)},
+    ]
+
 def build_card(s, cat):
-    """카드 데이터 포맷팅"""
+    """카드 데이터 포맷팅 (기본적 분석 + 외부요인 포함)"""
     price = s['price']
     chg   = s['changePct']
     sign  = '+' if chg >= 0 else ''
@@ -535,11 +623,7 @@ def build_card(s, cat):
         'rr': str(rr), 'vol': s.get('trAmt',0),
         'mkt': s.get('mkt','kospi'),
         'rsiApprox': s.get('rsiApprox', 50),
-        'reasons': [
-            {'icon':'◈','cat':'green','text':f"거래대금 {s.get('trAmt',0):,}억 · 거래량순위 상위 종목"},
-            {'icon':'◉','cat':'','text':f"등락률 {sign}{chg:.2f}% · RSI 추정 {s.get('rsiApprox',50):.0f}"},
-            {'icon':'▲','cat':'orange','text':f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원"},
-        ],
+        'reasons': _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p),
         'inds': [
             {'label':s.get('mkt','KOSPI').upper(),'cat':'green'},
             {'label':f"RR {rr}",'cat':''},
@@ -647,8 +731,10 @@ div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,
 # ════ 3. 자동 새로고침 ════
 # Gist 모드: auth만 있으면 동작 (kis_token 없어도 됨 — 백그라운드 스캔 결과 보기 전용)
 # 직접KIS 모드: kis_token 필요
-_has_gist   = bool(os.environ.get('GIST_ID',''))
-_can_refresh = st.session_state.auth and (_has_gist or st.session_state.kis_token)
+# 자동 갱신: 장중(08:00~15:30)에만 / 장외에는 수동 갱신만
+_has_gist    = bool(os.environ.get('GIST_ID',''))
+_mkt_open    = is_market_open()
+_can_refresh = st.session_state.auth and (_has_gist or st.session_state.kis_token) and _mkt_open
 
 if _can_refresh:
     GIST_ID_ENV  = os.environ.get('GIST_ID','')
@@ -656,13 +742,15 @@ if _can_refresh:
 
     if GIST_ID_ENV:
         # Gist 모드: GitHub Actions가 10분마다 Gist 갱신 → 앱도 10분마다 폴링
-        # ↑ fetch_gist_scan TTL=600초와 맞춤. 갱신 버튼 누르면 TTL 무효화됨
         _autorefresh_ms = 10 * 60 * 1000   # 고정 10분
     else:
         # 직접 KIS 모드: 사용자가 설정한 주기
         _autorefresh_ms = _ref_min * 60 * 1000
 
     st_autorefresh(interval=_autorefresh_ms, limit=None, key="auto_scan_refresh")
+else:
+    # 장외/주말/공휴일: 자동 갱신 중단 (수동 ↻ 버튼만 허용)
+    _has_gist = bool(os.environ.get('GIST_ID',''))
 
 # ════ 4. 메인 패널 ════
 if st.session_state.pop('_load_ok',False):
@@ -1091,11 +1179,21 @@ if st.session_state.kis_token:
         age_sec   = int(time.time() - gist_data.get('updated_at', time.time()))
         age_color  = "#00ff88" if age_sec < 700 else "#ffc800"  # 10분 내: 초록, 초과: 노랑
         next_scan  = max(0, 600 - age_sec)   # 다음 스캔까지 남은 초 (Actions 10분 주기 기준)
-        next_lbl   = f"{next_scan//60}분 {next_scan%60}초 후" if next_scan > 0 else "곧 갱신"
+        _mkt_now   = is_market_open()
+        if _mkt_now:
+            next_lbl = f"{next_scan//60}분 {next_scan%60}초 후" if next_scan > 0 else "곧 갱신"
+            mkt_badge = '<span style="color:#00ff88">🟢 장중</span>'
+        else:
+            is_hol = is_kr_holiday()
+            is_wkd = kst_now().weekday() >= 5
+            reason = "주말" if is_wkd else ("공휴일" if is_hol else "장마감")
+            next_lbl = "수동 요청 시만 갱신"
+            mkt_badge = f'<span style="color:#ffc800">🔴 {reason} — 자동스캔 중단</span>'
         st.markdown(
             f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
             f'⚡ Gist 즉시 로드 · KOSPI {kospi_n}+KOSDAQ {kosdaq_n}종목 · '
             f'<span style="color:{age_color}">{age_sec//60}분 {age_sec%60}초 전 스캔</span>'
+            f' · {mkt_badge}'
             f' · 다음갱신 <span style="color:#94a3b8">{next_lbl}</span></div>',
             unsafe_allow_html=True)
 
@@ -1110,8 +1208,13 @@ if st.session_state.kis_token:
 
     else:
         # ── 2순위: 직접 KIS 스캔 (Gist 없을 때) ──
+        # 장외(주말/공휴일/15:30 이후 8:00 이전)는 캐시 유지, 수동 갱신(↻)만 허용
+        _direct_mkt = is_market_open()
         cache_stale = (time.time() - server_store.get('scan_ts', 0)) > scan_ref_min * 60
         cached = server_store.get('scan_data')
+        # 장외이면서 캐시가 있으면 강제로 캐시 사용 (자동 스캔 차단)
+        if not _direct_mkt and cached:
+            cache_stale = False
 
         if cached and not cache_stale:
             kospi_stocks  = cached['kospi']
@@ -1120,22 +1223,37 @@ if st.session_state.kis_token:
             balance       = cached['balance']
             price_ts      = server_store['scan_str']
         else:
-            with st.spinner("📡 KIS 직접 스캔 중..."):
-                kospi_stocks = fetch_volume_ranking(
-                    st.session_state.kis_token, st.session_state.kis_base_url,
-                    st.session_state.kis_ak, st.session_state.kis_sec, 'J', 300)
-                kosdaq_stocks = fetch_volume_ranking(
-                    st.session_state.kis_token, st.session_state.kis_base_url,
-                    st.session_state.kis_ak, st.session_state.kis_sec, 'Q', 100)
-                balance = fetch_balance(
-                    st.session_state.kis_token, st.session_state.kis_base_url,
-                    st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
-            all_stocks = kospi_stocks + kosdaq_stocks
-            price_ts   = kst_strftime("%H:%M:%S")
-            server_store['scan_data'] = {'kospi':kospi_stocks,'kosdaq':kosdaq_stocks,
-                                          'all':all_stocks,'balance':balance}
-            server_store['scan_ts']  = time.time()
-            server_store['scan_str'] = price_ts
+            if not _direct_mkt:
+                # 장외인데 캐시 없음 → 안내만 표시, 스캔 시도 안 함
+                _reason = "주말" if kst_now().weekday()>=5 else ("공휴일" if is_kr_holiday() else "장마감(15:30 이후 또는 08:00 이전)")
+                st.info(f"🔴 **{_reason}** — 자동 스캔이 비활성화되어 있습니다.\n\n↻ 버튼을 눌러 수동으로 스캔할 수 있습니다.", icon="💤")
+                kospi_stocks=[]; kosdaq_stocks=[]; all_stocks=[]; balance={}
+                price_ts = kst_strftime("%H:%M:%S")
+            else:
+                st.markdown(
+                    '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
+                    'padding:8px 12px;background:rgba(255,200,0,0.08);'
+                    'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
+                    '📡 KIS 직접 스캔 중... KOSPI 300 + KOSDAQ 100 종목 조회 중입니다.<br>'
+                    '<span style="color:#64748b;font-size:11px">'
+                    'Gist 미설정 시 첫 로드에 30~60초 소요됩니다. GIST_ID 환경변수 설정을 권장합니다.</span>'
+                    '</div>', unsafe_allow_html=True)
+                with st.spinner("📡 KIS 직접 스캔 중... (KOSPI→KOSDAQ 순)"):
+                    kospi_stocks = fetch_volume_ranking(
+                        st.session_state.kis_token, st.session_state.kis_base_url,
+                        st.session_state.kis_ak, st.session_state.kis_sec, 'J', 300)
+                    kosdaq_stocks = fetch_volume_ranking(
+                        st.session_state.kis_token, st.session_state.kis_base_url,
+                        st.session_state.kis_ak, st.session_state.kis_sec, 'Q', 100)
+                    balance = fetch_balance(
+                        st.session_state.kis_token, st.session_state.kis_base_url,
+                        st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
+                all_stocks = kospi_stocks + kosdaq_stocks
+                price_ts   = kst_strftime("%H:%M:%S")
+                server_store['scan_data'] = {'kospi':kospi_stocks,'kosdaq':kosdaq_stocks,
+                                              'all':all_stocks,'balance':balance}
+                server_store['scan_ts']  = time.time()
+                server_store['scan_str'] = price_ts
 
         cats = categorize_stocks(all_stocks, st.session_state.scan_blacklist,
                                   st.session_state.scan_vol_min,
@@ -1250,8 +1368,10 @@ if st.session_state.kis_token:
     if balance and not balance.get('error'): balance_json=json.dumps(balance)
 
     # 상태 표시
+    _dm = is_market_open()
+    _dm_lbl = '🟢 장중' if _dm else ('🔴 주말' if kst_now().weekday()>=5 else ('🔴 공휴일' if is_kr_holiday() else '🔴 장마감'))
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
-📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 스캔 완료 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span><br>
+📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl}<br>
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개
 </div>""", unsafe_allow_html=True)
 

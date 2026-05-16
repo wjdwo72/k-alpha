@@ -2,13 +2,19 @@ name: K-ALPHA Auto Scan
 
 on:
   schedule:
-    # 평일 09:00~15:30 KST (UTC 00:00~06:30) 10분마다
+    # 장중 자동 스캔: 평일 08:00~15:30 KST (UTC 23:00~06:30)
+    # KST = UTC+9  →  KST 08:00 = UTC 전날 23:00
+    # UTC 기준: 23:00~23:50 (전날) + 00:00~06:30 (당일)
+    # 전날 UTC 23:xx (KST 08:xx) — 일~목 실행 (KST 월~금)
+    - cron: '0,10,20,30,40,50 23 * * 0,1,2,3,4'
+    # UTC 00:xx ~ 05:xx (KST 09:xx ~ 14:xx) — 월~금 실행
     - cron: '0,10,20,30,40,50 0,1,2,3,4,5 * * 1-5'
+    # UTC 06:00, 06:10, 06:20, 06:30 (KST 15:00~15:30) — 월~금
     - cron: '0,10,20,30 6 * * 1-5'
   workflow_dispatch:
     inputs:
       interval:
-        description: '개인방 간격(분, 10~240)'
+        description: '수동 스캔 — 개인방 간격(분, 10~240). 비워두면 기본값 사용. 장외/공휴일/주말에도 실행됨.'
         required: false
         default: ''
 
@@ -37,5 +43,6 @@ jobs:
           # Gist
           GIST_ID:           ${{ secrets.GIST_ID }}
           GH_TOKEN:          ${{ secrets.GH_TOKEN }}
+          # 수동 실행 시 입력값 (장외/공휴일에도 강제 스캔)
           MANUAL_INTERVAL:   ${{ github.event.inputs.interval }}
         run: python scan_worker.py
