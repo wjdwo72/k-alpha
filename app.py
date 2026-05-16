@@ -1412,7 +1412,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
 
 # ════ 5. 실시간 스캔 & 데이터 준비 ════
 prices_json="{}"; balance_json="{}"; price_ts=""
-scan_json="{}"; scan_count=0
+scan_json="{}"; scan_count=0; _scan_json_ready=False
 
 if st.session_state.kis_token:
     GIST_ID        = os.environ.get('GIST_ID','')
@@ -1479,9 +1479,10 @@ if st.session_state.kis_token:
         kospi_stocks  = [{}] * kospi_n   # 개수만 표시용
         kosdaq_stocks = [{}] * kosdaq_n
         # ── Gist 경로 scan_json 세팅 (NULL 버그 수정) ──
-        scan_json    = json.dumps(scan_result, ensure_ascii=False)
-        prices_json  = "{}"
-        balance_json = "{}"
+        scan_json       = json.dumps(scan_result, ensure_ascii=False)
+        prices_json     = "{}"
+        balance_json    = "{}"
+        _scan_json_ready = True
 
     else:
         # ── 2순위: 직접 KIS 스캔 (Gist 없을 때) ──
@@ -1501,6 +1502,15 @@ if st.session_state.kis_token:
             all_stocks    = cached['all']
             balance       = cached['balance']
             price_ts      = server_store['scan_str']
+            # ── 캐시에서 scan_result/scan_json 직접 복원 ──
+            if cached.get('scan_result'):
+                scan_result      = cached['scan_result']
+                cats             = {k: scan_result.get(k,[]) for k in ['swing','surge','tomorrow','smallmid']}
+                scan_count       = scan_result.get('total', len(all_stocks))
+                scan_json        = json.dumps(scan_result, ensure_ascii=False)
+                prices_json      = cached.get('prices_json','{}')
+                balance_json     = cached.get('balance_json','{}')
+                _scan_json_ready = True
             if not _direct_mkt and cached.get('is_afterhours'):
                 _afh_ts = cached.get('afterhours_ts','')
                 st.markdown(
@@ -1684,8 +1694,8 @@ if st.session_state.kis_token:
                 except Exception as e:
                     st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
-    # 스캔 결과 분류 — 직접 KIS 스캔 경로만 실행 (Gist 경로는 이미 cats/scan_result 세팅됨)
-    if all_stocks:  # 직접 KIS 스캔 시에만 cats 재계산
+    # 스캔 결과 분류 — 직접 KIS 스캔 경로만 실행 (Gist/캐시 경로는 이미 세팅됨)
+    if all_stocks and not _scan_json_ready:
         cats = categorize_stocks(
             all_stocks,
             st.session_state.scan_blacklist,
@@ -1711,8 +1721,14 @@ if st.session_state.kis_token:
                               'changePct':s['changePct'],'up':s['up']}
                   for s in all_stocks}
         prices_json = json.dumps(prices)
+        if balance and not balance.get('error'): balance_json = json.dumps(balance)
 
-        if balance and not balance.get('error'): balance_json=json.dumps(balance)
+        # ── 캐시에 scan_result/prices_json/balance_json도 함께 저장 ──
+        if server_store.get('scan_data'):
+            server_store['scan_data']['scan_result']  = scan_result
+            server_store['scan_data']['prices_json']  = prices_json
+            server_store['scan_data']['balance_json'] = balance_json
+        _scan_json_ready = True
 
     # 상태 표시
     _dm = is_market_open()
