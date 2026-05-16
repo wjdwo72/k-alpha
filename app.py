@@ -1577,24 +1577,6 @@ if st.session_state.kis_token:
                 if _is_afterhours_scan:
                     st.success(f"✅ 장마감 시점 분석 완료 — {price_ts} 기준 종가 데이터")
 
-
-        cats = categorize_stocks(all_stocks, st.session_state.scan_blacklist,
-                                  st.session_state.scan_vol_min,
-                                  st.session_state.scan_rsi_min, st.session_state.scan_rsi_max)
-        scan_count  = len(all_stocks)
-        scan_result = {
-            'swing':    [build_card(s,'swing')    for s in cats['swing']],
-            'surge':    [build_card(s,'surge')    for s in cats['surge']],
-            'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
-            'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
-            'ts': price_ts, 'total': scan_count,
-        }
-        scan_json    = json.dumps(scan_result, ensure_ascii=False)
-        prices       = {s['code']:{'price':s['price'],'change':s.get('change',0),
-                                    'changePct':s['changePct'],'up':s['up']} for s in all_stocks}
-        prices_json  = json.dumps(prices)
-        balance_json = json.dumps(balance) if balance and not balance.get('error') else "{}"
-
         st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
                     f'📊 KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목 · {price_ts}</div>',
                     unsafe_allow_html=True)
