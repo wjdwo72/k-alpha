@@ -1079,6 +1079,7 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
         with tab_g:
             st.caption("같은 봇 토큰을 사용합니다. 그룹 Chat ID만 별도 입력하세요.")
             st.info("그룹 Chat ID는 보통 `-100` 으로 시작하는 음수입니다.", icon="ℹ️")
+            st.warning("⚠️ **텔레그램 채널은 지원되지 않습니다.**\n\n채널이 아닌 **그룹(슈퍼그룹)** 에만 전송 가능합니다. 봇을 그룹에 **관리자**로 추가한 뒤 Chat ID를 입력하세요. 채널 Chat ID를 입력하면 `chat not found` 오류가 발생합니다.", icon="🚫")
 
             grp_enabled = st.toggle("그룹방 알림 활성화",
                                      value=st.session_state.get('tg_group_enabled', False),
@@ -1156,6 +1157,7 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
         with tab_g2:
             st.caption("같은 봇 토큰을 사용합니다. 그룹방 2 Chat ID를 입력하세요.")
             st.info("그룹 Chat ID는 보통 `-100` 으로 시작하는 음수입니다.", icon="ℹ️")
+            st.warning("⚠️ **텔레그램 채널은 지원되지 않습니다.** 채널이 아닌 **그룹(슈퍼그룹)** 에만 전송 가능합니다. 봇을 그룹 **관리자**로 추가 후 Chat ID 입력하세요.", icon="🚫")
 
             grp2_enabled = st.toggle("그룹방 2 알림 활성화",
                                      value=st.session_state.get('tg_group2_enabled', False),
@@ -1232,6 +1234,7 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
         with tab_g3:
             st.caption("같은 봇 토큰을 사용합니다. 그룹방 3 Chat ID를 입력하세요.")
             st.info("그룹 Chat ID는 보통 `-100` 으로 시작하는 음수입니다.", icon="ℹ️")
+            st.warning("⚠️ **텔레그램 채널은 지원되지 않습니다.** 채널이 아닌 **그룹(슈퍼그룹)** 에만 전송 가능합니다. 봇을 그룹 **관리자**로 추가 후 Chat ID 입력하세요.", icon="🚫")
 
             grp3_enabled = st.toggle("그룹방 3 알림 활성화",
                                      value=st.session_state.get('tg_group3_enabled', False),
@@ -1388,12 +1391,14 @@ if st.session_state.kis_token:
 
     else:
         # ── 2순위: 직접 KIS 스캔 (Gist 없을 때) ──
-        # 장외(주말/공휴일/15:30 이후 8:00 이전)는 캐시 유지, 수동 갱신(↻)만 허용
+        # 장외(주말/공휴일/15:30 이후 8:00 이전)는 캐시 유지
+        # ↻ 수동 갱신 시에는 장외에도 스캔 허용 (장마감 시점 분석)
         _direct_mkt = is_market_open()
+        _manual_refresh = server_store.get('scan_ts') == 0  # ↻ 버튼으로 초기화됐으면 True
         cache_stale = (time.time() - server_store.get('scan_ts', 0)) > scan_ref_min * 60
         cached = server_store.get('scan_data')
-        # 장외이면서 캐시가 있으면 강제로 캐시 사용 (자동 스캔 차단)
-        if not _direct_mkt and cached:
+        # 장외 + 캐시 있음 + 수동갱신 아님 → 캐시 유지 (자동 스캔 차단)
+        if not _direct_mkt and cached and not _manual_refresh:
             cache_stale = False
 
         if cached and not cache_stale:
@@ -1402,23 +1407,47 @@ if st.session_state.kis_token:
             all_stocks    = cached['all']
             balance       = cached['balance']
             price_ts      = server_store['scan_str']
+            if not _direct_mkt and cached.get('is_afterhours'):
+                _afh_ts = cached.get('afterhours_ts','')
+                st.markdown(
+                    f'<div style="font-family:monospace;font-size:12px;color:#ffc800;'
+                    f'padding:6px 10px;background:rgba(255,200,0,0.06);'
+                    f'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
+                    f'🔴 장마감 후 분석 데이터 · 스캔 시각 {_afh_ts} · 장중 데이터와 동일한 기준 적용<br>'
+                    f'<span style="color:#64748b;font-size:11px">↻ 버튼으로 현재 시점 재스캔 가능</span>'
+                    f'</div>', unsafe_allow_html=True)
         else:
-            if not _direct_mkt:
-                # 장외인데 캐시 없음 → 안내만 표시, 스캔 시도 안 함
-                _reason = "주말" if kst_now().weekday()>=5 else ("공휴일" if is_kr_holiday() else "장마감(15:30 이후 또는 08:00 이전)")
-                st.info(f"🔴 **{_reason}** — 자동 스캔이 비활성화되어 있습니다.\n\n↻ 버튼을 눌러 수동으로 스캔할 수 있습니다.", icon="💤")
+            if not _direct_mkt and not _manual_refresh:
+                # 장외인데 캐시 없고 수동갱신도 아님 → 안내만 표시
+                _reason = "주말" if kst_now().weekday()>=5 else ("공휴일" if is_kr_holiday() else "장마감")
+                st.info(
+                    f"🔴 **{_reason}** — 자동 스캔이 비활성화되어 있습니다.\n\n"
+                    f"↻ 버튼을 누르면 **장마감 시점 기준으로 분석**합니다.\n"
+                    f"(종목별 종가·거래대금 기준 스윙/급등 분류)", icon="💤")
                 kospi_stocks=[]; kosdaq_stocks=[]; all_stocks=[]; balance={}
                 price_ts = kst_strftime("%H:%M:%S")
             else:
-                st.markdown(
-                    '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
-                    'padding:8px 12px;background:rgba(255,200,0,0.08);'
-                    'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
-                    '📡 KIS 직접 스캔 중... KOSPI 300 + KOSDAQ 100 종목 조회 중입니다.<br>'
-                    '<span style="color:#64748b;font-size:11px">'
-                    'Gist 미설정 시 첫 로드에 30~60초 소요됩니다. GIST_ID 환경변수 설정을 권장합니다.</span>'
-                    '</div>', unsafe_allow_html=True)
-                with st.spinner("📡 KIS 직접 스캔 중... (KOSPI→KOSDAQ 순)"):
+                # 장중 스캔 또는 장외 수동 갱신(↻)
+                _is_afterhours_scan = not _direct_mkt
+                if _is_afterhours_scan:
+                    st.markdown(
+                        '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
+                        'padding:8px 12px;background:rgba(255,200,0,0.08);'
+                        'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
+                        '🔴 장마감 후 수동 스캔 중... 종가·거래대금 기준으로 분석합니다.<br>'
+                        '<span style="color:#64748b;font-size:11px">'
+                        '장마감 이후에는 실시간 체결이 없으므로 종가 기준 분류됩니다.</span>'
+                        '</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(
+                        '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
+                        'padding:8px 12px;background:rgba(255,200,0,0.08);'
+                        'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
+                        '📡 KIS 직접 스캔 중... KOSPI 300 + KOSDAQ 100 종목 조회 중입니다.<br>'
+                        '<span style="color:#64748b;font-size:11px">'
+                        'Gist 미설정 시 첫 로드에 30~60초 소요됩니다. GIST_ID 환경변수 설정을 권장합니다.</span>'
+                        '</div>', unsafe_allow_html=True)
+                with st.spinner("📡 KIS 스캔 중... (KOSPI→KOSDAQ 순)"):
                     kospi_stocks = fetch_volume_ranking(
                         st.session_state.kis_token, st.session_state.kis_base_url,
                         st.session_state.kis_ak, st.session_state.kis_sec, 'J', 300)
@@ -1430,10 +1459,17 @@ if st.session_state.kis_token:
                         st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
                 all_stocks = kospi_stocks + kosdaq_stocks
                 price_ts   = kst_strftime("%H:%M:%S")
-                server_store['scan_data'] = {'kospi':kospi_stocks,'kosdaq':kosdaq_stocks,
-                                              'all':all_stocks,'balance':balance}
+                server_store['scan_data'] = {
+                    'kospi': kospi_stocks, 'kosdaq': kosdaq_stocks,
+                    'all': all_stocks, 'balance': balance,
+                    'is_afterhours': _is_afterhours_scan,
+                    'afterhours_ts': price_ts,
+                }
                 server_store['scan_ts']  = time.time()
                 server_store['scan_str'] = price_ts
+                if _is_afterhours_scan:
+                    st.success(f"✅ 장마감 시점 분석 완료 — {price_ts} 기준 종가 데이터")
+
 
         cats = categorize_stocks(all_stocks, st.session_state.scan_blacklist,
                                   st.session_state.scan_vol_min,
