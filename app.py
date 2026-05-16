@@ -1482,10 +1482,14 @@ if st.session_state.kis_token:
         kospi_stocks  = [{}] * kospi_n   # 개수만 표시용
         kosdaq_stocks = [{}] * kosdaq_n
         # ── Gist 경로 scan_json 세팅 (NULL 버그 수정) ──
-        scan_json       = json.dumps(scan_result, ensure_ascii=False)
-        prices_json     = "{}"
-        balance_json    = "{}"
+        scan_json        = json.dumps(scan_result, ensure_ascii=False)
+        prices_json      = "{}"
+        balance_json     = "{}"
         _scan_json_ready = True
+        # server_store에도 저장해 캐시 복원 시 사용
+        server_store['scan_result'] = scan_result
+        server_store['prices_json'] = prices_json
+        server_store['balance_json'] = balance_json
 
     else:
         # ── 2순위: 직접 KIS 스캔 (Gist 없을 때) ──
@@ -1500,19 +1504,19 @@ if st.session_state.kis_token:
             cache_stale = False
 
         if cached and not cache_stale:
-            kospi_stocks  = cached['kospi']
-            kosdaq_stocks = cached['kosdaq']
-            all_stocks    = cached['all']
-            balance       = cached['balance']
-            price_ts      = server_store['scan_str']
-            # ── 캐시에서 scan_result/scan_json 직접 복원 ──
-            if cached.get('scan_result'):
-                scan_result      = cached['scan_result']
+            kospi_stocks  = cached.get('kospi', [])
+            kosdaq_stocks = cached.get('kosdaq', [])
+            balance       = cached.get('balance', {})
+            price_ts      = server_store.get('scan_str', '')
+            # ── scan_result를 server_store에서 직접 복원 ──
+            _sr = server_store.get('scan_result')
+            if _sr:
+                scan_result      = _sr
                 cats             = {k: scan_result.get(k,[]) for k in ['swing','surge','tomorrow','smallmid']}
-                scan_count       = scan_result.get('total', len(all_stocks))
+                scan_count       = scan_result.get('total', 0)
                 scan_json        = json.dumps(scan_result, ensure_ascii=False)
-                prices_json      = cached.get('prices_json','{}')
-                balance_json     = cached.get('balance_json','{}')
+                prices_json      = server_store.get('prices_json', '{}')
+                balance_json     = server_store.get('balance_json', '{}')
                 _scan_json_ready = True
             if not _direct_mkt and cached.get('is_afterhours'):
                 _afh_ts = cached.get('afterhours_ts','')
@@ -1574,6 +1578,7 @@ if st.session_state.kis_token:
                 }
                 server_store['scan_ts']  = time.time()
                 server_store['scan_str'] = price_ts
+                # scan_result는 categorize 후 아래에서 server_store에 저장됨
                 if _is_afterhours_scan:
                     st.success(f"✅ 장마감 시점 분석 완료 — {price_ts} 기준 종가 데이터")
 
@@ -1708,7 +1713,10 @@ if st.session_state.kis_token:
         prices_json = json.dumps(prices)
         if balance and not balance.get('error'): balance_json = json.dumps(balance)
 
-        # ── 캐시에 scan_result/prices_json/balance_json도 함께 저장 ──
+        # ── server_store에 scan_result 직접 저장 (다음 캐시 복원 시 사용) ──
+        server_store['scan_result']  = scan_result
+        server_store['prices_json']  = prices_json
+        server_store['balance_json'] = balance_json
         if server_store.get('scan_data'):
             server_store['scan_data']['scan_result']  = scan_result
             server_store['scan_data']['prices_json']  = prices_json
