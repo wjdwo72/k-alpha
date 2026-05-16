@@ -1413,6 +1413,9 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
 # ════ 5. 실시간 스캔 & 데이터 준비 ════
 prices_json="{}"; balance_json="{}"; price_ts=""
 scan_json="{}"; scan_count=0; _scan_json_ready=False
+scan_result={'swing':[],'surge':[],'tomorrow':[],'smallmid':[],'ts':'','total':0}
+cats={'swing':[],'surge':[],'tomorrow':[],'smallmid':[]}
+all_stocks=[]; kospi_stocks=[]; kosdaq_stocks=[]; balance={}
 
 if st.session_state.kis_token:
     GIST_ID        = os.environ.get('GIST_ID','')
@@ -1695,7 +1698,7 @@ if st.session_state.kis_token:
                     st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
     # 스캔 결과 분류 — 직접 KIS 스캔 경로만 실행 (Gist/캐시 경로는 이미 세팅됨)
-    if all_stocks and not _scan_json_ready:
+    if not _scan_json_ready and all_stocks:
         cats = categorize_stocks(
             all_stocks,
             st.session_state.scan_blacklist,
@@ -1841,6 +1844,10 @@ if st.session_state.kis_token:
 # ════ 6. HTML 터미널 ════
 if not os.path.exists("app.html"):
     st.error("app.html 파일을 GitHub 저장소에 업로드하세요."); st.stop()
+
+# scan_json 최종 안전장치 — scan_result와 동기화
+if scan_result.get('swing') or scan_result.get('surge') or scan_result.get('tomorrow') or scan_result.get('smallmid'):
+    scan_json = json.dumps(scan_result, ensure_ascii=False)
 with open("app.html","r",encoding="utf-8") as f: html=f.read()
 inject=f"""<script>
 window.__STREAMLIT_MODE__ = true;
