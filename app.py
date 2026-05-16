@@ -1024,6 +1024,63 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
 
         tab_p, tab_g, tab_g2, tab_g3 = st.tabs(["👤 개인 채팅방", "👥 그룹방 1", "👥 그룹방 2", "👥 그룹방 3"])
 
+        def _show_tg_group_error(err_desc, chat_id_str):
+            """텔레그램 그룹 연결 오류 원인 진단 + 해결책 안내"""
+            err = (err_desc or '').lower()
+            chat_id_str = str(chat_id_str).strip()
+            # 채팅ID 형식 진단
+            is_supergroup = chat_id_str.startswith('-100')
+            is_plain_group = chat_id_str.startswith('-') and not chat_id_str.startswith('-100')
+            is_positive = not chat_id_str.startswith('-')
+
+            if 'chat not found' in err:
+                if is_plain_group:
+                    st.error(f"❌ chat not found")
+                    st.markdown("""<div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);
+border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f0;line-height:2">
+<b style="color:#ffc800">🔍 원인: 일반 그룹 Chat ID입니다</b><br>
+입력한 ID(<code style="color:#ff4d6d">{cid}</code>)는 <b>일반 그룹</b>으로, 봇 메시지를 받을 수 없습니다.<br><br>
+<b style="color:#00d4ff">✅ 해결 방법 (둘 중 하나):</b><br>
+① 텔레그램 PC앱에서 해당 그룹 → <b>그룹 설정 → 그룹 유형 → 슈퍼그룹으로 전환</b><br>
+② <b>새 그룹 생성</b> 시 "슈퍼그룹"으로 만들기 (멤버 200명 이상이면 자동 슈퍼그룹)<br><br>
+슈퍼그룹 Chat ID는 <b style="color:#00ff88">-100</b>으로 시작합니다 (예: <code>-1001234567890</code>)
+</div>""".format(cid=chat_id_str), unsafe_allow_html=True)
+                elif is_positive:
+                    st.error(f"❌ chat not found")
+                    st.markdown("""<div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);
+border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f0;line-height:2">
+<b style="color:#ffc800">🔍 원인: 개인 Chat ID 또는 잘못된 형식</b><br>
+그룹 Chat ID는 반드시 <b style="color:#ff4d6d">음수(- 로 시작)</b>여야 합니다.<br>
+개인방 Chat ID를 입력하셨다면 <b>개인 채팅방 탭</b>을 이용하세요.
+</div>""", unsafe_allow_html=True)
+                else:
+                    st.error(f"❌ chat not found")
+                    st.markdown("""<div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);
+border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f0;line-height:2">
+<b style="color:#ffc800">🔍 가능한 원인:</b><br>
+① 봇이 그룹에 <b>초대되지 않았거나 강퇴</b>됨<br>
+② 봇의 <b>Privacy Mode</b>가 켜져 있음 → BotFather에서 <code>/setprivacy</code> → <b>Disable</b><br>
+③ 그룹 Chat ID가 잘못됨 → <b>@userinfobot</b>으로 정확한 ID 확인
+</div>""", unsafe_allow_html=True)
+            elif 'forbidden' in err or 'kicked' in err:
+                st.error(f"❌ {err_desc}")
+                st.markdown("""<div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);
+border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f0;line-height:2">
+<b style="color:#ffc800">🔍 원인: 봇이 그룹에서 차단됨</b><br>
+봇을 그룹에서 <b>다시 초대</b>하고 <b>관리자 권한</b>을 부여하세요.<br>
+또는 BotFather → <code>/setprivacy</code> → <b>Disable</b> 후 봇 재초대
+</div>""", unsafe_allow_html=True)
+            else:
+                st.error(f"❌ {err_desc}")
+                st.markdown("""<div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);
+border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f0;line-height:2">
+<b style="color:#ffc800">🔍 체크리스트:</b><br>
+① BotFather → <code>/setprivacy</code> → <b>Disable</b> (필수)<br>
+② 봇을 그룹 <b>관리자</b>로 설정<br>
+③ @userinfobot 으로 정확한 Chat ID 재확인<br>
+④ Bot Token이 개인방 탭에 정상 등록됐는지 확인
+</div>""", unsafe_allow_html=True)
+
         # ── 개인방 탭 ──────────────────────────────
         with tab_p:
             st.caption("봇 토큰과 내 개인 Chat ID를 입력하세요.")
@@ -1091,6 +1148,10 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
                                            placeholder="-1001234567890",
                                            disabled=not grp_enabled,
                                            key="tg_grp_chat_inp")
+            # 입력값 즉시 session_state 반영 (disabled 상태에서도 기존값 유지)
+            if tg_group_chat:
+                st.session_state['tg_group_chat'] = tg_group_chat
+            _grp_chat_val = st.session_state.get('tg_group_chat', '')
 
             _cur_g = st.session_state.get('tg_group_interval_label','30분')
             if _cur_g not in _iv_keys: _cur_g = '30분'
@@ -1103,31 +1164,48 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
             cg1, cg2 = st.columns([2,1])
             with cg1:
                 if st.button("👥 그룹방 테스트 전송", use_container_width=True,
-                              key="btn_tg_g", disabled=not grp_enabled):
+                              key="btn_tg_g", disabled=(not grp_enabled or not _grp_chat_val)):
                     _tok = st.session_state.get('tg_token','')
-                    if _tok and tg_group_chat:
+                    if _tok and _grp_chat_val:
                         try:
-                            r = requests.post(
-                                f"https://api.telegram.org/bot{_tok}/sendMessage",
-                                json={"chat_id": tg_group_chat,
-                                      "text":"✅ K-ALPHA 그룹방 알림 연결 성공!",
-                                      "parse_mode":"HTML"}, timeout=8)
-                            if r.json().get('ok'):
-                                st.session_state['tg_group_chat'] = tg_group_chat
-                                grp_enc = base64.b64encode(json.dumps({
-                                    'c': tg_group_chat,
-                                    'en': grp_enabled,
-                                    'iv': _iv_dict[iv_g_label],
-                                    'ivl': iv_g_label,
-                                }).encode()).decode()
-                                qp['tg_grp'] = grp_enc
-                                server_store['tg_grp'] = grp_enc
-                                components.html(
-                                    f"<script>try{{localStorage.setItem('ka_tg_grp_v1',{json.dumps(grp_enc)});}}catch(e){{}}</script>",
-                                    height=0, scrolling=False)
-                                st.success("✅ 그룹방 연결 성공!")
+                            # 1단계: 봇이 그룹 멤버인지 먼저 확인
+                            _chat_info = requests.get(
+                                f"https://api.telegram.org/bot{_tok}/getChat",
+                                params={"chat_id": _grp_chat_val}, timeout=8).json()
+                            if not _chat_info.get('ok'):
+                                _show_tg_group_error(_chat_info.get('description',''), _grp_chat_val)
                             else:
-                                st.error(f"❌ {r.json().get('description')}")
+                                r = requests.post(
+                                    f"https://api.telegram.org/bot{_tok}/sendMessage",
+                                    json={"chat_id": _grp_chat_val,
+                                          "text":"✅ K-ALPHA 그룹방 알림 연결 성공!",
+                                          "parse_mode":"HTML"}, timeout=8)
+                                if r.json().get('ok'):
+                                    st.session_state['tg_group_chat'] = _grp_chat_val
+                                    grp_enc = base64.b64encode(json.dumps({
+                                        'c': _grp_chat_val,
+                                        'en': grp_enabled,
+                                        'iv': _iv_dict[iv_g_label],
+                                        'ivl': iv_g_label,
+                                    }).encode()).decode()
+                                    qp['tg_grp'] = grp_enc
+                                    server_store['tg_grp'] = grp_enc
+                                    components.html(
+                                        f"<script>try{{localStorage.setItem('ka_tg_grp_v1',{json.dumps(grp_enc)});}}catch(e){{}}</script>",
+                                        height=0, scrolling=False)
+                                    st.success("✅ 그룹방 연결 성공!")
+                                else:
+                                    err_d = r.json().get('description','')
+                                    if 'not enough rights' in err_d.lower() or 'have no rights' in err_d.lower():
+                                        st.error("❌ 봇에게 메시지 전송 권한이 없습니다")
+                                        st.markdown("""<div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);
+border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f0;line-height:2">
+<b style="color:#ffc800">🔍 원인: 봇 메시지 권한 없음</b><br>
+① 그룹 설정 → 봇 → <b>관리자로 설정</b> 후 재시도<br>
+② 또는 BotFather → <code>/setprivacy</code> → <b>Disable</b> 후 봇을 그룹에서 내보내고 재초대
+</div>""", unsafe_allow_html=True)
+                                    else:
+                                        _show_tg_group_error(err_d, _grp_chat_val)
                         except Exception as e:
                             st.error(f"❌ {e}")
                     elif not _tok:
@@ -1169,6 +1247,9 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
                                            placeholder="-1001234567890",
                                            disabled=not grp2_enabled,
                                            key="tg_grp2_chat_inp")
+            if tg_group2_chat:
+                st.session_state['tg_group2_chat'] = tg_group2_chat
+            _grp2_chat_val = st.session_state.get('tg_group2_chat', '')
 
             _cur_g2 = st.session_state.get('tg_group2_interval_label','30분')
             if _cur_g2 not in _iv_keys: _cur_g2 = '30분'
@@ -1181,31 +1262,36 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
             cg2a, cg2b = st.columns([2,1])
             with cg2a:
                 if st.button("👥 그룹방 2 테스트 전송", use_container_width=True,
-                              key="btn_tg_g2", disabled=not grp2_enabled):
+                              key="btn_tg_g2", disabled=(not grp2_enabled or not _grp2_chat_val)):
                     _tok = st.session_state.get('tg_token','')
-                    if _tok and tg_group2_chat:
+                    if _tok and _grp2_chat_val:
                         try:
-                            r = requests.post(
-                                f"https://api.telegram.org/bot{_tok}/sendMessage",
-                                json={"chat_id": tg_group2_chat,
-                                      "text":"✅ K-ALPHA 그룹방 2 알림 연결 성공!",
-                                      "parse_mode":"HTML"}, timeout=8)
-                            if r.json().get('ok'):
-                                st.session_state['tg_group2_chat'] = tg_group2_chat
-                                grp2_enc = base64.b64encode(json.dumps({
-                                    'c': tg_group2_chat,
-                                    'en': grp2_enabled,
-                                    'iv': _iv_dict[iv_g2_label],
-                                    'ivl': iv_g2_label,
-                                }).encode()).decode()
-                                qp['tg_grp2'] = grp2_enc
-                                server_store['tg_grp2'] = grp2_enc
-                                components.html(
-                                    f"<script>try{{localStorage.setItem('ka_tg_grp2_v1',{json.dumps(grp2_enc)});}}catch(e){{}}</script>",
-                                    height=0, scrolling=False)
-                                st.success("✅ 그룹방 2 연결 성공!")
+                            _ci2 = requests.get(f"https://api.telegram.org/bot{_tok}/getChat",
+                                params={"chat_id": _grp2_chat_val}, timeout=8).json()
+                            if not _ci2.get('ok'):
+                                _show_tg_group_error(_ci2.get('description',''), _grp2_chat_val)
                             else:
-                                st.error(f"❌ {r.json().get('description')}")
+                                r = requests.post(
+                                    f"https://api.telegram.org/bot{_tok}/sendMessage",
+                                    json={"chat_id": _grp2_chat_val,
+                                          "text":"✅ K-ALPHA 그룹방 2 알림 연결 성공!",
+                                          "parse_mode":"HTML"}, timeout=8)
+                                if r.json().get('ok'):
+                                    st.session_state['tg_group2_chat'] = _grp2_chat_val
+                                    grp2_enc = base64.b64encode(json.dumps({
+                                        'c': _grp2_chat_val,
+                                        'en': grp2_enabled,
+                                        'iv': _iv_dict[iv_g2_label],
+                                        'ivl': iv_g2_label,
+                                    }).encode()).decode()
+                                    qp['tg_grp2'] = grp2_enc
+                                    server_store['tg_grp2'] = grp2_enc
+                                    components.html(
+                                        f"<script>try{{localStorage.setItem('ka_tg_grp2_v1',{json.dumps(grp2_enc)});}}catch(e){{}}</script>",
+                                        height=0, scrolling=False)
+                                    st.success("✅ 그룹방 2 연결 성공!")
+                                else:
+                                    _show_tg_group_error(r.json().get('description',''), _grp2_chat_val)
                         except Exception as e:
                             st.error(f"❌ {e}")
                     elif not _tok:
@@ -1246,6 +1332,9 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
                                            placeholder="-1001234567890",
                                            disabled=not grp3_enabled,
                                            key="tg_grp3_chat_inp")
+            if tg_group3_chat:
+                st.session_state['tg_group3_chat'] = tg_group3_chat
+            _grp3_chat_val = st.session_state.get('tg_group3_chat', '')
 
             _cur_g3 = st.session_state.get('tg_group3_interval_label','30분')
             if _cur_g3 not in _iv_keys: _cur_g3 = '30분'
@@ -1258,31 +1347,36 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
             cg3a, cg3b = st.columns([2,1])
             with cg3a:
                 if st.button("👥 그룹방 3 테스트 전송", use_container_width=True,
-                              key="btn_tg_g3", disabled=not grp3_enabled):
+                              key="btn_tg_g3", disabled=(not grp3_enabled or not _grp3_chat_val)):
                     _tok = st.session_state.get('tg_token','')
-                    if _tok and tg_group3_chat:
+                    if _tok and _grp3_chat_val:
                         try:
-                            r = requests.post(
-                                f"https://api.telegram.org/bot{_tok}/sendMessage",
-                                json={"chat_id": tg_group3_chat,
-                                      "text":"✅ K-ALPHA 그룹방 3 알림 연결 성공!",
-                                      "parse_mode":"HTML"}, timeout=8)
-                            if r.json().get('ok'):
-                                st.session_state['tg_group3_chat'] = tg_group3_chat
-                                grp3_enc = base64.b64encode(json.dumps({
-                                    'c': tg_group3_chat,
-                                    'en': grp3_enabled,
-                                    'iv': _iv_dict[iv_g3_label],
-                                    'ivl': iv_g3_label,
-                                }).encode()).decode()
-                                qp['tg_grp3'] = grp3_enc
-                                server_store['tg_grp3'] = grp3_enc
-                                components.html(
-                                    f"<script>try{{localStorage.setItem('ka_tg_grp3_v1',{json.dumps(grp3_enc)});}}catch(e){{}}</script>",
-                                    height=0, scrolling=False)
-                                st.success("✅ 그룹방 3 연결 성공!")
+                            _ci3 = requests.get(f"https://api.telegram.org/bot{_tok}/getChat",
+                                params={"chat_id": _grp3_chat_val}, timeout=8).json()
+                            if not _ci3.get('ok'):
+                                _show_tg_group_error(_ci3.get('description',''), _grp3_chat_val)
                             else:
-                                st.error(f"❌ {r.json().get('description')}")
+                                r = requests.post(
+                                    f"https://api.telegram.org/bot{_tok}/sendMessage",
+                                    json={"chat_id": _grp3_chat_val,
+                                          "text":"✅ K-ALPHA 그룹방 3 알림 연결 성공!",
+                                          "parse_mode":"HTML"}, timeout=8)
+                                if r.json().get('ok'):
+                                    st.session_state['tg_group3_chat'] = _grp3_chat_val
+                                    grp3_enc = base64.b64encode(json.dumps({
+                                        'c': _grp3_chat_val,
+                                        'en': grp3_enabled,
+                                        'iv': _iv_dict[iv_g3_label],
+                                        'ivl': iv_g3_label,
+                                    }).encode()).decode()
+                                    qp['tg_grp3'] = grp3_enc
+                                    server_store['tg_grp3'] = grp3_enc
+                                    components.html(
+                                        f"<script>try{{localStorage.setItem('ka_tg_grp3_v1',{json.dumps(grp3_enc)});}}catch(e){{}}</script>",
+                                        height=0, scrolling=False)
+                                    st.success("✅ 그룹방 3 연결 성공!")
+                                else:
+                                    _show_tg_group_error(r.json().get('description',''), _grp3_chat_val)
                         except Exception as e:
                             st.error(f"❌ {e}")
                     elif not _tok:
@@ -1590,34 +1684,35 @@ if st.session_state.kis_token:
                 except Exception as e:
                     st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
-    # 스캔 결과 분류
-    cats = categorize_stocks(
-        all_stocks,
-        st.session_state.scan_blacklist,
-        st.session_state.scan_vol_min,
-        st.session_state.scan_rsi_min,
-        st.session_state.scan_rsi_max,
-    )
-    scan_count = len(all_stocks)
+    # 스캔 결과 분류 — 직접 KIS 스캔 경로만 실행 (Gist 경로는 이미 cats/scan_result 세팅됨)
+    if all_stocks:  # 직접 KIS 스캔 시에만 cats 재계산
+        cats = categorize_stocks(
+            all_stocks,
+            st.session_state.scan_blacklist,
+            st.session_state.scan_vol_min,
+            st.session_state.scan_rsi_min,
+            st.session_state.scan_rsi_max,
+        )
+        scan_count = len(all_stocks)
 
-    # 카드 데이터 생성
-    scan_result = {
-        'swing':    [build_card(s,'swing')    for s in cats['swing']],
-        'surge':    [build_card(s,'surge')    for s in cats['surge']],
-        'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
-        'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
-        'ts': price_ts,
-        'total': scan_count,
-    }
-    scan_json = json.dumps(scan_result, ensure_ascii=False)
+        # 카드 데이터 생성
+        scan_result = {
+            'swing':    [build_card(s,'swing')    for s in cats['swing']],
+            'surge':    [build_card(s,'surge')    for s in cats['surge']],
+            'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
+            'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
+            'ts': price_ts,
+            'total': scan_count,
+        }
+        scan_json = json.dumps(scan_result, ensure_ascii=False)
 
-    # 현재가 딕셔너리
-    prices = {s['code']:{'price':s['price'],'change':s['change'],
-                          'changePct':s['changePct'],'up':s['up']}
-              for s in all_stocks}
-    prices_json = json.dumps(prices)
+        # 현재가 딕셔너리
+        prices = {s['code']:{'price':s['price'],'change':s['change'],
+                              'changePct':s['changePct'],'up':s['up']}
+                  for s in all_stocks}
+        prices_json = json.dumps(prices)
 
-    if balance and not balance.get('error'): balance_json=json.dumps(balance)
+        if balance and not balance.get('error'): balance_json=json.dumps(balance)
 
     # 상태 표시
     _dm = is_market_open()
