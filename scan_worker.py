@@ -47,15 +47,33 @@ def _lbl(m):
     if m % 60==0: return f"{m//60}시간"
     return f"{m//60}시간{m%60}분"
 
-def should_send(interval_min):
-    """해당 간격 기준으로 지금 전송해야 하면 True"""
-    is_manual = bool(os.environ.get('MANUAL_INTERVAL','').strip())
-    if is_manual: return True
+def should_scan():
+    """
+    장시간(평일 09:00~15:30 KST)이면 True.
+    cron은 10분마다 실행되므로 이 함수는 단순히 시간대만 체크.
+    MANUAL_INTERVAL이 있으면 무조건 True (수동 실행).
+    """
+    if os.environ.get('MANUAL_INTERVAL','').strip():
+        return True
     t = kst_now()
-    total = t.hour*60 + t.minute
-    if not (540 <= total <= 930): return False   # 09:00~15:30
-    if t.weekday() >= 5: return False            # 주말 제외
-    return (total % interval_min) < 5           # 간격 단위 bucket
+    if t.weekday() >= 5: return False            # 주말
+    total = t.hour * 60 + t.minute
+    return 540 <= total <= 930                   # 09:00~15:30 KST
+
+def should_send_tg(interval_min):
+    """
+    interval_min 간격으로 텔레그램을 보내야 하면 True.
+    cron은 10분마다 실행됨 → interval_min이 10의 배수여야 정확히 동작.
+    판단 기준: (현재분 % interval_min) == 0  OR  나머지 < 5 (cron 지연 허용)
+    예) interval=30 → 09:00, 09:30, 10:00 ... 에 전송
+        interval=60 → 09:00, 10:00, 11:00 ... 에 전송
+    """
+    if os.environ.get('MANUAL_INTERVAL','').strip():
+        return True
+    t   = kst_now()
+    total = t.hour * 60 + t.minute
+    # cron 지연 최대 ~3분 허용 (실제 실행시각 오차)
+    return (total % interval_min) < 4
 
 def get_token():
     r = requests.post(f"{BASE_URL}/oauth2/tokenP",
@@ -187,32 +205,39 @@ def main():
     if not all([KIS_AK, KIS_SEC]):
         print("❌ KIS 환경변수 미설정"); return
 
-    t = kst_now()
+    t  = kst_now()
     ts = f"{t.hour:02d}:{t.minute:02d}:{t.second:02d}"
-    print(f"[{ts} KST] 개인간격:{TG_INTERVAL}분 | 그룹간격:{TG_GROUP_INTERVAL or 'OFF'}분 | 환경:{KIS_ENV}")
+    total_min = t.hour * 60 + t.minute
 
-    # 개인방 또는 그룹방 중 하나라도 전송 타이밍이면 스캔 실행
-    send_personal = TG_CHAT and should_send(TG_INTERVAL)
-    send_group    = TG_GROUP_CHAT and TG_GROUP_INTERVAL > 0 and should_send(TG_GROUP_INTERVAL)
+    print(f"[{ts} KST] 개인TG:{TG_INTERVAL}분 | 그룹TG:{TG_GROUP_INTERVAL or 'OFF'}분 | 환경:{KIS_ENV}")
+    print(f"  현재 장중={should_scan()} | 개인TG_전송={should_send_tg(TG_INTERVAL)} | "
+          f"그룹TG_전송={should_send_tg(TG_GROUP_INTERVAL) if TG_GROUP_INTERVAL else 'OFF'}")
 
-    if not send_personal and not send_group:
-        print("⏭ 스킵 (장외/간격미해당)"); return
+    # ── 장시간 여부 — 스캔 + Gist 저장 여부 결정 ──
+    if not should_scan():
+        print("⏭ 스킵 (장외 / 주말)"); return
 
-    print("🔑 토큰 발급 중...")
+    # ── 텔레그램 간격 필터 ──
+    send_personal = bool(TG_CHAT and TG_TOKEN and should_send_tg(TG_INTERVAL))
+    send_group    = bool(TG_GROUP_CHAT and TG_TOKEN and TG_GROUP_INTERVAL > 0
+                        and should_send_tg(TG_GROUP_INTERVAL))
+
+    print("🔑 KIS 토큰 발급 중...")
     token = get_token()
     if not token: print("❌ 토큰 발급 실패"); return
 
-    print("📊 거래량 순위 조회...")
+    print("📊 거래량 순위 조회 (KOSPI 300 + KOSDAQ 100)...")
     kospi  = fetch_ranking(token, 'J', 300)
     kosdaq = fetch_ranking(token, 'Q', 100)
     all_s  = kospi + kosdaq
-    print(f"KOSPI {len(kospi)} + KOSDAQ {len(kosdaq)} = {len(all_s)}종목")
+    print(f"  KOSPI {len(kospi)} + KOSDAQ {len(kosdaq)} = {len(all_s)}종목 (ETF 제외)")
 
     if not all_s: print("❌ 결과 없음"); return
 
     cats = categorize(all_s)
+    print(f"  스윙:{len(cats['swing'])} 급등:{len(cats['surge'])} 중소형:{len(cats['smallmid'])}")
 
-    # Gist 저장 (앱이 즉시 읽음)
+    # ── Gist 저장: 장중이면 10분마다 항상 저장 (앱 즉시 로드용) ──
     scan_result = {
         'swing':    [build_card(s,'swing')    for s in cats['swing']],
         'surge':    [build_card(s,'surge')    for s in cats['surge']],
@@ -224,19 +249,20 @@ def main():
     }
     save_to_gist(scan_result)
 
+    # ── 텔레그램 전송 ──
     if not TG_TOKEN:
         print("⚠ TG_TOKEN 없음 — 텔레그램 전송 건너뜀"); return
 
     is_market = 9 <= t.hour <= 15
 
     def build_msg(iv_min):
-        iv_lbl = _lbl(iv_min)
-        mkt_lbl = '🟢장중' if is_market else '🔴장마감'
-        top_main  = (cats['swing']+cats['surge'])[:5]
+        iv_lbl    = _lbl(iv_min)
+        mkt_lbl   = '🟢장중' if is_market else '🔴장마감'
+        top_main  = (cats['swing'] + cats['surge'])[:5]
         top_small = cats['smallmid'][:5]
         if not top_main:
-            top_main = sorted(all_s, key=lambda x:x.get('trAmt',0), reverse=True)[:5]
-            for s in top_main: s.setdefault('score',75); s.setdefault('grade','B')
+            top_main = sorted(all_s, key=lambda x: x.get('trAmt', 0), reverse=True)[:5]
+            for s in top_main: s.setdefault('score', 75); s.setdefault('grade', 'B')
         lines = [
             f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts}] {mkt_lbl}\n"
             f"KOSPI {len(kospi)}종목 + KOSDAQ {len(kosdaq)}종목\n━━━━━━━━━━━━━━━━",
@@ -244,22 +270,23 @@ def main():
         ]
         for s in top_main: lines.append(fmt_tg(s))
         if top_small:
-            lines.append("\n⬟ <b>[중소형주 TOP5]</b>")
+            lines.append(f"\n⬟ <b>[중소형주 TOP5]</b>")
             for s in top_small: lines.append(fmt_tg(s))
         lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔완료 · 다음 {iv_lbl} 후")
         return "\n\n".join(lines)
 
-    # 개인방 전송
     if send_personal:
-        msg_p = build_msg(TG_INTERVAL)
-        ok_p = send_telegram(msg_p, TG_CHAT)
-        print(f"{'✅ 개인방 전송' if ok_p else '❌ 개인방 실패'}")
+        ok_p = send_telegram(build_msg(TG_INTERVAL), TG_CHAT)
+        print(f"{'✅ 개인방 전송 완료' if ok_p else '❌ 개인방 전송 실패'}")
+    else:
+        print(f"⏭ 개인방 TG 스킵 — 간격:{TG_INTERVAL}분 | 현재분:{total_min} | 나머지:{total_min % TG_INTERVAL}분")
 
-    # 그룹방 전송
-    if send_group:
-        msg_g = build_msg(TG_GROUP_INTERVAL)
-        ok_g = send_telegram(msg_g, TG_GROUP_CHAT)
-        print(f"{'✅ 그룹방 전송' if ok_g else '❌ 그룹방 실패'}")
+    if TG_GROUP_INTERVAL > 0:
+        if send_group:
+            ok_g = send_telegram(build_msg(TG_GROUP_INTERVAL), TG_GROUP_CHAT)
+            print(f"{'✅ 그룹방 전송 완료' if ok_g else '❌ 그룹방 전송 실패'}")
+        else:
+            print(f"⏭ 그룹방 TG 스킵 — 간격:{TG_GROUP_INTERVAL}분 | 나머지:{total_min % TG_GROUP_INTERVAL}분")
 
     print("✅ 완료")
 

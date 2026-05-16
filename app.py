@@ -72,9 +72,11 @@ DEFAULTS = {
     "kis_token":None,"kis_base_url":None,
     "kis_ak":"","kis_sec":"","kis_acc":"","kis_env":"실전투자",
     "use_pin":True,"auto_connect":True,
-    # 텔레그램 — 개인방 (기존 호환)
+    # 화면 갱신 주기 (Gist 폴링 — 텔레그램과 무관)
+    "scan_refresh_min": 10,
+    # 텔레그램 — 개인방
     "tg_token":"","tg_chat":"","tg_interval_min":10,"tg_interval_label":"10분",
-    # 텔레그램 — 그룹방 (별도 설정)
+    # 텔레그램 — 그룹방
     "tg_group_chat":"","tg_group_enabled":False,
     "tg_group_interval_min":30,"tg_group_interval_label":"30분",
     "scan_blacklist":[],"scan_vol_min":50,"scan_rsi_min":20,"scan_rsi_max":75,
@@ -235,7 +237,7 @@ KOSDAQ_CODES = [
     '036810','048870','053300','060310','069510','073570','078600','080160','086060','086520',
 ]
 
-@st.cache_data(ttl=30, show_spinner=False)  # 30초 캐시
+@st.cache_data(ttl=600, show_spinner=False)   # 10분 캐시 — Gist는 10분마다 갱신
 def fetch_gist_scan(gist_id):
     """GitHub Gist에서 최신 스캔 결과 즉시 로드"""
     if not gist_id: return None
@@ -642,15 +644,25 @@ div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,
     st.markdown('</div>',unsafe_allow_html=True)
     st.stop()
 
-# ════ 3. 자동 새로고침 (KIS 연결 시에만) ════
-if st.session_state.auth and st.session_state.kis_token:
-    iv_min = st.session_state.get('tg_interval_min', 10)
-    # 설정된 간격마다 자동 재실행 (스캔 + 텔레그램)
-    _refresh_count = st_autorefresh(
-        interval=iv_min * 60 * 1000,  # ms
-        limit=None,
-        key="auto_scan_refresh"
-    )
+# ════ 3. 자동 새로고침 ════
+# Gist 모드: auth만 있으면 동작 (kis_token 없어도 됨 — 백그라운드 스캔 결과 보기 전용)
+# 직접KIS 모드: kis_token 필요
+_has_gist   = bool(os.environ.get('GIST_ID',''))
+_can_refresh = st.session_state.auth and (_has_gist or st.session_state.kis_token)
+
+if _can_refresh:
+    GIST_ID_ENV  = os.environ.get('GIST_ID','')
+    _ref_min     = st.session_state.get('scan_refresh_min', 10)
+
+    if GIST_ID_ENV:
+        # Gist 모드: GitHub Actions가 10분마다 Gist 갱신 → 앱도 10분마다 폴링
+        # ↑ fetch_gist_scan TTL=600초와 맞춤. 갱신 버튼 누르면 TTL 무효화됨
+        _autorefresh_ms = 10 * 60 * 1000   # 고정 10분
+    else:
+        # 직접 KIS 모드: 사용자가 설정한 주기
+        _autorefresh_ms = _ref_min * 60 * 1000
+
+    st_autorefresh(interval=_autorefresh_ms, limit=None, key="auto_scan_refresh")
 
 # ════ 4. 메인 패널 ════
 if st.session_state.pop('_load_ok',False):
@@ -683,6 +695,29 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
                 else:
                     try: del qp['auto_conn']
                     except: pass
+
+        st.divider()
+
+        # ── 화면 갱신 주기 ──────────────────────
+        _gist_on = bool(os.environ.get('GIST_ID',''))
+        if _gist_on:
+            st.markdown(
+                '<div style="font-family:monospace;font-size:11px;color:#00d4ff;'
+                'padding:6px 10px;background:rgba(0,212,255,0.06);'
+                'border:1px solid rgba(0,212,255,0.2);border-radius:6px">'
+                '⚡ <b>Gist 백그라운드 모드</b> — GitHub Actions가 10분마다 자동 스캔·저장<br>'
+                '앱은 10분마다 Gist를 읽어 즉시 표시합니다. KIS 연결 없이도 동작합니다.'
+                '</div>', unsafe_allow_html=True)
+        else:
+            _rv_opts = {"5분":5,"10분":10,"15분":15,"20분":20,"30분":30}
+            _rv_cur  = st.session_state.get('scan_refresh_min', 10)
+            _rv_cur_lbl = {v:k for k,v in _rv_opts.items()}.get(_rv_cur, '10분')
+            _rv_sel = st.select_slider(
+                "⟳ 화면 자동갱신 주기 (직접 KIS 스캔)",
+                options=list(_rv_opts.keys()), value=_rv_cur_lbl, key="rv_sel")
+            st.session_state['scan_refresh_min'] = _rv_opts[_rv_sel]
+            st.caption("GIST_ID 환경변수가 없어 직접 KIS API 스캔 모드입니다.")
+
         st.divider()
         st.markdown("**📊 스캔 필터 설정**")
         vol_min = st.number_input("최소 거래대금 (억원)", min_value=10, max_value=5000,
@@ -1016,41 +1051,66 @@ prices_json="{}"; balance_json="{}"; price_ts=""
 scan_json="{}"; scan_count=0
 
 if st.session_state.kis_token:
-    iv_min = st.session_state.get('tg_interval_min', 10)
-    GIST_ID = os.environ.get('GIST_ID','')
+    GIST_ID        = os.environ.get('GIST_ID','')
+    scan_ref_min   = st.session_state.get('scan_refresh_min', 10)
+    iv_min         = st.session_state.get('tg_interval_min', 10)
 
     ca, cb = st.columns([5,1])
     with cb:
         if st.button("↻", key="btn_ref", help="즉시 갱신"):
             server_store['scan_ts'] = 0
-            fetch_gist_scan.clear()
+            fetch_gist_scan.clear()   # TTL 무효화 → 다음 렌더에서 즉시 새 데이터 로드
             st.rerun()
     with ca:
-        st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#4a5568;padding:2px 0">'
-                    f'⟳ {iv_min}분 자동갱신 · <span style="color:#00ff88">{kst_strftime("%H:%M:%S")}</span></div>',
-                    unsafe_allow_html=True)
+        if GIST_ID:
+            st.markdown(
+                f'<div style="font-family:monospace;font-size:12px;color:#4a5568;padding:2px 0">'
+                f'⚡ Gist 백그라운드 · ⟳ 10분 자동폴링 · '
+                f'<span style="color:#00ff88">{kst_strftime("%H:%M:%S")}</span></div>',
+                unsafe_allow_html=True)
+        else:
+            st.markdown(
+                f'<div style="font-family:monospace;font-size:12px;color:#4a5568;padding:2px 0">'
+                f'📡 KIS 직접 스캔 · ⟳ {scan_ref_min}분 자동갱신 · '
+                f'<span style="color:#00ff88">{kst_strftime("%H:%M:%S")}</span></div>',
+                unsafe_allow_html=True)
 
     # ── 1순위: GitHub Gist (즉시, 0초) ──
     gist_data = fetch_gist_scan(GIST_ID) if GIST_ID else None
 
     if gist_data:
         # Gist 데이터로 즉시 표시
-        scan_result = gist_data
-        scan_json   = json.dumps(scan_result, ensure_ascii=False)
-        scan_count  = gist_data.get('total', 0)
-        price_ts    = gist_data.get('ts', kst_strftime("%H:%M:%S"))
-        prices_json = "{}"
+        scan_result  = gist_data
+        scan_json    = json.dumps(scan_result, ensure_ascii=False)
+        scan_count   = gist_data.get('total', 0)
+        price_ts     = gist_data.get('ts', kst_strftime("%H:%M:%S"))
+        prices_json  = "{}"
         balance_json = "{}"
-        kospi_n  = gist_data.get('kospi_n', 0)
-        kosdaq_n = gist_data.get('kosdaq_n', 0)
-        age_sec  = int(time.time() - gist_data.get('updated_at', time.time()))
-        st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
-                    f'⚡ Gist 즉시 로드 · KOSPI {kospi_n}+KOSDAQ {kosdaq_n}종목 · '
-                    f'{age_sec//60}분 {age_sec%60}초 전 스캔</div>', unsafe_allow_html=True)
+        kospi_n   = gist_data.get('kospi_n', 0)
+        kosdaq_n  = gist_data.get('kosdaq_n', 0)
+        age_sec   = int(time.time() - gist_data.get('updated_at', time.time()))
+        age_color  = "#00ff88" if age_sec < 700 else "#ffc800"  # 10분 내: 초록, 초과: 노랑
+        next_scan  = max(0, 600 - age_sec)   # 다음 스캔까지 남은 초 (Actions 10분 주기 기준)
+        next_lbl   = f"{next_scan//60}분 {next_scan%60}초 후" if next_scan > 0 else "곧 갱신"
+        st.markdown(
+            f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
+            f'⚡ Gist 즉시 로드 · KOSPI {kospi_n}+KOSDAQ {kosdaq_n}종목 · '
+            f'<span style="color:{age_color}">{age_sec//60}분 {age_sec%60}초 전 스캔</span>'
+            f' · 다음갱신 <span style="color:#94a3b8">{next_lbl}</span></div>',
+            unsafe_allow_html=True)
+
+        # Gist 경로에서도 텔레그램 버킷 체크를 위해 all_stocks 더미 복원
+        # (실제 종목 리스트 없이 card 데이터에서 역산)
+        _all_cards = (gist_data.get('swing',[]) + gist_data.get('surge',[]) +
+                      gist_data.get('smallmid',[]) + gist_data.get('tomorrow',[]))
+        all_stocks = []   # Gist 모드에서는 개별 종목 리스트 없음 — 카드 데이터를 직접 사용
+        cats       = {k: gist_data.get(k, []) for k in ['swing','surge','tomorrow','smallmid']}
+        kospi_stocks  = [{}] * kospi_n   # 개수만 표시용
+        kosdaq_stocks = [{}] * kosdaq_n
 
     else:
         # ── 2순위: 직접 KIS 스캔 (Gist 없을 때) ──
-        cache_stale = (time.time() - server_store.get('scan_ts', 0)) > iv_min*60
+        cache_stale = (time.time() - server_store.get('scan_ts', 0)) > scan_ref_min * 60
         cached = server_store.get('scan_data')
 
         if cached and not cache_stale:
@@ -1099,49 +1159,46 @@ if st.session_state.kis_token:
                     unsafe_allow_html=True)
 
         # ── 텔레그램 자동 전송 (개인방 + 그룹방 각자 간격 독립) ──
-        def _build_tg_lines(iv_label_str, cats_d, all_s, k_n, kd_n, ts_str):
+        def _build_tg_lines(iv_label_str, cats_d, k_n, kd_n, ts_str, total_n):
+            """cats_d는 카드 dict 리스트 (scan_result 형태 — Gist/직접 모두 호환)"""
             is_mkt  = 9 <= int(kst_strftime('%H')) <= 15
             mkt_lbl = '🟢장중' if is_mkt else '🔴장마감'
-            def fmt_s(s, cat):
-                pct = s.get('changePct',0); sign = '+' if pct>=0 else ''
-                card = build_card(s, cat); icon = '🔴' if s.get('grade')=='S' else '🟡'
-                return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
-                        f"   💰 {s['price']:,}원 {sign}{pct:.2f}% | {s.get('trAmt',0):,}억\n"
-                        f"   📈 매입:{card['buy']} | 손절:{card['stop']} | RR {card['rr']}")
+            def fmt_card(c):
+                pct_str = c.get('change','0%'); icon = '🔴' if c.get('grade')=='S' else '🟡'
+                return (f"{icon} <b>{c['name']}</b> ({c['code']})\n"
+                        f"   💰 {c['price']}원 {pct_str} | {c.get('vol',0):,}억\n"
+                        f"   📈 매입:{c['buy']} | 손절:{c['stop']} | RR {c['rr']}")
             lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
                      f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
             sl = cats_d.get('swing',[])[:10]; ul = cats_d.get('surge',[])[:10]
             tl = cats_d.get('tomorrow',[])[:10]; ml = cats_d.get('smallmid',[])[:10]
-            if sl:   lines.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>");   [lines.append(fmt_s(s,'swing'))    for s in sl]
-            if ul:   lines.append(f"\n⚡ <b>[급등전야 TOP{len(ul)}]</b>");   [lines.append(fmt_s(s,'surge'))    for s in ul]
-            if tl:   lines.append(f"\n🔭 <b>[내일관심 TOP{len(tl)}]</b>");   [lines.append(fmt_s(s,'tomorrow')) for s in tl]
-            if ml:   lines.append(f"\n⬟ <b>[중소형주 TOP{len(ml)}]</b>");   [lines.append(fmt_s(s,'smallmid')) for s in ml]
+            if sl: lines.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>");  [lines.append(fmt_card(c)) for c in sl]
+            if ul: lines.append(f"\n⚡ <b>[급등전야 TOP{len(ul)}]</b>");  [lines.append(fmt_card(c)) for c in ul]
+            if tl: lines.append(f"\n🔭 <b>[내일관심 TOP{len(tl)}]</b>"); [lines.append(fmt_card(c)) for c in tl]
+            if ml: lines.append(f"\n⬟ <b>[중소형주 TOP{len(ml)}]</b>");  [lines.append(fmt_card(c)) for c in ml]
             if not any([sl, ul, tl, ml]):
-                fb = sorted(all_s, key=lambda x:x.get('trAmt',0), reverse=True)[:10]
-                lines.append("📊 <b>[거래대금 상위 TOP10]</b>"); [lines.append(fmt_s(s,'swing')) for s in fb]
-            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 완료")
+                lines.append("📊 <b>[스캔 결과 없음 — 장 시작 전이거나 필터 조건 미달]</b>")
+            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {total_n}종목 완료 · 다음 {iv_label_str} 후")
             return "\n\n".join(lines)
 
         _tg_tok   = st.session_state.get('tg_token','')
         _tg_chat  = st.session_state.get('tg_chat','')
         _iv_p     = st.session_state.get('tg_interval_min', 10)
         _iv_p_lbl = st.session_state.get('tg_interval_label','10분')
-
         _grp_en   = st.session_state.get('tg_group_enabled', False)
         _grp_chat = st.session_state.get('tg_group_chat','')
         _iv_g     = st.session_state.get('tg_group_interval_min', 30)
         _iv_g_lbl = st.session_state.get('tg_group_interval_label','30분')
-
         _now_ts   = kst_strftime('%H:%M:%S')
         _k_n = len(kospi_stocks); _kd_n = len(kosdaq_stocks)
 
         # 개인방 — 독립 bucket
-        if _tg_tok and _tg_chat and all_stocks:
+        if _tg_tok and _tg_chat:
             _bkt_p = int(time.time() // (_iv_p * 60))
             if _bkt_p != st.session_state.get('_tg_bkt_p', -1):
                 st.session_state['_tg_bkt_p'] = _bkt_p
                 try:
-                    msg = _build_tg_lines(_iv_p_lbl, cats, all_stocks, _k_n, _kd_n, _now_ts)
+                    msg = _build_tg_lines(_iv_p_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_tg_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
@@ -1150,12 +1207,12 @@ if st.session_state.kis_token:
                     st.caption(f"개인방 텔레그램 오류: {e}")
 
         # 그룹방 — 독립 bucket
-        if _tg_tok and _grp_en and _grp_chat and all_stocks:
+        if _tg_tok and _grp_en and _grp_chat:
             _bkt_g = int(time.time() // (_iv_g * 60))
             if _bkt_g != st.session_state.get('_tg_bkt_g', -1):
                 st.session_state['_tg_bkt_g'] = _bkt_g
                 try:
-                    msg = _build_tg_lines(_iv_g_lbl, cats, all_stocks, _k_n, _kd_n, _now_ts)
+                    msg = _build_tg_lines(_iv_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_grp_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
