@@ -27,6 +27,18 @@ _iv_g_raw      = os.environ.get('TG_GROUP_INTERVAL','').strip()
 try:    TG_GROUP_INTERVAL = max(10, min(240, int(_iv_g_raw))) if _iv_g_raw else 0
 except: TG_GROUP_INTERVAL = 0   # 0 = 그룹방 미설정
 
+# 그룹방 2
+TG_GROUP2_CHAT = os.environ.get('TG_GROUP2_CHAT','').strip()
+_iv_g2_raw     = os.environ.get('TG_GROUP2_INTERVAL','').strip()
+try:    TG_GROUP2_INTERVAL = max(10, min(240, int(_iv_g2_raw))) if _iv_g2_raw else 0
+except: TG_GROUP2_INTERVAL = 0
+
+# 그룹방 3
+TG_GROUP3_CHAT = os.environ.get('TG_GROUP3_CHAT','').strip()
+_iv_g3_raw     = os.environ.get('TG_GROUP3_INTERVAL','').strip()
+try:    TG_GROUP3_INTERVAL = max(10, min(240, int(_iv_g3_raw))) if _iv_g3_raw else 0
+except: TG_GROUP3_INTERVAL = 0
+
 GIST_ID  = os.environ.get('GIST_ID','').strip()
 GH_TOKEN = os.environ.get('GH_TOKEN','').strip()
 
@@ -326,7 +338,7 @@ def main():
     is_weekend  = t.weekday() >= 5
     market_open = is_market_open(t)
 
-    print(f"[{ts} KST] 개인TG:{TG_INTERVAL}분 | 그룹TG:{TG_GROUP_INTERVAL or 'OFF'}분 | 환경:{KIS_ENV}")
+    print(f"[{ts} KST] 개인TG:{TG_INTERVAL}분 | 그룹1TG:{TG_GROUP_INTERVAL or 'OFF'}분 | 그룹2TG:{TG_GROUP2_INTERVAL or 'OFF'}분 | 그룹3TG:{TG_GROUP3_INTERVAL or 'OFF'}분 | 환경:{KIS_ENV}")
     print(f"  수동실행={is_manual} | 주말={is_weekend} | 공휴일={is_holiday} | 장중={market_open}")
 
     # ── 장외/공휴일/주말: 수동 실행만 허용 ──
@@ -340,6 +352,10 @@ def main():
     send_personal = bool(TG_CHAT and TG_TOKEN and should_send_tg(TG_INTERVAL))
     send_group    = bool(TG_GROUP_CHAT and TG_TOKEN and TG_GROUP_INTERVAL > 0
                         and should_send_tg(TG_GROUP_INTERVAL))
+    send_group2   = bool(TG_GROUP2_CHAT and TG_TOKEN and TG_GROUP2_INTERVAL > 0
+                        and should_send_tg(TG_GROUP2_INTERVAL))
+    send_group3   = bool(TG_GROUP3_CHAT and TG_TOKEN and TG_GROUP3_INTERVAL > 0
+                        and should_send_tg(TG_GROUP3_INTERVAL))
 
     print("🔑 KIS 토큰 발급 중...")
     token = get_token()
@@ -406,9 +422,23 @@ def main():
     if TG_GROUP_INTERVAL > 0:
         if send_group:
             ok_g = send_telegram(build_msg(TG_GROUP_INTERVAL), TG_GROUP_CHAT)
-            print(f"{'✅ 그룹방 전송 완료' if ok_g else '❌ 그룹방 전송 실패'}")
+            print(f"{'✅ 그룹방 1 전송 완료' if ok_g else '❌ 그룹방 1 전송 실패'}")
         else:
-            print(f"⏭ 그룹방 TG 스킵 — 나머지:{total_min % TG_GROUP_INTERVAL}분")
+            print(f"⏭ 그룹방 1 TG 스킵 — 나머지:{total_min % TG_GROUP_INTERVAL}분")
+
+    if TG_GROUP2_INTERVAL > 0:
+        if send_group2:
+            ok_g2 = send_telegram(build_msg(TG_GROUP2_INTERVAL), TG_GROUP2_CHAT)
+            print(f"{'✅ 그룹방 2 전송 완료' if ok_g2 else '❌ 그룹방 2 전송 실패'}")
+        else:
+            print(f"⏭ 그룹방 2 TG 스킵 — 나머지:{total_min % TG_GROUP2_INTERVAL}분")
+
+    if TG_GROUP3_INTERVAL > 0:
+        if send_group3:
+            ok_g3 = send_telegram(build_msg(TG_GROUP3_INTERVAL), TG_GROUP3_CHAT)
+            print(f"{'✅ 그룹방 3 전송 완료' if ok_g3 else '❌ 그룹방 3 전송 실패'}")
+        else:
+            print(f"⏭ 그룹방 3 TG 스킵 — 나머지:{total_min % TG_GROUP3_INTERVAL}분")
 
     print("✅ 완료")
 

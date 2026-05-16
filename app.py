@@ -111,6 +111,12 @@ DEFAULTS = {
     "tg_group_chat":"","tg_group_enabled":False,
     "tg_group_interval_min":30,"tg_group_interval_label":"30분",
     "scan_blacklist":[],"scan_vol_min":50,"scan_rsi_min":20,"scan_rsi_max":75,
+    # 텔레그램 — 그룹방 2
+    "tg_group2_chat":"","tg_group2_enabled":False,
+    "tg_group2_interval_min":30,"tg_group2_interval_label":"30분",
+    # 텔레그램 — 그룹방 3
+    "tg_group3_chat":"","tg_group3_enabled":False,
+    "tg_group3_interval_min":30,"tg_group3_interval_label":"30분",
 }
 for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
@@ -118,7 +124,8 @@ for k,v in DEFAULTS.items():
 # ── 서버 메모리 저장소 (같은 프로세스 내 재시작에도 유지) ──
 @st.cache_resource
 def get_server_store():
-    return {"ck": None, "cp": None, "tg": None, "tg_grp": None, "agreed": False,
+    return {"ck": None, "cp": None, "tg": None, "tg_grp": None,
+            "tg_grp2": None, "tg_grp3": None, "agreed": False,
             "scan_data": None, "scan_ts": 0, "scan_str": ""}
 
 server_store = get_server_store()
@@ -155,6 +162,26 @@ if qp.get("tg_grp") and not st.session_state.get("tg_group_chat"):
         st.session_state["tg_group_enabled"]          = tg_grp.get("en", False)
         st.session_state["tg_group_interval_min"]     = tg_grp.get("iv", 30)
         st.session_state["tg_group_interval_label"]   = tg_grp.get("ivl","30분")
+    except: pass
+
+# 텔레그램 복원 — 그룹방 2
+if qp.get("tg_grp2") and not st.session_state.get("tg_group2_chat"):
+    try:
+        tg_grp2 = json.loads(base64.b64decode(qp.get("tg_grp2","")).decode())
+        st.session_state["tg_group2_chat"]           = tg_grp2.get("c","")
+        st.session_state["tg_group2_enabled"]        = tg_grp2.get("en", False)
+        st.session_state["tg_group2_interval_min"]   = tg_grp2.get("iv", 30)
+        st.session_state["tg_group2_interval_label"] = tg_grp2.get("ivl","30분")
+    except: pass
+
+# 텔레그램 복원 — 그룹방 3
+if qp.get("tg_grp3") and not st.session_state.get("tg_group3_chat"):
+    try:
+        tg_grp3 = json.loads(base64.b64decode(qp.get("tg_grp3","")).decode())
+        st.session_state["tg_group3_chat"]           = tg_grp3.get("c","")
+        st.session_state["tg_group3_enabled"]        = tg_grp3.get("en", False)
+        st.session_state["tg_group3_interval_min"]   = tg_grp3.get("iv", 30)
+        st.session_state["tg_group3_interval_label"] = tg_grp3.get("ivl","30분")
     except: pass
 
 # URL 키 자동 불러오기 + 연결
@@ -995,7 +1022,7 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
         _iv_keys, _iv_vals = _iv_map()
         _iv_dict = dict(zip(_iv_keys, _iv_vals))
 
-        tab_p, tab_g = st.tabs(["👤 개인 채팅방", "👥 그룹 채팅방"])
+        tab_p, tab_g, tab_g2, tab_g3 = st.tabs(["👤 개인 채팅방", "👥 그룹방 1", "👥 그룹방 2", "👥 그룹방 3"])
 
         # ── 개인방 탭 ──────────────────────────────
         with tab_p:
@@ -1125,6 +1152,158 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
                 qp['tg_grp'] = grp_enc
                 server_store['tg_grp'] = grp_enc
 
+        # ── 그룹방 2 탭 ──────────────────────────────
+        with tab_g2:
+            st.caption("같은 봇 토큰을 사용합니다. 그룹방 2 Chat ID를 입력하세요.")
+            st.info("그룹 Chat ID는 보통 `-100` 으로 시작하는 음수입니다.", icon="ℹ️")
+
+            grp2_enabled = st.toggle("그룹방 2 알림 활성화",
+                                     value=st.session_state.get('tg_group2_enabled', False),
+                                     key="tog_grp2_en")
+            st.session_state['tg_group2_enabled'] = grp2_enabled
+
+            tg_group2_chat = st.text_input("그룹방 2 Chat ID",
+                                           value=st.session_state.get('tg_group2_chat',''),
+                                           placeholder="-1001234567890",
+                                           disabled=not grp2_enabled,
+                                           key="tg_grp2_chat_inp")
+
+            _cur_g2 = st.session_state.get('tg_group2_interval_label','30분')
+            if _cur_g2 not in _iv_keys: _cur_g2 = '30분'
+            iv_g2_label = st.select_slider("⏱ 그룹방 2 전송 간격",
+                                           options=_iv_keys, value=_cur_g2,
+                                           disabled=not grp2_enabled, key="tg_iv_g2")
+            st.session_state['tg_group2_interval_label'] = iv_g2_label
+            st.session_state['tg_group2_interval_min']   = _iv_dict[iv_g2_label]
+
+            cg2a, cg2b = st.columns([2,1])
+            with cg2a:
+                if st.button("👥 그룹방 2 테스트 전송", use_container_width=True,
+                              key="btn_tg_g2", disabled=not grp2_enabled):
+                    _tok = st.session_state.get('tg_token','')
+                    if _tok and tg_group2_chat:
+                        try:
+                            r = requests.post(
+                                f"https://api.telegram.org/bot{_tok}/sendMessage",
+                                json={"chat_id": tg_group2_chat,
+                                      "text":"✅ K-ALPHA 그룹방 2 알림 연결 성공!",
+                                      "parse_mode":"HTML"}, timeout=8)
+                            if r.json().get('ok'):
+                                st.session_state['tg_group2_chat'] = tg_group2_chat
+                                grp2_enc = base64.b64encode(json.dumps({
+                                    'c': tg_group2_chat,
+                                    'en': grp2_enabled,
+                                    'iv': _iv_dict[iv_g2_label],
+                                    'ivl': iv_g2_label,
+                                }).encode()).decode()
+                                qp['tg_grp2'] = grp2_enc
+                                server_store['tg_grp2'] = grp2_enc
+                                components.html(
+                                    f"<script>try{{localStorage.setItem('ka_tg_grp2_v1',{json.dumps(grp2_enc)});}}catch(e){{}}</script>",
+                                    height=0, scrolling=False)
+                                st.success("✅ 그룹방 2 연결 성공!")
+                            else:
+                                st.error(f"❌ {r.json().get('description')}")
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+                    elif not _tok:
+                        st.error("개인방 탭에서 Bot Token을 먼저 등록하세요")
+                    else:
+                        st.error("그룹 Chat ID를 입력하세요")
+            with cg2b:
+                ok_g2 = bool(grp2_enabled and st.session_state.get('tg_group2_chat'))
+                st.markdown(
+                    f'<div style="padding:8px;text-align:center;font-family:monospace;font-size:12px;'
+                    f'color:{"#00ff88" if ok_g2 else "#4a5568"}">{"🟢 연결됨" if ok_g2 else "⭕ 미연결"}</div>',
+                    unsafe_allow_html=True)
+
+            if tg_group2_chat:
+                st.session_state['tg_group2_chat'] = tg_group2_chat
+                grp2_enc = base64.b64encode(json.dumps({
+                    'c': tg_group2_chat,
+                    'en': grp2_enabled,
+                    'iv': _iv_dict[iv_g2_label],
+                    'ivl': iv_g2_label,
+                }).encode()).decode()
+                qp['tg_grp2'] = grp2_enc
+                server_store['tg_grp2'] = grp2_enc
+
+        # ── 그룹방 3 탭 ──────────────────────────────
+        with tab_g3:
+            st.caption("같은 봇 토큰을 사용합니다. 그룹방 3 Chat ID를 입력하세요.")
+            st.info("그룹 Chat ID는 보통 `-100` 으로 시작하는 음수입니다.", icon="ℹ️")
+
+            grp3_enabled = st.toggle("그룹방 3 알림 활성화",
+                                     value=st.session_state.get('tg_group3_enabled', False),
+                                     key="tog_grp3_en")
+            st.session_state['tg_group3_enabled'] = grp3_enabled
+
+            tg_group3_chat = st.text_input("그룹방 3 Chat ID",
+                                           value=st.session_state.get('tg_group3_chat',''),
+                                           placeholder="-1001234567890",
+                                           disabled=not grp3_enabled,
+                                           key="tg_grp3_chat_inp")
+
+            _cur_g3 = st.session_state.get('tg_group3_interval_label','30분')
+            if _cur_g3 not in _iv_keys: _cur_g3 = '30분'
+            iv_g3_label = st.select_slider("⏱ 그룹방 3 전송 간격",
+                                           options=_iv_keys, value=_cur_g3,
+                                           disabled=not grp3_enabled, key="tg_iv_g3")
+            st.session_state['tg_group3_interval_label'] = iv_g3_label
+            st.session_state['tg_group3_interval_min']   = _iv_dict[iv_g3_label]
+
+            cg3a, cg3b = st.columns([2,1])
+            with cg3a:
+                if st.button("👥 그룹방 3 테스트 전송", use_container_width=True,
+                              key="btn_tg_g3", disabled=not grp3_enabled):
+                    _tok = st.session_state.get('tg_token','')
+                    if _tok and tg_group3_chat:
+                        try:
+                            r = requests.post(
+                                f"https://api.telegram.org/bot{_tok}/sendMessage",
+                                json={"chat_id": tg_group3_chat,
+                                      "text":"✅ K-ALPHA 그룹방 3 알림 연결 성공!",
+                                      "parse_mode":"HTML"}, timeout=8)
+                            if r.json().get('ok'):
+                                st.session_state['tg_group3_chat'] = tg_group3_chat
+                                grp3_enc = base64.b64encode(json.dumps({
+                                    'c': tg_group3_chat,
+                                    'en': grp3_enabled,
+                                    'iv': _iv_dict[iv_g3_label],
+                                    'ivl': iv_g3_label,
+                                }).encode()).decode()
+                                qp['tg_grp3'] = grp3_enc
+                                server_store['tg_grp3'] = grp3_enc
+                                components.html(
+                                    f"<script>try{{localStorage.setItem('ka_tg_grp3_v1',{json.dumps(grp3_enc)});}}catch(e){{}}</script>",
+                                    height=0, scrolling=False)
+                                st.success("✅ 그룹방 3 연결 성공!")
+                            else:
+                                st.error(f"❌ {r.json().get('description')}")
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+                    elif not _tok:
+                        st.error("개인방 탭에서 Bot Token을 먼저 등록하세요")
+                    else:
+                        st.error("그룹 Chat ID를 입력하세요")
+            with cg3b:
+                ok_g3 = bool(grp3_enabled and st.session_state.get('tg_group3_chat'))
+                st.markdown(
+                    f'<div style="padding:8px;text-align:center;font-family:monospace;font-size:12px;'
+                    f'color:{"#00ff88" if ok_g3 else "#4a5568"}">{"🟢 연결됨" if ok_g3 else "⭕ 미연결"}</div>',
+                    unsafe_allow_html=True)
+
+            if tg_group3_chat:
+                st.session_state['tg_group3_chat'] = tg_group3_chat
+                grp3_enc = base64.b64encode(json.dumps({
+                    'c': tg_group3_chat,
+                    'en': grp3_enabled,
+                    'iv': _iv_dict[iv_g3_label],
+                    'ivl': iv_g3_label,
+                }).encode()).decode()
+                qp['tg_grp3'] = grp3_enc
+                server_store['tg_grp3'] = grp3_enc
+
     with st.expander("🔒 로그아웃"):
         if st.button("로그아웃",key="btn_logout"):
             for k in ["agreed","auth","kis_token","kis_ak","kis_sec","kis_acc"]:
@@ -1169,11 +1348,8 @@ if st.session_state.kis_token:
     if gist_data:
         # Gist 데이터로 즉시 표시
         scan_result  = gist_data
-        scan_json    = json.dumps(scan_result, ensure_ascii=False)
         scan_count   = gist_data.get('total', 0)
         price_ts     = gist_data.get('ts', kst_strftime("%H:%M:%S"))
-        prices_json  = "{}"
-        balance_json = "{}"
         kospi_n   = gist_data.get('kospi_n', 0)
         kosdaq_n  = gist_data.get('kosdaq_n', 0)
         age_sec   = int(time.time() - gist_data.get('updated_at', time.time()))
@@ -1205,6 +1381,10 @@ if st.session_state.kis_token:
         cats       = {k: gist_data.get(k, []) for k in ['swing','surge','tomorrow','smallmid']}
         kospi_stocks  = [{}] * kospi_n   # 개수만 표시용
         kosdaq_stocks = [{}] * kosdaq_n
+        # ── Gist 경로 scan_json 세팅 (NULL 버그 수정) ──
+        scan_json    = json.dumps(scan_result, ensure_ascii=False)
+        prices_json  = "{}"
+        balance_json = "{}"
 
     else:
         # ── 2순위: 직접 KIS 스캔 (Gist 없을 때) ──
@@ -1338,6 +1518,42 @@ if st.session_state.kis_token:
                 except Exception as e:
                     st.caption(f"그룹방 텔레그램 오류: {e}")
 
+        # 그룹방 2 — 독립 bucket (Gist 경로)
+        _grp2_en_g   = st.session_state.get('tg_group2_enabled', False)
+        _grp2_chat_g = st.session_state.get('tg_group2_chat','')
+        _iv_g2_g     = st.session_state.get('tg_group2_interval_min', 30)
+        _iv_g2_g_lbl = st.session_state.get('tg_group2_interval_label','30분')
+        if _tg_tok and _grp2_en_g and _grp2_chat_g:
+            _bkt_g2g = int(time.time() // (_iv_g2_g * 60))
+            if _bkt_g2g != st.session_state.get('_tg_bkt_g2g', -1):
+                st.session_state['_tg_bkt_g2g'] = _bkt_g2g
+                try:
+                    msg = _build_tg_lines(_iv_g2_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
+                    r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
+                        json={"chat_id":_grp2_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
+                    if r.json().get('ok'):
+                        st.toast(f"👥 그룹방 2 전송 완료 ({_now_ts})", icon="✅")
+                except Exception as e:
+                    st.caption(f"그룹방 2 텔레그램 오류: {e}")
+
+        # 그룹방 3 — 독립 bucket (Gist 경로)
+        _grp3_en_g   = st.session_state.get('tg_group3_enabled', False)
+        _grp3_chat_g = st.session_state.get('tg_group3_chat','')
+        _iv_g3_g     = st.session_state.get('tg_group3_interval_min', 30)
+        _iv_g3_g_lbl = st.session_state.get('tg_group3_interval_label','30분')
+        if _tg_tok and _grp3_en_g and _grp3_chat_g:
+            _bkt_g3g = int(time.time() // (_iv_g3_g * 60))
+            if _bkt_g3g != st.session_state.get('_tg_bkt_g3g', -1):
+                st.session_state['_tg_bkt_g3g'] = _bkt_g3g
+                try:
+                    msg = _build_tg_lines(_iv_g3_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
+                    r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
+                        json={"chat_id":_grp3_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
+                    if r.json().get('ok'):
+                        st.toast(f"👥 그룹방 3 전송 완료 ({_now_ts})", icon="✅")
+                except Exception as e:
+                    st.caption(f"그룹방 3 텔레그램 오류: {e}")
+
     # 스캔 결과 분류
     cats = categorize_stocks(
         all_stocks,
@@ -1438,6 +1654,42 @@ if st.session_state.kis_token:
                     st.toast(f"👥 그룹방 전송 완료 ({_now2})", icon="✅")
             except Exception as e:
                 st.caption(f"그룹방 텔레그램 오류: {e}")
+
+    # 그룹방 2 — 독립 bucket
+    _grp2_en2   = st.session_state.get('tg_group2_enabled', False)
+    _grp2_chat2 = st.session_state.get('tg_group2_chat','')
+    _iv_g2b     = st.session_state.get('tg_group2_interval_min', 30)
+    _iv_g2b_lbl = st.session_state.get('tg_group2_interval_label','30분')
+    if _tg_tok2 and _grp2_en2 and _grp2_chat2 and all_stocks:
+        _bkt_g2b = int(time.time() // (_iv_g2b * 60))
+        if _bkt_g2b != st.session_state.get('_tg_bkt_g2', -1):
+            st.session_state['_tg_bkt_g2'] = _bkt_g2b
+            try:
+                msg2g2 = _mk_msg2(_iv_g2b_lbl, all_stocks, _kn2, _kdn2, _now2)
+                r2g2 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
+                    json={"chat_id":_grp2_chat2,"text":msg2g2,"parse_mode":"HTML"}, timeout=10)
+                if r2g2.json().get('ok'):
+                    st.toast(f"👥 그룹방 2 전송 완료 ({_now2})", icon="✅")
+            except Exception as e:
+                st.caption(f"그룹방 2 텔레그램 오류: {e}")
+
+    # 그룹방 3 — 독립 bucket
+    _grp3_en2   = st.session_state.get('tg_group3_enabled', False)
+    _grp3_chat2 = st.session_state.get('tg_group3_chat','')
+    _iv_g3b     = st.session_state.get('tg_group3_interval_min', 30)
+    _iv_g3b_lbl = st.session_state.get('tg_group3_interval_label','30분')
+    if _tg_tok2 and _grp3_en2 and _grp3_chat2 and all_stocks:
+        _bkt_g3b = int(time.time() // (_iv_g3b * 60))
+        if _bkt_g3b != st.session_state.get('_tg_bkt_g3', -1):
+            st.session_state['_tg_bkt_g3'] = _bkt_g3b
+            try:
+                msg2g3 = _mk_msg2(_iv_g3b_lbl, all_stocks, _kn2, _kdn2, _now2)
+                r2g3 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
+                    json={"chat_id":_grp3_chat2,"text":msg2g3,"parse_mode":"HTML"}, timeout=10)
+                if r2g3.json().get('ok'):
+                    st.toast(f"👥 그룹방 3 전송 완료 ({_now2})", icon="✅")
+            except Exception as e:
+                st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
 # ════ 6. HTML 터미널 ════
 if not os.path.exists("app.html"):
