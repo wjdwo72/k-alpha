@@ -4631,11 +4631,15 @@ function applyRealScanData() {
   var scanTs = document.getElementById('scan-ts');
   if (scanTs) scanTs.textContent = scan.ts;
 
-  // DEMO 데이터를 실시간 데이터로 교체
-  if (scan.swing && scan.swing.length > 0)    DEMO.swing    = convertScanCards(scan.swing,    'swing');
-  if (scan.surge && scan.surge.length > 0)    DEMO.surge    = convertScanCards(scan.surge,    'surge');
-  if (scan.tomorrow && scan.tomorrow.length > 0) DEMO.tomorrow = convertScanCards(scan.tomorrow, 'tomorrow');
-  if (scan.smallmid && scan.smallmid.length > 0) DEMO.smallmid = convertScanCards(scan.smallmid, 'smallmid');
+  // DEMO 데이터를 실시간 데이터로 교체 (null 방어)
+  var sw = convertScanCards(scan.swing,    'swing');
+  var su = convertScanCards(scan.surge,    'surge');
+  var tm = convertScanCards(scan.tomorrow, 'tomorrow');
+  var sm = convertScanCards(scan.smallmid, 'smallmid');
+  if (sw.length > 0) DEMO.swing    = sw;
+  if (su.length > 0) DEMO.surge    = su;
+  if (tm.length > 0) DEMO.tomorrow = tm;
+  if (sm.length > 0) DEMO.smallmid = sm;
 
   renderCards();
 
@@ -4661,16 +4665,19 @@ function applyRealScanData() {
 }
 
 function convertScanCards(cards, cat) {
-  return cards.map(function(c) {
+  if (!cards || !Array.isArray(cards)) return [];
+  return cards.filter(function(c) { return c != null && c.code; }).map(function(c) {
     return {
-      name: c.name || c.code,  // 이름 없으면 코드
-      code: c.code, score: c.score, grade: c.grade,
-      price: c.price, change: c.change, up: c.up,
-      buy: c.buy, target: c.target, stop: c.stop, rr: c.rr, vol: c.vol,
+      name: c.name || c.code,
+      code: c.code, score: c.score || 70, grade: c.grade || 'B',
+      price: c.price, change: c.change || '0%', up: c.up != null ? c.up : true,
+      buy: c.buy || c.price, target: c.target || c.price, stop: c.stop || c.price,
+      rr: c.rr || '1.0', vol: c.vol || 0,
       reasons: c.reasons || [], inds: c.inds || [],
       chart3m: generateMiniChart(c.price, c.up, false, codeToSeed(c.code)),
       chartD:  generateMiniChart(c.price, c.up, true,  codeToSeed(c.code) + 999),
-      cat: cat, mkt: c.mkt || 'kospi', _isLive: true
+      cat: cat, mkt: c.mkt || 'kospi', _isLive: true,
+      rsiApprox: c.rsiApprox || 50
     };
   });
 }

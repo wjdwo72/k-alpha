@@ -632,32 +632,40 @@ def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
     ]
 
 def build_card(s, cat):
-    """카드 데이터 포맷팅 (기본적 분석 + 외부요인 포함)"""
-    price = s['price']
-    chg   = s['changePct']
-    sign  = '+' if chg >= 0 else ''
-    buy_p = int(price * 0.995)
-    stop_p= int(price * 0.97)
-    tgt_p = int(price * 1.10)
-    rr    = round((tgt_p-price)/(price-stop_p+1), 1)
-    return {
-        'name': s['name'], 'code': s['code'],
-        'score': s.get('score',70), 'grade': s.get('grade','B'),
-        'price': f"{price:,}",
-        'change': f"{sign}{chg:.2f}%",
-        'up': s['up'],
-        'buy': f"{buy_p:,}", 'target': f"{tgt_p:,}", 'stop': f"{stop_p:,}",
-        'rr': str(rr), 'vol': s.get('trAmt',0),
-        'mkt': s.get('mkt','kospi'),
-        'rsiApprox': s.get('rsiApprox', 50),
-        'reasons': _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p),
-        'inds': [
-            {'label':s.get('mkt','KOSPI').upper(),'cat':'green'},
-            {'label':f"RR {rr}",'cat':''},
-            {'label':f"거래대금 {s.get('trAmt',0):,}억",'cat':'orange'},
-        ],
-        'chart3m': [], 'chartD': [], 'cat': cat,
-    }
+    """카드 데이터 포맷팅 (기본적 분석 + 외부요인 포함) — None-safe"""
+    try:
+        price = s['price']
+        if isinstance(price, str):
+            price = int(price.replace(',', ''))
+        chg = s.get('changePct', 0)
+        if isinstance(chg, str):
+            try: chg = float(chg.replace('%','').replace('+',''))
+            except: chg = 0.0
+        sign  = '+' if chg >= 0 else ''
+        buy_p = int(price * 0.995)
+        stop_p= int(price * 0.97)
+        tgt_p = int(price * 1.10)
+        rr    = round((tgt_p-price)/(price-stop_p+1), 1)
+        return {
+            'name': s.get('name', s.get('code','?')), 'code': s.get('code',''),
+            'score': s.get('score',70), 'grade': s.get('grade','B'),
+            'price': f"{price:,}",
+            'change': f"{sign}{chg:.2f}%",
+            'up': s.get('up', chg >= 0),
+            'buy': f"{buy_p:,}", 'target': f"{tgt_p:,}", 'stop': f"{stop_p:,}",
+            'rr': str(rr), 'vol': s.get('trAmt', s.get('vol', 0)),
+            'mkt': s.get('mkt','kospi'),
+            'rsiApprox': s.get('rsiApprox', 50),
+            'reasons': _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p),
+            'inds': [
+                {'label':s.get('mkt','KOSPI').upper(),'cat':'green'},
+                {'label':f"RR {rr}",'cat':''},
+                {'label':f"거래대금 {s.get('trAmt', s.get('vol',0)):,}억",'cat':'orange'},
+            ],
+            'chart3m': [], 'chartD': [], 'cat': cat,
+        }
+    except Exception:
+        return None
 
 # ════ 1. 법적 고지 ════
 if not st.session_state.agreed:
@@ -1482,7 +1490,7 @@ if st.session_state.kis_token:
         kospi_stocks  = [{}] * kospi_n   # 개수만 표시용
         kosdaq_stocks = [{}] * kosdaq_n
         # ── Gist 경로 scan_json 세팅 (NULL 버그 수정) ──
-        scan_json        = json.dumps(scan_result, ensure_ascii=False)
+        scan_json        = json.dumps(scan_result, ensure_ascii=True)
         prices_json      = "{}"
         balance_json     = "{}"
         _scan_json_ready = True
@@ -1514,7 +1522,7 @@ if st.session_state.kis_token:
                 scan_result      = _sr
                 cats             = {k: scan_result.get(k,[]) for k in ['swing','surge','tomorrow','smallmid']}
                 scan_count       = scan_result.get('total', 0)
-                scan_json        = json.dumps(scan_result, ensure_ascii=False)
+                scan_json        = json.dumps(scan_result, ensure_ascii=True)
                 prices_json      = server_store.get('prices_json', '{}')
                 balance_json     = server_store.get('balance_json', '{}')
                 _scan_json_ready = True
@@ -1695,16 +1703,18 @@ if st.session_state.kis_token:
         )
         scan_count = len(all_stocks)
 
-        # 카드 데이터 생성
+        # 카드 데이터 생성 (None 필터 포함)
+        def _safe_cards(stock_list, c):
+            return [r for r in (build_card(s, c) for s in stock_list) if r is not None]
         scan_result = {
-            'swing':    [build_card(s,'swing')    for s in cats['swing']],
-            'surge':    [build_card(s,'surge')    for s in cats['surge']],
-            'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
-            'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
+            'swing':    _safe_cards(cats['swing'],    'swing'),
+            'surge':    _safe_cards(cats['surge'],    'surge'),
+            'tomorrow': _safe_cards(cats['tomorrow'], 'tomorrow'),
+            'smallmid': _safe_cards(cats['smallmid'], 'smallmid'),
             'ts': price_ts,
             'total': scan_count,
         }
-        scan_json = json.dumps(scan_result, ensure_ascii=False)
+        scan_json = json.dumps(scan_result, ensure_ascii=True)
 
         # 현재가 딕셔너리
         prices = {s['code']:{'price':s['price'],'change':s['change'],
@@ -1837,26 +1847,33 @@ if not os.path.exists("app.html"):
 
 # scan_json 최종 안전장치 — scan_result와 동기화
 if scan_result.get('swing') or scan_result.get('surge') or scan_result.get('tomorrow') or scan_result.get('smallmid'):
-    scan_json = json.dumps(scan_result, ensure_ascii=False)
+    scan_json = json.dumps(scan_result, ensure_ascii=True)
 with open("app.html","r",encoding="utf-8") as f: html=f.read()
+# scan_json을 base64로 인코딩 → 스크립트 주입 시 한글·특수문자 오염 방지
+_scan_b64 = base64.b64encode(scan_json.encode('utf-8')).decode('ascii')
+_prices_b64  = base64.b64encode(prices_json.encode('utf-8')).decode('ascii')
+_balance_b64 = base64.b64encode(balance_json.encode('utf-8')).decode('ascii')
 inject=f"""<script>
-window.__STREAMLIT_MODE__ = true;
-window.__KIS_TOKEN__    = {json.dumps(st.session_state.kis_token or '')};
-window.__KIS_BASE_URL__ = {json.dumps(st.session_state.kis_base_url or '')};
-window.__KIS_AK__       = {json.dumps(st.session_state.kis_ak)};
-window.__KIS_SEC__      = {json.dumps(st.session_state.kis_sec)};
-window.__KIS_ACC__      = {json.dumps(st.session_state.kis_acc)};
-window.__KIS_PRICES__   = {prices_json};
-window.__KIS_BALANCE__  = {balance_json};
-window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
-window.__SCAN_RESULT__  = {scan_json};
-window.__SCAN_COUNT__   = {scan_count};
-window.__TG_TOKEN__     = {json.dumps(st.session_state.get('tg_token',''))};
-window.__TG_CHAT__      = {json.dumps(st.session_state.get('tg_chat',''))};
-window.__TG_INTERVAL__  = {st.session_state.get('tg_interval_min',10)*60*1000};
-window.__SCAN_VOL_MIN__ = {st.session_state.get('scan_vol_min',50)};
-window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
-window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
+(function(){{
+  function _b64d(s){{try{{return JSON.parse(atob(s));}}catch(e){{return null;}}}}
+  window.__STREAMLIT_MODE__ = true;
+  window.__KIS_TOKEN__    = {json.dumps(st.session_state.kis_token or '')};
+  window.__KIS_BASE_URL__ = {json.dumps(st.session_state.kis_base_url or '')};
+  window.__KIS_AK__       = {json.dumps(st.session_state.kis_ak)};
+  window.__KIS_SEC__      = {json.dumps(st.session_state.kis_sec)};
+  window.__KIS_ACC__      = {json.dumps(st.session_state.kis_acc)};
+  window.__KIS_PRICES__   = _b64d("{_prices_b64}") || {{}};
+  window.__KIS_BALANCE__  = _b64d("{_balance_b64}") || {{}};
+  window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
+  window.__SCAN_RESULT__  = _b64d("{_scan_b64}") || {{}};
+  window.__SCAN_COUNT__   = {scan_count};
+  window.__TG_TOKEN__     = {json.dumps(st.session_state.get('tg_token',''))};
+  window.__TG_CHAT__      = {json.dumps(st.session_state.get('tg_chat',''))};
+  window.__TG_INTERVAL__  = {st.session_state.get('tg_interval_min',10)*60*1000};
+  window.__SCAN_VOL_MIN__ = {st.session_state.get('scan_vol_min',50)};
+  window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
+  window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
+}})();
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
 components.html(html,height=5000,scrolling=False)
