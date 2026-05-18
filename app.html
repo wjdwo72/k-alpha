@@ -2490,6 +2490,8 @@ function filterKrStocks(stocks) {
   return stocks.filter(s => {
     // smallmid 카테고리는 필터에서 항상 통과 (별도 Alpha-10 로직)
     if (s.cat === 'smallmid') return true;
+    // 실시간 스캔 종목(_isLive)은 이미 Python에서 필터링됨 → 통과
+    if (s._isLive) return true;
     const m = DEMO_META[s.code] || { tradingAmt: 1000, mktType: 'kospi', capType: 'large', rsi: 45 };
     // 거래대금 필터
     if (m.tradingAmt < scanSettings.volMin) return false;
@@ -2695,7 +2697,13 @@ try {
     return true;
   }).length;
   if (totalFiltered === 0) {
-    scanSettings = { volMin: 500, cap: 'all', mkt: 'all', rsiMin: 30, rsiMax: 60 };
+    // volMin을 주입된 값 기준으로 리셋 (500 고정 대신 window 변수 우선)
+    scanSettings = {
+      volMin: window.__SCAN_VOL_MIN__ || 50,
+      cap: 'all', mkt: 'all',
+      rsiMin: window.__SCAN_RSI_MIN__ || 20,
+      rsiMax: window.__SCAN_RSI_MAX__ || 80
+    };
     try { localStorage.removeItem('k_scan_settings'); } catch(e) {}
   }
 })();
@@ -2824,12 +2832,6 @@ function openKisChartFromEl(el, market, event) {
   openKisChart(code, market, name, event);
 }
 
-function registerStock(code, name) {
-  if (code && name && name !== code) STOCK_REGISTRY[code] = name;
-}
-function getStockName(code) {
-  return STOCK_REGISTRY[code] || code;
-}
 function makeSvgChart(data, color, filled) {
   const W = 280, H = 48, pad = 3;
   var nums = (data || []).map(function(v) {
@@ -2908,14 +2910,22 @@ function buildCard(stock, rank) {
   const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : '#00ff88';
 
   const meta = DEMO_META[stock.code] || {};
-  const mktBadge = meta.mktType === 'kosdaq'
+  // 실시간 종목은 mkt/vol 정보를 stock 자체에서 가져옴
+  const liveMkt = stock.mkt || (stock._isLive ? 'kospi' : null);
+  const liveVol = stock._isLive ? (stock.vol || 0) : null;
+  const liveRsi = stock._isLive ? (stock.rsiApprox || null) : null;
+
+  const mktType = meta.mktType || liveMkt || 'kospi';
+  const mktBadge = mktType === 'kosdaq'
     ? `<span style="font-family:'Share Tech Mono',monospace;font-size:9px;padding:1px 5px;background:rgba(192,132,252,0.15);border:1px solid rgba(192,132,252,0.3);border-radius:3px;color:#c084fc">KOSDAQ</span>`
     : `<span style="font-family:'Share Tech Mono',monospace;font-size:9px;padding:1px 5px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.25);border-radius:3px;color:var(--accent)">KOSPI</span>`;
-  const tradingBadge = meta.tradingAmt
-    ? `<span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim)">거래대금 ${fmtNum(meta.tradingAmt)}억</span>`
+  const displayVol = meta.tradingAmt || liveVol;
+  const tradingBadge = displayVol
+    ? `<span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim)">거래대금 ${fmtNum(displayVol)}억</span>`
     : '';
-  const rsiBadge = meta.rsi
-    ? `<span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:${meta.rsi < 40 ? 'var(--accent2)' : meta.rsi > 55 ? 'var(--accent4)' : 'var(--text-dim)'}">RSI ${meta.rsi}</span>`
+  const displayRsi = meta.rsi || liveRsi;
+  const rsiBadge = displayRsi
+    ? `<span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:${displayRsi < 40 ? 'var(--accent2)' : displayRsi > 55 ? 'var(--accent4)' : 'var(--text-dim)'}">RSI ${typeof displayRsi === 'number' ? displayRsi.toFixed(0) : displayRsi}</span>`
     : '';
 
   const indsHtml = stock.inds.map(i => `<span class="ind-pill ${i.cat}">${i.label}</span>`).join('');
@@ -4663,30 +4673,6 @@ function convertScanCards(cards, cat) {
       cat: cat, mkt: c.mkt || 'kospi', _isLive: true
     };
   });
-}
-
-function generateMiniChart(price, up, daily) {
-  // 가격이 문자열("59,600")인 경우 숫자로 변환
-  var p = typeof price === 'string' ? parseInt(price.replace(/,/g,'')) : Number(price);
-  if (!p || isNaN(p) || p <= 0) p = 100000;
-
-  var pts = [];
-  var base = p * (up ? 0.96 : 1.04);
-  var steps = 10;
-  for (var i = 0; i < steps; i++) {
-    var noise = 1 + (Math.random() - 0.5) * 0.008;
-    base = base * noise;
-    pts.push(Math.round(base));
-  }
-  // 마지막 값은 실제 현재가
-  pts[pts.length - 1] = p;
-  // 단조 트렌드 (상승/하락 방향성 반영)
-  if (up) {
-    pts[0] = Math.round(p * 0.975);
-  } else {
-    pts[0] = Math.round(p * 1.025);
-  }
-  return pts;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
