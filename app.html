@@ -693,6 +693,81 @@
     cursor: default;
   }
 
+  .btn-ai {
+    padding: 7px 12px;
+    background: linear-gradient(135deg, rgba(192,132,252,0.15), rgba(255,107,157,0.1));
+    border: 1px solid #c084fc;
+    border-radius: 5px;
+    color: #c084fc;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+  }
+  .btn-ai:hover {
+    background: linear-gradient(135deg, rgba(192,132,252,0.3), rgba(255,107,157,0.2));
+    box-shadow: 0 0 12px rgba(192,132,252,0.4);
+    transform: translateY(-1px);
+  }
+  .btn-ai:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ── AI 분석 모달 ── */
+  #ai-modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(2,4,8,0.85);
+    overflow-y: auto;
+    padding: 20px 12px;
+  }
+  #ai-modal-overlay.show { display: flex; align-items: flex-start; justify-content: center; }
+  #ai-modal-box {
+    background: var(--surface);
+    border: 1px solid #c084fc;
+    border-radius: 12px;
+    padding: 20px;
+    width: min(680px, 96vw);
+    margin: auto;
+    font-family: 'Share Tech Mono', monospace;
+    box-shadow: 0 0 30px rgba(192,132,252,0.2);
+  }
+  #ai-modal-title {
+    font-size: 15px; font-weight: 700; color: #c084fc;
+    margin-bottom: 4px; letter-spacing: 1px;
+  }
+  #ai-modal-sub { font-size: 11px; color: var(--text-dim); margin-bottom: 14px; }
+  #ai-modal-content {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 12px;
+    color: var(--text-bright);
+    line-height: 1.9;
+    white-space: pre-wrap;
+    min-height: 120px;
+    max-height: 65vh;
+    overflow-y: auto;
+  }
+  #ai-modal-content .ai-loading {
+    color: #c084fc; animation: aiPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes aiPulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  #ai-modal-close {
+    margin-top: 14px;
+    padding: 8px 20px;
+    background: rgba(192,132,252,0.12);
+    border: 1px solid #c084fc;
+    border-radius: 5px;
+    color: #c084fc;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #ai-modal-close:hover { background: rgba(192,132,252,0.25); }
+
   /* ── SIDEBAR ── */
   .sidebar {
     border-left: 1px solid var(--border);
@@ -1771,6 +1846,19 @@
 </div>
 
 <!-- APPROVE MODAL -->
+<!-- AI 심층 분석 모달 -->
+<div id="ai-modal-overlay">
+  <div id="ai-modal-box">
+    <div id="ai-modal-title">🤖 AI 심층 분석</div>
+    <div id="ai-modal-sub"></div>
+    <div id="ai-modal-content"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button id="ai-modal-close" onclick="closeAiAnalysis()">✕ 닫기</button>
+      <button id="ai-modal-copy" onclick="copyAiResult()" style="padding:8px 16px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:5px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer;transition:all 0.2s">📋 복사</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <div class="modal-title">K-자동매매 승인</div>
@@ -2998,6 +3086,9 @@ function buildCard(stock, rank) {
       <button class="btn-approve" id="btn-${stock.code}" onclick="openModal('${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
         ⬡ K-자동매매 승인
       </button>
+      <button class="btn-ai" id="btn-ai-${stock.code}" onclick="openAiAnalysis(event, ${JSON.stringify(stock).replace(/'/g,'&#39;')})">
+        🤖 AI 분석
+      </button>
     </div>
   `;
   return div;
@@ -3302,6 +3393,145 @@ function openModal(code, name, buy, target, stop, rr, score, grade) {
 function closeModal() {
   document.getElementById('modal').classList.remove('show');
   currentModal = null;
+}
+
+// ──────────────────────────────────────────────
+// AI 심층 분석
+// ──────────────────────────────────────────────
+var _aiAbortController = null;
+
+var SWING_SYSTEM_PROMPT = `# 역할 (Role)
+너는 기술적 분석과 시장 수급(트래픽), 재료 분석에 탁월한 10년 차 전업 주식 투자자이자 '스윙 매매 및 급등 돌파 매매 전문가'이다.
+
+# 목적 (Objective)
+내가 제공하는 [종목 정보 데이터]를 바탕으로, 스윙 매매(보유 기간 수일~2주) 관점에서 진입 가능한 유망 종목인지 분석하고, 급등 조짐 및 위험 요소를 종합 평가해 줘.
+
+# 분석 기준 (Technical Strategy)
+반드시 아래 4가지 조건과 체크리스트에 맞춰 엄격하게 검증해 줘.
+
+1. 상승 추세 및 눌림목 확인
+   - 주가가 20일선 및 60일 이평선 위에 위치해 있는가?
+   - 고점과 저점이 조금씩 높아지는 우상향 흐름인가?
+   - (눌림목) 강한 상승 후 전고점, 주요 이평선, 지지선 근처에서 조정을 마치고 반등 신호가 보이는가?
+
+2. 거래대금 및 수급 (중요)
+   - 평소 대비 거래량이 최소 2~3배 이상 급증했는가? (직전 5일 평균 대비 스파이크 확인)
+   - 거래량이 늘었음에도 주가가 무너지지 않고 버티거나 횡보/상승하는가?
+
+3. 돌파 및 주도주 여부
+   - 오래 횡보하던 박스권이나 최근 1~3개월 전고점을 대량 거래량과 함께 돌파(또는 돌파 직전) 중인가?
+   - 현재 돈이 몰리는 주도 섹터(예: AI, 로봇, 바이오, 조선 등)에 속해 있으며, 테마 내에서 가장 먼저 움직이는 '1등주(대장주)'인가?
+
+4. 피해야 할 함정 신호 (리스크 체크)
+   - '거래량은 터졌는데 주가가 못 가는' 매물대 함정인가?
+   - 호재 뉴스가 너무 늦게 반영되어 고점일 가능성이 높은가?
+   - 재무 상태가 극도로 불량하고 실체 없는 재료인가?
+   - 시초가/종가에 과도한 갭상승으로 추격매수를 유도하는 차트인가?
+
+# 출력 형식 (Output Format)
+분석 결과는 아래의 가독성 좋은 포맷으로 나누어 직관적으로 작성해 줘.
+
+---
+## 📊 1. 종합 매수 매력도 평점
+- [ ]점 / 100점 (스윙 진입 적합성 점수)
+
+## 📈 2. 기술적/수급 분석 요약
+- **추세/위치:** (이평선, 박스권 돌파 상태)
+- **거래량/수급:** (최근 거래량 급증 여부 및 의미)
+- **주도주/재료:** (섹터 내 강점 및 관련 재료 신선도)
+
+## 🚨 3. 위험 요소 및 함정 체크 (필수)
+- (재무, 고점 추격, 매물 폭탄 가능성 등 조심해야 할 점 기술)
+
+## 🎯 4. 실전 매매 시나리오 (매수/손절 타점)
+- **매수 전략:** (돌파 직후 추격보다는 어디 지지선/눌림목에서 진입할 것인지)
+- **목표가 및 보유 기간:** (단기 스윙 관점 설정)
+- **손절선:** (이 가격 무너지면 무조건 칼손절해야 하는 기준 가격 제시)
+---`;
+
+function openAiAnalysis(event, stock) {
+  event.stopPropagation();
+  var apiKey = window.__ANTHROPIC_API_KEY__ || '';
+  if (!apiKey) {
+    alert('Anthropic API 키가 설정되지 않았습니다.\n왼쪽 사이드바 > 🤖 Claude AI 심층 분석 설정에서 키를 입력하세요.');
+    return;
+  }
+
+  var overlay = document.getElementById('ai-modal-overlay');
+  var subEl   = document.getElementById('ai-modal-sub');
+  var content = document.getElementById('ai-modal-content');
+
+  subEl.textContent = stock.name + ' (' + stock.code + ') · ' + (stock.cat || '') + ' · ' + (stock.price || '') + '원';
+  content.innerHTML = '<span class="ai-loading">⏳ Claude AI 분석 중... 잠시만 기다려 주세요.</span>';
+  overlay.classList.add('show');
+
+  var reasons = (stock.reasons || []).map(function(r){ return r.text || ''; }).join('\n');
+  var userMsg = '[종목 정보 데이터]\n'
+    + '종목명: ' + (stock.name || '') + '\n'
+    + '종목코드: ' + (stock.code || '') + '\n'
+    + '카테고리: ' + (stock.cat === 'swing' ? '실시간스윙' : stock.cat === 'surge' ? '급등전야' : stock.cat === 'tomorrow' ? '내일관심' : '중소형주') + '\n'
+    + '현재가: ' + (stock.price || '') + '원\n'
+    + '등락률: ' + (stock.change || '') + '\n'
+    + 'K 스코어: ' + (stock.score || '') + '점 (' + (stock.grade || '') + '등급)\n'
+    + '매입가(기준): ' + (stock.buy || '') + '원\n'
+    + '목표가: ' + (stock.target || '') + '원\n'
+    + '손절가: ' + (stock.stop || '') + '원\n'
+    + '손익비: ' + (stock.rr || '') + '\n'
+    + '거래대금: ' + (stock.vol || '') + '억원\n'
+    + 'RSI(추정): ' + (stock.rsiApprox || '') + '\n'
+    + '시장구분: ' + ((stock.mkt || 'KOSPI').toUpperCase()) + '\n'
+    + 'K 분석사유:\n' + reasons;
+
+  if (_aiAbortController) { try { _aiAbortController.abort(); } catch(e){} }
+  _aiAbortController = new AbortController();
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    signal: _aiAbortController.signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-7',
+      max_tokens: 2048,
+      system: SWING_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  })
+  .then(function(res) {
+    if (!res.ok) {
+      return res.json().then(function(e) {
+        throw new Error((e.error && e.error.message) || 'API 오류 ' + res.status);
+      });
+    }
+    return res.json();
+  })
+  .then(function(data) {
+    var text = (data.content && data.content[0] && data.content[0].text) || '응답 없음';
+    content.textContent = text;
+  })
+  .catch(function(err) {
+    if (err.name === 'AbortError') return;
+    content.innerHTML = '<span style="color:#ff4d6d">❌ 오류: ' + err.message + '</span>';
+  });
+}
+
+function closeAiAnalysis() {
+  document.getElementById('ai-modal-overlay').classList.remove('show');
+  if (_aiAbortController) { try { _aiAbortController.abort(); } catch(e){} _aiAbortController = null; }
+}
+
+function copyAiResult() {
+  var text = document.getElementById('ai-modal-content').textContent;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(function() {
+    var btn = document.getElementById('ai-modal-copy');
+    btn.textContent = '✅ 복사됨';
+    setTimeout(function(){ btn.textContent = '📋 복사'; }, 1500);
+  }).catch(function(){});
 }
 
 function confirmOrder() {

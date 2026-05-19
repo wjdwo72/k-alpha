@@ -117,6 +117,8 @@ DEFAULTS = {
     # 텔레그램 — 그룹방 3
     "tg_group3_chat":"","tg_group3_enabled":False,
     "tg_group3_interval_min":30,"tg_group3_interval_label":"30분",
+    # Claude AI 심층 분석
+    "anthropic_api_key":"",
 }
 for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
@@ -1401,6 +1403,31 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 qp['tg_grp3'] = grp3_enc
                 server_store['tg_grp3'] = grp3_enc
 
+    # ── 🤖 Claude AI 심층 분석 ──────────────────────────────
+    with st.expander("🤖 Claude AI 심층 분석 설정", expanded=False):
+        st.caption("종목 카드의 'AI 심층 분석' 버튼에서 사용할 Anthropic API 키를 입력하세요.")
+        anthropic_key = st.text_input(
+            "Anthropic API Key",
+            type="password",
+            value=st.session_state.get('anthropic_api_key', ''),
+            placeholder="sk-ant-...",
+            key="anthropic_key_inp"
+        )
+        if anthropic_key:
+            st.session_state['anthropic_api_key'] = anthropic_key
+        ok_ai = bool(st.session_state.get('anthropic_api_key'))
+        st.markdown(
+            f'<div style="padding:6px 10px;font-family:monospace;font-size:11px;'
+            f'color:{"#00ff88" if ok_ai else "#4a5568"}">{"🟢 API 키 등록됨 — 카드에서 AI 분석 가능" if ok_ai else "⭕ 키 미등록"}</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown("""<div style="font-family:'Share Tech Mono',monospace;font-size:10px;
+color:#4a5568;padding:4px 0;line-height:1.8">
+• API 키는 브라우저 세션에만 저장됩니다<br>
+• 각 분석 요청마다 Claude API 비용이 발생합니다<br>
+• 발급: console.anthropic.com
+</div>""", unsafe_allow_html=True)
+
     with st.expander("🔒 로그아웃"):
         if st.button("로그아웃",key="btn_logout"):
             for k in ["agreed","auth","kis_token","kis_ak","kis_sec","kis_acc"]:
@@ -1874,6 +1901,7 @@ window.__TG_INTERVAL__  = {st.session_state.get('tg_interval_min',10)*60*1000};
 window.__SCAN_VOL_MIN__ = {st.session_state.get('scan_vol_min',50)};
 window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
 window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
+window.__ANTHROPIC_API_KEY__ = {json.dumps(st.session_state.get('anthropic_api_key',''))};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
 components.html(html,height=5000,scrolling=False)
