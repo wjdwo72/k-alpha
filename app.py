@@ -117,6 +117,10 @@ DEFAULTS = {
     # 텔레그램 — 그룹방 3
     "tg_group3_chat":"","tg_group3_enabled":False,
     "tg_group3_interval_min":30,"tg_group3_interval_label":"30분",
+    # Google AI Studio (Gemini)
+    "google_api_key":"",
+    # 텔레그램 AI 분석 전송 갯수
+    "tg_ai_count": 5,
 }
 for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
@@ -1401,6 +1405,42 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 qp['tg_grp3'] = grp3_enc
                 server_store['tg_grp3'] = grp3_enc
 
+        st.divider()
+        st.markdown("**📊 분석 내용 전송 설정**")
+        tg_ai_count = st.slider(
+            "카테고리당 종목 갯수 (최대 10개)",
+            min_value=1, max_value=10,
+            value=st.session_state.get('tg_ai_count', 5),
+            key="tg_ai_count_sl"
+        )
+        st.session_state['tg_ai_count'] = tg_ai_count
+        st.caption(f"각 카테고리(스윙·급등·내일관심·중소형주)당 {tg_ai_count}종목씩 분석 내용 포함 전송")
+
+    # ── 🤖 Google AI Studio (Gemini) ──────────────────────────────
+    with st.expander("🤖 Google AI 분석 설정 (Gemini)", expanded=False):
+        st.caption("종목 카드 'AI 분석' 버튼에서 Google Gemini API로 심층 분석합니다.")
+        google_key = st.text_input(
+            "Google AI Studio API Key",
+            type="password",
+            value=st.session_state.get('google_api_key', ''),
+            placeholder="AIzaSy...",
+            key="google_key_inp"
+        )
+        if google_key:
+            st.session_state['google_api_key'] = google_key
+        ok_google = bool(st.session_state.get('google_api_key'))
+        st.markdown(
+            f'<div style="padding:6px 10px;font-family:monospace;font-size:11px;'
+            f'color:{"#00ff88" if ok_google else "#4a5568"}">{"🟢 Gemini API 등록됨 — 카드에서 AI 심층 분석 가능" if ok_google else "⭕ 키 미등록 — 로컬 분석 사용"}</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown("""<div style="font-family:'Share Tech Mono',monospace;font-size:10px;
+color:#4a5568;padding:4px 0;line-height:1.8">
+• 키 미등록 시 로컬 KIS 데이터 기반 분석으로 동작<br>
+• 발급: aistudio.google.com → Get API Key<br>
+• 텔레그램 자동 전송은 로컬 분석 사용 (API 비용 없음)
+</div>""", unsafe_allow_html=True)
+
     with st.expander("🔒 로그아웃"):
         if st.button("로그아웃",key="btn_logout"):
             for k in ["agreed","auth","kis_token","kis_ak","kis_sec","kis_acc"]:
@@ -1630,8 +1670,9 @@ if st.session_state.kis_token:
                         f"{_compact_ai(c)}")
             lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
                      f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
-            sl = cats_d.get('swing',[])[:5]; ul = cats_d.get('surge',[])[:5]
-            tl = cats_d.get('tomorrow',[])[:5]; ml = cats_d.get('smallmid',[])[:5]
+            _n = st.session_state.get('tg_ai_count', 5)
+            sl = cats_d.get('swing',[])[:_n]; ul = cats_d.get('surge',[])[:_n]
+            tl = cats_d.get('tomorrow',[])[:_n]; ml = cats_d.get('smallmid',[])[:_n]
             if sl:
                 lines.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>")
                 for c in sl: lines.append(fmt_card(c))
@@ -1819,8 +1860,9 @@ if st.session_state.kis_token:
     def _mk_msg2(iv_lbl, all_s, k_n, kd_n, ts_str):
         is_mkt = 9 <= int(kst_strftime('%H')) <= 15
         mkt_lbl = '🟢 장중' if is_mkt else '🔴 장 마감'
-        sl = cats.get('swing',[])[:5]; ul = cats.get('surge',[])[:5]
-        tl = cats.get('tomorrow',[])[:5]; ml = cats.get('smallmid',[])[:5]
+        _n2 = st.session_state.get('tg_ai_count', 5)
+        sl = cats.get('swing',[])[:_n2]; ul = cats.get('surge',[])[:_n2]
+        tl = cats.get('tomorrow',[])[:_n2]; ml = cats.get('smallmid',[])[:_n2]
         ls = [f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts_str}] {mkt_lbl}\n"
               f"KOSPI {k_n}종목 + KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
         if sl:
@@ -1929,6 +1971,8 @@ window.__SCAN_COUNT__   = {scan_count};
 window.__TG_TOKEN__     = {json.dumps(st.session_state.get('tg_token',''))};
 window.__TG_CHAT__      = {json.dumps(st.session_state.get('tg_chat',''))};
 window.__TG_INTERVAL__  = {st.session_state.get('tg_interval_min',10)*60*1000};
+window.__GOOGLE_API_KEY__ = {json.dumps(st.session_state.get('google_api_key',''))};
+window.__TG_AI_COUNT__  = {st.session_state.get('tg_ai_count', 5)};
 window.__SCAN_VOL_MIN__ = {st.session_state.get('scan_vol_min',50)};
 window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
 window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
