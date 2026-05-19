@@ -1934,4 +1934,4 @@ window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
 window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
-components.html(html,height=5000,scrolling=False)
+components.html(html,height=15000,scrolling=False)

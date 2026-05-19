@@ -3166,6 +3166,10 @@ function renderCards() {
   }, 300);
 
   window._chartRedrawPending = true;
+  if (IS_STREAMLIT && typeof sendHeight === 'function') {
+    setTimeout(sendHeight, 200);
+    setTimeout(sendHeight, 600);
+  }
 }
 
 
@@ -5014,15 +5018,35 @@ updateClock();
 
 // ── Streamlit iframe 높이 자동 조정 ──
 function sendHeight() {
-  var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 2000);
+  var h = Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight,
+    document.body.offsetHeight,
+    3000
+  ) + 80;
   try { window.parent.postMessage({ type: 'streamlit:setFrameHeight', height: h }, '*'); } catch(e) {}
 }
 
 if (IS_STREAMLIT) {
+  // 초기 로드
   setTimeout(sendHeight, 300);
   setTimeout(sendHeight, 800);
   setTimeout(sendHeight, 2000);
+  setTimeout(sendHeight, 4000);
+  // 탭 전환·클릭 시 재측정
   window.addEventListener('click', function() { setTimeout(sendHeight, 400); });
+  // 탭 패널 클릭 감지
+  document.addEventListener('click', function(e) {
+    if (e.target && (e.target.classList.contains('tab') || e.target.closest('.tab'))) {
+      setTimeout(sendHeight, 300);
+      setTimeout(sendHeight, 700);
+    }
+  });
+  // ResizeObserver — 콘텐츠 크기 변할 때마다 자동 전송
+  if (typeof ResizeObserver !== 'undefined') {
+    var _ro = new ResizeObserver(function() { sendHeight(); });
+    _ro.observe(document.body);
+  }
 }
 
 // 포트폴리오 초기 렌더 (탭이 숨겨져 있어도 데이터 준비)
