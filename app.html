@@ -1851,6 +1851,7 @@
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
       <button id="ai-modal-close" onclick="closeAiAnalysis()">✕ 닫기</button>
       <button id="ai-modal-copy" onclick="copyAiResult()" style="padding:8px 16px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:5px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer;transition:all 0.2s">📋 복사</button>
+      <button id="ai-modal-tg" onclick="sendAiToTelegram()" style="padding:8px 16px;background:rgba(0,255,136,0.1);border:1px solid var(--accent2);border-radius:5px;color:var(--accent2);font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer;transition:all 0.2s">📱 텔레그램 전송</button>
     </div>
   </div>
 </div>
@@ -3548,6 +3549,62 @@ function copyAiResult() {
     btn.textContent = '✅ 복사됨';
     setTimeout(function(){ btn.textContent = '📋 복사'; }, 1500);
   }).catch(function(){});
+}
+
+function sendAiToTelegram() {
+  var token = window.__TG_TOKEN__ || '';
+  var chat  = window.__TG_CHAT__  || '';
+  if (!token || !chat) {
+    alert('텔레그램 봇 토큰과 Chat ID를 먼저 설정하세요.\n(사이드바 > 📱 텔레그램 알림 설정)');
+    return;
+  }
+  var raw  = document.getElementById('ai-modal-content').textContent;
+  var sub  = document.getElementById('ai-modal-sub').textContent;
+  if (!raw) return;
+
+  // HTML escape + 포맷 변환 (텔레그램 HTML 모드)
+  var escaped = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 섹션 헤더 굵게 처리
+  escaped = escaped
+    .replace(/(📊 1\. 종합 매수 매력도 평점)/g, '<b>$1</b>')
+    .replace(/(📈 2\. 기술적\/수급 분석 요약)/g, '<b>$1</b>')
+    .replace(/(🚨 3\. 위험 요소 및 함정 체크)/g, '<b>$1</b>')
+    .replace(/(🎯 4\. 실전 매매 시나리오)/g, '<b>$1</b>');
+
+  var msg = '🤖 <b>K-ALPHA AI 심층 분석</b>\n'
+    + '<code>' + sub + '</code>\n'
+    + '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+    + escaped;
+
+  var btn = document.getElementById('ai-modal-tg');
+  btn.textContent = '⏳ 전송 중...';
+  btn.disabled = true;
+
+  fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat_id: chat, text: msg, parse_mode: 'HTML'})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      btn.textContent = '✅ 전송 완료';
+      setTimeout(function(){ btn.textContent = '📱 텔레그램 전송'; btn.disabled = false; }, 2000);
+    } else {
+      btn.textContent = '❌ 전송 실패';
+      btn.disabled = false;
+      alert('전송 실패: ' + (d.description || '알 수 없는 오류'));
+    }
+  })
+  .catch(function(e) {
+    btn.textContent = '❌ 오류';
+    btn.disabled = false;
+    alert('오류: ' + e.message);
+  });
 }
 
 function confirmOrder() {
