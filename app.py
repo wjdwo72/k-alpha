@@ -1587,28 +1587,36 @@ if st.session_state.kis_token:
                     unsafe_allow_html=True)
 
         # ── 텔레그램 자동 전송 (개인방 + 그룹방 각자 간격 독립) ──
-        def _compact_ai(c):
-            """카드 dict → 1줄 AI 분석 요약"""
-            score = c.get('score', 70)
-            grade = c.get('grade', 'B')
-            rsi   = c.get('rsiApprox', 50) or 50
-            rr    = 1.0
-            try: rr = float(str(c.get('rr','1.0')).replace(',',''))
-            except: pass
-            chg = 0.0
-            try: chg = float(str(c.get('change','0%')).replace('%','').replace('+',''))
-            except: pass
-            reasons = c.get('reasons', [])
-            tech = next((r.get('text','').replace('[기술적 분석] ','')
-                         for r in reasons if '[기술적' in r.get('text','')), '')
-            brief = (tech.split(' · ')[0])[:22] if tech else '이평선 분석 중'
+        def _ai_reasons(reasons, rsi, chg, rr, score, grade):
+            """K 분석 사유 전체를 텔레그램용 멀티라인 문자열로 변환"""
             risks = []
             if rsi > 72:   risks.append(f'RSI{rsi:.0f}과매수')
             if chg >= 7:   risks.append(f'+{chg:.0f}%급등주의')
             elif chg >= 4: risks.append(f'+{chg:.0f}%눌림대기')
             if rr < 1.5:   risks.append(f'RR{rr}낮음')
             risk_str = '·'.join(risks) if risks else '없음'
-            return f"   🤖 {score}점({grade}) {brief} | ⚠{risk_str}"
+            lines = [f"   🤖 <b>{score}점({grade})</b> | ⚠{risk_str}"]
+            for r in reasons:
+                text = r.get('text', '')
+                if '[기본적 분석]' in text:
+                    lines.append(f"   🏢 {text.replace('[기본적 분석] ','')[:80]}")
+                elif '[외부요인]' in text:
+                    lines.append(f"   🌐 {text.replace('[외부요인] ','')[:80]}")
+                else:
+                    lines.append(f"   ▸ {text[:80]}")
+            return '\n'.join(lines)
+
+        def _compact_ai(c):
+            """카드 dict → K 분석 사유 포함 멀티라인"""
+            score = c.get('score', 70); grade = c.get('grade', 'B')
+            rsi = c.get('rsiApprox', 50) or 50
+            rr  = 1.0
+            try: rr = float(str(c.get('rr','1.0')).replace(',',''))
+            except: pass
+            chg = 0.0
+            try: chg = float(str(c.get('change','0%')).replace('%','').replace('+',''))
+            except: pass
+            return _ai_reasons(c.get('reasons',[]), rsi, chg, rr, score, grade)
 
         def _build_tg_lines(iv_label_str, cats_d, k_n, kd_n, ts_str, total_n):
             """cats_d는 카드 dict 리스트 (scan_result 형태 — Gist/직접 모두 호환)"""
@@ -1622,8 +1630,8 @@ if st.session_state.kis_token:
                         f"{_compact_ai(c)}")
             lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
                      f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
-            sl = cats_d.get('swing',[])[:10]; ul = cats_d.get('surge',[])[:10]
-            tl = cats_d.get('tomorrow',[])[:10]; ml = cats_d.get('smallmid',[])[:10]
+            sl = cats_d.get('swing',[])[:5]; ul = cats_d.get('surge',[])[:5]
+            tl = cats_d.get('tomorrow',[])[:5]; ml = cats_d.get('smallmid',[])[:5]
             if sl:
                 lines.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>")
                 for c in sl: lines.append(fmt_card(c))
@@ -1776,25 +1784,29 @@ if st.session_state.kis_token:
     _kn2  = len(kospi_stocks); _kdn2 = len(kosdaq_stocks)
 
     def _compact_ai2(s, card):
-        """원시 stock dict + card dict → 1줄 AI 분석 요약"""
-        score = s.get('score', 70)
-        grade = s.get('grade', 'B')
+        """원시 stock dict + card dict → K 분석 사유 포함 멀티라인"""
+        score = s.get('score', 70); grade = s.get('grade', 'B')
         rsi   = s.get('rsiApprox', 50) or 50
         rr    = 1.0
         try: rr = float(str(card.get('rr','1.0')).replace(',',''))
         except: pass
-        chg   = s.get('changePct', 0) or 0
-        reasons = card.get('reasons', [])
-        tech = next((r.get('text','').replace('[기술적 분석] ','')
-                     for r in reasons if '[기술적' in r.get('text','')), '')
-        brief = (tech.split(' · ')[0])[:22] if tech else '이평선 분석 중'
+        chg = s.get('changePct', 0) or 0
         risks = []
         if rsi > 72:   risks.append(f'RSI{rsi:.0f}과매수')
         if chg >= 7:   risks.append(f'+{chg:.0f}%급등주의')
         elif chg >= 4: risks.append(f'+{chg:.0f}%눌림대기')
         if rr < 1.5:   risks.append(f'RR{rr}낮음')
         risk_str = '·'.join(risks) if risks else '없음'
-        return f"   🤖 {score}점({grade}) {brief} | ⚠{risk_str}"
+        lines = [f"   🤖 <b>{score}점({grade})</b> | ⚠{risk_str}"]
+        for r in card.get('reasons', []):
+            text = r.get('text', '')
+            if '[기본적 분석]' in text:
+                lines.append(f"   🏢 {text.replace('[기본적 분석] ','')[:80]}")
+            elif '[외부요인]' in text:
+                lines.append(f"   🌐 {text.replace('[외부요인] ','')[:80]}")
+            else:
+                lines.append(f"   ▸ {text[:80]}")
+        return '\n'.join(lines)
 
     def _fmt2(s, cat):
         pct = s.get('changePct',0); sign = '+' if pct>=0 else ''
@@ -1807,8 +1819,8 @@ if st.session_state.kis_token:
     def _mk_msg2(iv_lbl, all_s, k_n, kd_n, ts_str):
         is_mkt = 9 <= int(kst_strftime('%H')) <= 15
         mkt_lbl = '🟢 장중' if is_mkt else '🔴 장 마감'
-        sl = cats.get('swing',[])[:10]; ul = cats.get('surge',[])[:10]
-        tl = cats.get('tomorrow',[])[:10]; ml = cats.get('smallmid',[])[:10]
+        sl = cats.get('swing',[])[:5]; ul = cats.get('surge',[])[:5]
+        tl = cats.get('tomorrow',[])[:5]; ml = cats.get('smallmid',[])[:5]
         ls = [f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts_str}] {mkt_lbl}\n"
               f"KOSPI {k_n}종목 + KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
         if sl:
