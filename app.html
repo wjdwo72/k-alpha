@@ -750,10 +750,6 @@
     max-height: 65vh;
     overflow-y: auto;
   }
-  #ai-modal-content .ai-loading {
-    color: #c084fc; animation: aiPulse 1.2s ease-in-out infinite;
-  }
-  @keyframes aiPulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
   #ai-modal-close {
     margin-top: 14px;
     padding: 8px 20px;
@@ -3396,132 +3392,152 @@ function closeModal() {
 }
 
 // ──────────────────────────────────────────────
-// AI 심층 분석
+// AI 심층 분석 (로컬 KIS 스캔 데이터 기반 — 외부 API 불필요)
 // ──────────────────────────────────────────────
-var _aiAbortController = null;
+function _num(str) {
+  if (str == null) return 0;
+  return parseFloat(String(str).replace(/,/g, '')) || 0;
+}
 
-var SWING_SYSTEM_PROMPT = `# 역할 (Role)
-너는 기술적 분석과 시장 수급(트래픽), 재료 분석에 탁월한 10년 차 전업 주식 투자자이자 '스윙 매매 및 급등 돌파 매매 전문가'이다.
+function generateSwingReport(stock) {
+  var score     = stock.score || 70;
+  var grade     = stock.grade || 'B';
+  var cat       = stock.cat  || 'swing';
+  var rsi       = stock.rsiApprox || 50;
+  var vol       = stock.vol  || 0;
+  var rr        = parseFloat(stock.rr) || 1.0;
+  var changePct = parseFloat(String(stock.change || '0').replace('%','').replace('+','')) || 0;
+  var price     = _num(stock.price);
+  var buyP      = _num(stock.buy);
+  var tgtP      = _num(stock.target);
+  var stopP     = _num(stock.stop);
 
-# 목적 (Objective)
-내가 제공하는 [종목 정보 데이터]를 바탕으로, 스윙 매매(보유 기간 수일~2주) 관점에서 진입 가능한 유망 종목인지 분석하고, 급등 조짐 및 위험 요소를 종합 평가해 줘.
+  var reasons   = (stock.reasons || []).map(function(r){ return r.text || ''; });
+  var techR     = reasons.filter(function(r){ return r.indexOf('[기술적') >= 0; });
+  var fundR     = reasons.filter(function(r){ return r.indexOf('[기본적') >= 0; });
+  var macroR    = reasons.filter(function(r){ return r.indexOf('[외부요인') >= 0; });
 
-# 분석 기준 (Technical Strategy)
-반드시 아래 4가지 조건과 체크리스트에 맞춰 엄격하게 검증해 줘.
+  var catLabel  = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주'}[cat] || cat;
 
-1. 상승 추세 및 눌림목 확인
-   - 주가가 20일선 및 60일 이평선 위에 위치해 있는가?
-   - 고점과 저점이 조금씩 높아지는 우상향 흐름인가?
-   - (눌림목) 강한 상승 후 전고점, 주요 이평선, 지지선 근처에서 조정을 마치고 반등 신호가 보이는가?
+  /* ── 1. 매력도 평점 ── */
+  var scoreMsg;
+  if (score >= 90)      scoreMsg = '최상위 진입 적합 — 즉시 매수 검토 가능';
+  else if (score >= 80) scoreMsg = '스윙 진입 적합 — 눌림목 확인 후 분할 매수 유효';
+  else if (score >= 70) scoreMsg = '조건 충족 — 추가 확인 후 소량 선진입 고려';
+  else                  scoreMsg = '기준 미달 — 관망 후 조건 강화 시 재검토';
 
-2. 거래대금 및 수급 (중요)
-   - 평소 대비 거래량이 최소 2~3배 이상 급증했는가? (직전 5일 평균 대비 스파이크 확인)
-   - 거래량이 늘었음에도 주가가 무너지지 않고 버티거나 횡보/상승하는가?
+  /* ── 2. 기술적/수급 ── */
+  var trendMsg = techR.length
+    ? techR[0].replace('[기술적 분석] ','').split(' · ').slice(0,2).join(' · ')
+    : (score >= 80 ? '주요 이평선 위 위치 · 우상향 추세 유지 중' : '이평선 근접 구간 · 지지 여부 확인 필요');
 
-3. 돌파 및 주도주 여부
-   - 오래 횡보하던 박스권이나 최근 1~3개월 전고점을 대량 거래량과 함께 돌파(또는 돌파 직전) 중인가?
-   - 현재 돈이 몰리는 주도 섹터(예: AI, 로봇, 바이오, 조선 등)에 속해 있으며, 테마 내에서 가장 먼저 움직이는 '1등주(대장주)'인가?
+  var techDetail = techR.length
+    ? techR[0].replace('[기술적 분석] ','').split(' · ').slice(2).join(' · ')
+    : '';
 
-4. 피해야 할 함정 신호 (리스크 체크)
-   - '거래량은 터졌는데 주가가 못 가는' 매물대 함정인가?
-   - 호재 뉴스가 너무 늦게 반영되어 고점일 가능성이 높은가?
-   - 재무 상태가 극도로 불량하고 실체 없는 재료인가?
-   - 시초가/종가에 과도한 갭상승으로 추격매수를 유도하는 차트인가?
+  var volMsg;
+  if (vol >= 2000)      volMsg = vol + '억 — 기관·외국인 대규모 매수세 추정 (초대형 수급)';
+  else if (vol >= 800)  volMsg = vol + '억 — 기관 매수세 유입 추정. 수급 양호';
+  else if (vol >= 300)  volMsg = vol + '억 — 업종·테마 수급 집중 구간';
+  else                  volMsg = vol + '억 — 개별 재료 중심. 수급 관찰 필요';
 
-# 출력 형식 (Output Format)
-분석 결과는 아래의 가독성 좋은 포맷으로 나누어 직관적으로 작성해 줘.
+  var materialMsg = fundR.length
+    ? fundR[0].replace('[기본적 분석] ','')
+    : (macroR.length ? macroR[0].replace('[외부요인] ','') : catLabel + ' 분류 — 현재 스캔 상위 종목');
 
----
-## 📊 1. 종합 매수 매력도 평점
-- [ ]점 / 100점 (스윙 진입 적합성 점수)
+  /* ── 3. 위험 요소 ── */
+  var risks = [];
+  if (rsi > 72)
+    risks.push('RSI ' + rsi.toFixed(0) + ' 과매수 — 단기 조정 가능성. 상승 지속 시 분할 대응');
+  else if (rsi < 28)
+    risks.push('RSI ' + rsi.toFixed(0) + ' 과매도 — 반등 기대 가능하나 추가 하락 리스크 잔존');
+  if (changePct >= 7)
+    risks.push('당일 +' + changePct.toFixed(1) + '% 급등 — 고점 추격 위험. 갭상승 매물 출회 주의');
+  else if (changePct >= 4)
+    risks.push('당일 +' + changePct.toFixed(1) + '% 상승 — 눌림목 대기 후 진입 권장');
+  if (changePct <= -6)
+    risks.push('당일 ' + changePct.toFixed(1) + '% 하락 — 하락 추세 가능성. 지지 확인 전 매수 자제');
+  if (rr < 1.5)
+    risks.push('손익비 ' + rr + ' — 1.5 미만. 목표가 상향 또는 손절 조정 검토');
+  if (score < 75)
+    risks.push('K스코어 ' + score + '점 — 복수 조건 미달. 추가 확인 필요');
+  if (cat === 'surge')
+    risks.push('급등전야 분류 — 단기 모멘텀 종목. 장대양봉 당일 추격은 자제, 다음날 갭 확인 후 진입');
+  if (!risks.length)
+    risks.push('현재 스캔 기준 주요 리스크 없음 — 단, 실시간 공시·뉴스 별도 확인 필수');
 
-## 📈 2. 기술적/수급 분석 요약
-- **추세/위치:** (이평선, 박스권 돌파 상태)
-- **거래량/수급:** (최근 거래량 급증 여부 및 의미)
-- **주도주/재료:** (섹터 내 강점 및 관련 재료 신선도)
+  /* ── 4. 매매 시나리오 ── */
+  var buyStrategy;
+  if (changePct >= 4)
+    buyStrategy = '현재 단기 상승 중 — 즉시 추격 자제. '
+      + buyP.toLocaleString() + '원 이하 눌림목 확인 후\n    1차 '
+      + Math.round(buyP * 0.998).toLocaleString() + '원 / 2차 '
+      + buyP.toLocaleString() + '원 분할 진입';
+  else
+    buyStrategy = buyP.toLocaleString() + '원 근처 양봉 캔들 확인 후 진입\n    (종가 기준 ' + buyP.toLocaleString() + '원 위에서 매수)';
 
-## 🚨 3. 위험 요소 및 함정 체크 (필수)
-- (재무, 고점 추격, 매물 폭탄 가능성 등 조심해야 할 점 기술)
+  var holdPeriod = {swing:'3~7일 단기 스윙', surge:'1~3일 단기 급등', tomorrow:'이튿날 반등 노림 (1~3일)', smallmid:'5~14일 중기 스윙'}[cat] || '3~7일';
 
-## 🎯 4. 실전 매매 시나리오 (매수/손절 타점)
-- **매수 전략:** (돌파 직후 추격보다는 어디 지지선/눌림목에서 진입할 것인지)
-- **목표가 및 보유 기간:** (단기 스윙 관점 설정)
-- **손절선:** (이 가격 무너지면 무조건 칼손절해야 하는 기준 가격 제시)
----`;
+  var tgtPct  = price > 0 ? ((tgtP / price - 1) * 100).toFixed(1) : '?';
+  var stopPct = price > 0 ? Math.abs((stopP / price - 1) * 100).toFixed(1) : '?';
+
+  /* ── 조합 ── */
+  var L = [];
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('📊 1. 종합 매수 매력도 평점');
+  L.push('');
+  L.push('  ' + score + '점 / 100점  [' + grade + '등급 · ' + catLabel + ']');
+  L.push('  → ' + scoreMsg);
+  L.push('');
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('📈 2. 기술적/수급 분석 요약');
+  L.push('');
+  L.push('  ▸ 추세/위치:');
+  L.push('    ' + trendMsg);
+  if (techDetail) L.push('    + ' + techDetail);
+  L.push('');
+  L.push('  ▸ 거래량/수급:');
+  L.push('    ' + volMsg);
+  L.push('');
+  L.push('  ▸ 주도주/재료:');
+  L.push('    ' + materialMsg);
+  L.push('');
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('🚨 3. 위험 요소 및 함정 체크');
+  L.push('');
+  risks.forEach(function(r){ L.push('  ⚠ ' + r); });
+  L.push('');
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('🎯 4. 실전 매매 시나리오');
+  L.push('');
+  L.push('  ▸ 매수 전략:');
+  L.push('    ' + buyStrategy);
+  L.push('');
+  L.push('  ▸ 목표가 및 보유 기간:');
+  L.push('    ' + tgtP.toLocaleString() + '원  (+' + tgtPct + '%)  ·  ' + holdPeriod);
+  L.push('');
+  L.push('  ▸ 손절선 (이탈 시 즉시 칼손절):');
+  L.push('    ' + stopP.toLocaleString() + '원  (-' + stopPct + '%)  ·  손익비 ' + rr);
+  L.push('');
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('⚡ K-ALPHA 스캔 데이터 기반 분석 · 참고 목적 전용');
+  return L.join('\n');
+}
 
 function openAiAnalysis(event, stock) {
   event.stopPropagation();
-  var apiKey = window.__ANTHROPIC_API_KEY__ || '';
-  if (!apiKey) {
-    alert('Anthropic API 키가 설정되지 않았습니다.\n왼쪽 사이드바 > 🤖 Claude AI 심층 분석 설정에서 키를 입력하세요.');
-    return;
-  }
-
   var overlay = document.getElementById('ai-modal-overlay');
   var subEl   = document.getElementById('ai-modal-sub');
   var content = document.getElementById('ai-modal-content');
 
-  subEl.textContent = stock.name + ' (' + stock.code + ') · ' + (stock.cat || '') + ' · ' + (stock.price || '') + '원';
-  content.innerHTML = '<span class="ai-loading">⏳ Claude AI 분석 중... 잠시만 기다려 주세요.</span>';
+  var catLabel = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주'}[stock.cat] || stock.cat || '';
+  subEl.textContent = stock.name + ' (' + stock.code + ')  ·  ' + catLabel + '  ·  ' + (stock.price || '') + '원  ' + (stock.change || '');
+  content.textContent = generateSwingReport(stock);
   overlay.classList.add('show');
-
-  var reasons = (stock.reasons || []).map(function(r){ return r.text || ''; }).join('\n');
-  var userMsg = '[종목 정보 데이터]\n'
-    + '종목명: ' + (stock.name || '') + '\n'
-    + '종목코드: ' + (stock.code || '') + '\n'
-    + '카테고리: ' + (stock.cat === 'swing' ? '실시간스윙' : stock.cat === 'surge' ? '급등전야' : stock.cat === 'tomorrow' ? '내일관심' : '중소형주') + '\n'
-    + '현재가: ' + (stock.price || '') + '원\n'
-    + '등락률: ' + (stock.change || '') + '\n'
-    + 'K 스코어: ' + (stock.score || '') + '점 (' + (stock.grade || '') + '등급)\n'
-    + '매입가(기준): ' + (stock.buy || '') + '원\n'
-    + '목표가: ' + (stock.target || '') + '원\n'
-    + '손절가: ' + (stock.stop || '') + '원\n'
-    + '손익비: ' + (stock.rr || '') + '\n'
-    + '거래대금: ' + (stock.vol || '') + '억원\n'
-    + 'RSI(추정): ' + (stock.rsiApprox || '') + '\n'
-    + '시장구분: ' + ((stock.mkt || 'KOSPI').toUpperCase()) + '\n'
-    + 'K 분석사유:\n' + reasons;
-
-  if (_aiAbortController) { try { _aiAbortController.abort(); } catch(e){} }
-  _aiAbortController = new AbortController();
-
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    signal: _aiAbortController.signal,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-7',
-      max_tokens: 2048,
-      system: SWING_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMsg }]
-    })
-  })
-  .then(function(res) {
-    if (!res.ok) {
-      return res.json().then(function(e) {
-        throw new Error((e.error && e.error.message) || 'API 오류 ' + res.status);
-      });
-    }
-    return res.json();
-  })
-  .then(function(data) {
-    var text = (data.content && data.content[0] && data.content[0].text) || '응답 없음';
-    content.textContent = text;
-  })
-  .catch(function(err) {
-    if (err.name === 'AbortError') return;
-    content.innerHTML = '<span style="color:#ff4d6d">❌ 오류: ' + err.message + '</span>';
-  });
 }
 
 function closeAiAnalysis() {
   document.getElementById('ai-modal-overlay').classList.remove('show');
-  if (_aiAbortController) { try { _aiAbortController.abort(); } catch(e){} _aiAbortController = null; }
 }
 
 function copyAiResult() {
