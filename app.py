@@ -500,10 +500,10 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         # ════════════════════════════════════════════
         # ① 실시간 스윙 (기술적 지지 + 모멘텀 + 수급)
         #    - MA 근접 상향 돌파 (이격도 100~103 추정)
-        #    - 거래대금 200억 이상 (기관/외국인 수급 추정)
-        #    - 등락률 +0.5%~+4% (과열 아닌 모멘텀)
+        #    - 거래대금 100억 이상 (수급 확인)
+        #    - 등락률 +0.3%~+6% (과열 아닌 모멘텀)
         # ════════════════════════════════════════════
-        if proximity_ok and 0.5 <= pct <= 4.5 and vol_grade >= 2:
+        if proximity_ok and 0.3 <= pct <= 6.0 and vol_grade >= 1:
             # 점수: 기본 70 + 모멘텀(최대 12) + 수급(최대 16) + RSI보너스(최대 7)
             momentum_sc = min(12, int(pct * 3))
             vol_sc      = min(16, vol_grade * 4)
@@ -536,7 +536,7 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         #    - 거래대금 50억+ (수급 대기 추정)
         #    - 피보나치 61.8% 되돌림 구간 근사
         # ════════════════════════════════════════════
-        if ma_support_ok and -1.0 <= pct <= 1.5 and tr >= 50:
+        if -2.0 <= pct <= 2.5 and tr >= 50:
             # 점수: 기본 60 + 수급(최대 18) + 안정성보너스(최대 10) + 피보나치(최대 5)
             vol_sc  = min(18, vol_grade * 5)
             stab_sc = 10 if abs(pct) <= 0.5 else 5 if abs(pct) <= 1.0 else 0
@@ -1862,8 +1862,16 @@ if st.session_state.kis_token:
                 lines.append(f"\n⬟ <b>[중소형주 TOP{len(ml)}]</b>")
                 for c in ml: lines.append(fmt_card(c))
             if not any([sl, ul, tl, ml]):
-                lines.append("📊 <b>[스캔 결과 없음 — 장 시작 전이거나 필터 조건 미달]</b>")
-            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {total_n}종목 완료 · 다음 {iv_label_str} 후")
+                # 폴백: 모든 카드에서 거래대금 순 상위 5 표시
+                _all = (cats_d.get('swing',[]) + cats_d.get('surge',[]) +
+                        cats_d.get('tomorrow',[]) + cats_d.get('smallmid',[]))
+                if _all:
+                    _fb = sorted(_all, key=lambda x: x.get('vol',0), reverse=True)[:5]
+                    lines.append("📊 <b>[거래대금 상위]</b>")
+                    for c in _fb: lines.append(fmt_card(c))
+                else:
+                    lines.append("📊 스캔 결과 없음 — 필터 조건 미달")
+            lines.append(f"━━━━━━━━━━━━━━━━\n📊 {total_n}종목 스캔 완료 · 다음 {iv_label_str} 후")
             return "\n\n".join(lines)
 
         _tg_tok   = st.session_state.get('tg_token','')
