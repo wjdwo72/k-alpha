@@ -1713,7 +1713,15 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 server_store['tg_grp3'] = grp3_enc
 
         st.divider()
-        st.caption("💡 AI 분석 종목 수는 각 채팅방 탭에서 개별 설정할 수 있습니다.")
+        st.markdown("**📊 분석 내용 전송 설정**")
+        tg_ai_count = st.slider(
+            "카테고리당 종목 갯수 (최대 10개)",
+            min_value=1, max_value=10,
+            value=st.session_state.get('tg_ai_count', 3),
+            key="tg_ai_count_sl"
+        )
+        st.session_state['tg_ai_count'] = tg_ai_count
+        st.caption(f"각 카테고리(스윙·급등·내일관심·중소형주)당 {tg_ai_count}종목씩 분석 내용 포함 전송 (채팅방별 설정 없으면 이 값 사용)")
 
     # ── 🤖 Google AI Studio (Gemini) ──────────────────────────────
     with st.expander("🤖 Google AI 분석 설정 (Gemini)", expanded=False):
