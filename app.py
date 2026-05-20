@@ -711,7 +711,7 @@ def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s
     for attempt in range(3):
         try:
             r = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gkey}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gkey}",
                 json={"system_instruction":{"parts":[{"text":"너는 스윙 매매 전문가다. 반드시 한국어, 간결(200자 이내)."}]},
                       "contents":[{"role":"user","parts":[{"text":msg}]}],
                       "generationConfig":{"maxOutputTokens":300,"temperature":0.7}},
