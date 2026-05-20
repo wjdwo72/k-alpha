@@ -3619,7 +3619,7 @@ function openAiAnalysis(event, stock) {
     if (_aiAbortCtrl) { try { _aiAbortCtrl.abort(); } catch(e){} }
     _aiAbortCtrl = new AbortController();
 
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' + googleKey;
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + googleKey;
     fetch(url, {
       method: 'POST',
       signal: _aiAbortCtrl.signal,
