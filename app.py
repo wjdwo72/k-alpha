@@ -739,19 +739,35 @@ div[data-testid="column"] .stButton button:active{transform:scale(.92)!important
 div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,.12)!important;border-color:rgba(0,212,255,.4)!important;color:#00d4ff!important}
 .del-btn .stButton button{width:100%!important;height:52px!important;background:#0d1220!important;color:#64748b!important;border:1px solid #1a2535!important;border-radius:10px!important;font-size:14px!important;padding:0!important}
 </style>""", unsafe_allow_html=True)
+
+    # ── 1. 면책조항 (PIN 위에 표시) ──────────────
+    st.markdown("""<div style="background:#0a0e1a;border:1px solid rgba(255,165,0,0.35);
+border-radius:10px;padding:12px 14px;margin-bottom:10px;font-family:'Share Tech Mono',monospace">
+  <div style="color:#ffc800;font-size:11px;font-weight:700;margin-bottom:8px">⚠ 투자 위험 고지 및 면책 조항</div>
+  <div style="font-size:10px;color:#64748b;line-height:1.9">
+    • 개발자는 투자 결과에 대해 <b style="color:#ff4d6d">일체의 법적 책임을 지지 않습니다</b><br>
+    • 모든 분석·신호는 <b style="color:#ffc800">참고 목적</b>이며 결과를 보장하지 않습니다<br>
+    • <b style="color:#ff4d6d">원금 손실 위험</b>이 있으며 최종 판단은 <b style="color:#e2e8f0">이용자 본인</b>에게 있습니다<br>
+    • 한국투자증권과 <b style="color:#ffc800">무관한 독립 개인 개발 도구</b>입니다
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # ── 2. K·ALPHA 타이틀 + PIN 입력 ─────────────
     dots=''.join([f'<div style="width:12px;height:12px;border-radius:50%;'
         +(f'background:#00d4ff;border:2px solid #00d4ff;">' if i<len(buf) else 'border:2px solid #1a3a4a;background:transparent">')
         +'</div>' for i in range(4)])
-    st.markdown(f"""<div style="text-align:center;padding:28px 0 18px;font-family:'Share Tech Mono',monospace">
+    st.markdown(f"""<div style="text-align:center;padding:16px 0 14px;font-family:'Share Tech Mono',monospace">
   <div style="font-size:clamp(22px,7vw,40px);font-weight:700;letter-spacing:6px;
     background:linear-gradient(90deg,#00d4ff,#00ff88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px">K · ALPHA</div>
-  <div style="font-size:11px;color:#4a5568;letter-spacing:2px;margin-bottom:20px">SECURE ACCESS</div>
-  <div style="background:#0a0e1a;border:1px solid #1a2535;border-radius:16px;padding:22px 20px 14px;width:min(280px,86vw);margin:0 auto">
+  <div style="font-size:11px;color:#4a5568;letter-spacing:2px;margin-bottom:16px">SECURE ACCESS</div>
+  <div style="background:#0a0e1a;border:1px solid #1a2535;border-radius:16px;padding:18px 20px 12px;width:min(280px,86vw);margin:0 auto">
     <div style="font-size:10px;color:#4a5568;margin-bottom:10px">🔒 PIN 번호 입력</div>
-    <div style="display:flex;justify-content:center;gap:14px;margin-bottom:16px">{dots}</div>
+    <div style="display:flex;justify-content:center;gap:14px;margin-bottom:12px">{dots}</div>
     {'<div style="color:#ff4d6d;font-size:11px">❌ 비밀번호가 틀렸습니다</div>' if err else ''}
   </div>
 </div>""", unsafe_allow_html=True)
+
+    # ── 3. 숫자 키패드 ────────────────────────────
     for row in [[1,2,3],[4,5,6],[7,8,9]]:
         cols=st.columns(3)
         for c,n in zip(cols,row):
@@ -764,36 +780,37 @@ div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,
     st.button('⌫  지우기',key='pb_del',on_click=press_del,use_container_width=True)
     st.markdown('</div>',unsafe_allow_html=True)
 
-    st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+    # ── 4. PIN 설정 (해제 / 변경) ─────────────────
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+    with st.expander("⚙ PIN 설정 (해제 / 변경)", expanded=False):
+        st.caption("현재 PIN을 입력한 후 사용 해제 또는 새 PIN으로 변경하세요.")
+        _cur_pin_inp = st.text_input("현재 PIN", type="password", max_chars=4,
+                                      placeholder="현재 4자리", key="pin_cur_inp")
 
-    with st.expander("⚠ 투자 위험 고지", expanded=False):
-        st.markdown("""<div style="font-size:11px;color:#94a3b8;line-height:2;font-family:monospace">
-• 개발자는 투자 결과에 대해 <b style="color:#ff4d6d">일체의 법적 책임을 지지 않습니다</b><br>
-• 모든 분석·신호는 <b style="color:#ffc800">참고 목적</b>이며 결과를 보장하지 않습니다<br>
-• <b style="color:#ff4d6d">원금 손실 위험</b>이 있으며 최종 판단은 <b>이용자 본인</b>에게 있습니다<br>
-• 자동매매 손실·오류에 대해 개발자는 <b style="color:#ff4d6d">법적 책임을 지지 않습니다</b><br>
-• 한국투자증권과 <b style="color:#ffc800">무관한 독립 개인 개발 도구</b>입니다
-</div>""", unsafe_allow_html=True)
-
-    with st.expander("⚙ PIN 설정", expanded=False):
-        _use_p = st.toggle("🔒 PIN 잠금 사용", value=st.session_state.use_pin, key="pin_tog_lock")
-        if _use_p != st.session_state.use_pin:
-            st.session_state.use_pin = _use_p
-            if not _use_p:
-                qp['no_pin'] = '1'
-                st.session_state.auth = True
-                st.rerun()
-            else:
-                try: del qp['no_pin']
-                except: pass
+        pc1, pc2 = st.columns(2)
+        with pc1:
+            if st.button("🔓 PIN 사용 해제", key="btn_pin_disable", use_container_width=True):
+                if _cur_pin_inp == PASSWORD:
+                    st.session_state.use_pin = False
+                    st.session_state.auth = True
+                    qp['no_pin'] = '1'
+                    try: del qp['cp']
+                    except: pass
+                    st.success("✅ PIN 잠금이 해제됐습니다.")
+                    st.rerun()
+                else:
+                    st.error("❌ PIN이 틀렸습니다")
 
         st.divider()
         st.markdown("**🔑 PIN 변경**")
-        _old_pin  = st.text_input("현재 PIN", type="password", max_chars=4, placeholder="현재 4자리", key="pin_chg_old")
-        _new_pin  = st.text_input("새 PIN",   type="password", max_chars=4, placeholder="새 4자리",  key="pin_chg_new")
-        _new_pin2 = st.text_input("새 PIN 확인", type="password", max_chars=4, placeholder="새 4자리 재입력", key="pin_chg_new2")
+        _new_pin  = st.text_input("새 PIN",      type="password", max_chars=4,
+                                   placeholder="새 4자리", key="pin_new_inp")
+        _new_pin2 = st.text_input("새 PIN 확인", type="password", max_chars=4,
+                                   placeholder="새 4자리 재입력", key="pin_new2_inp")
+        with pc2:
+            pass  # layout placeholder
         if st.button("💾 PIN 변경 저장", key="btn_pin_chg", use_container_width=True):
-            if _old_pin != PASSWORD:
+            if _cur_pin_inp != PASSWORD:
                 st.error("❌ 현재 PIN이 틀렸습니다")
             elif len(_new_pin) != 4 or not _new_pin.isdigit():
                 st.error("❌ 새 PIN은 숫자 4자리여야 합니다")
@@ -801,18 +818,15 @@ div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,
                 st.error("❌ 새 PIN이 일치하지 않습니다")
             else:
                 server_store['app_pin'] = _new_pin
-                # KIS 키 재암호화
                 if qp.get('ck'):
                     try:
                         _d = py_load(qp['ck'], PASSWORD)
                         _new_ck = py_save(_d['ak'], _d['sec'], _d['acc'], _d.get('env','실전투자'), _new_pin)
-                        qp['ck'] = _new_ck
-                        server_store['ck'] = _new_ck
+                        qp['ck'] = _new_ck; server_store['ck'] = _new_ck
                         _new_cp = base64.b64encode((_new_pin+':kalpha').encode()).decode()
-                        qp['cp'] = _new_cp
-                        server_store['cp'] = _new_cp
+                        qp['cp'] = _new_cp; server_store['cp'] = _new_cp
                     except: pass
-                st.success(f"✅ PIN이 {_new_pin}으로 변경됐습니다. 다음 접속부터 적용됩니다.")
+                st.success(f"✅ PIN이 {_new_pin}으로 변경됐습니다.")
                 st.rerun()
 
     st.stop()
