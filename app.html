@@ -1835,6 +1835,38 @@
           <span style="font-size:11px;color:var(--text-dim)">(과매수 구간 자동 제외)</span>
         </div>
       </div>
+      <div style="height:1px;background:var(--border)"></div>
+      <div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;letter-spacing:1px">📋 카테고리별 스캔 조건 <span style="color:var(--accent4);font-size:10px">※ 장이 안좋을 때 완화 조정</span></div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px">
+          <div style="font-size:11px;color:var(--swing);margin-bottom:6px;font-weight:700">🔥 실시간스윙</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap">
+            <span style="font-size:10px;color:var(--text-dim);min-width:46px">거래대금:</span>
+            <input id="swing-vol-min" type="number" min="50" max="3000" step="50" value="100" style="width:65px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text-bright);font-family:'Share Tech Mono',monospace;font-size:11px">
+            <span style="font-size:10px;color:var(--text-dim)">억+</span>
+            <span style="font-size:10px;color:#4a5568">(기존 300억)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:10px;color:var(--text-dim);min-width:46px">등락률:</span>
+            <input id="swing-pct-min" type="number" min="-10" max="10" step="0.1" value="0.3" style="width:55px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text-bright);font-family:'Share Tech Mono',monospace;font-size:11px">
+            <span style="color:var(--text-dim)">~</span>
+            <input id="swing-pct-max" type="number" min="-10" max="20" step="0.1" value="6.0" style="width:55px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text-bright);font-family:'Share Tech Mono',monospace;font-size:11px">
+            <span style="font-size:10px;color:var(--text-dim)">%</span>
+            <span style="font-size:10px;color:#4a5568">(기존 0.5~4.5%)</span>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px">
+          <div style="font-size:11px;color:var(--tomorrow);margin-bottom:6px;font-weight:700">🔭 내일관심</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:10px;color:var(--text-dim);min-width:46px">등락률:</span>
+            <input id="tomorrow-pct-min" type="number" min="-10" max="10" step="0.5" value="-2.0" style="width:55px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text-bright);font-family:'Share Tech Mono',monospace;font-size:11px">
+            <span style="color:var(--text-dim)">~</span>
+            <input id="tomorrow-pct-max" type="number" min="-10" max="10" step="0.5" value="2.5" style="width:55px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text-bright);font-family:'Share Tech Mono',monospace;font-size:11px">
+            <span style="font-size:10px;color:var(--text-dim)">%</span>
+            <span style="font-size:10px;color:#4a5568">(기존 -0.5~+1.5%)</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeSettings()">취소</button>
@@ -2582,18 +2614,25 @@ const DEMO_META = {
 // ── 필터 적용 함수 ──
 function filterKrStocks(stocks) {
   return stocks.filter(s => {
-    // smallmid 카테고리는 필터에서 항상 통과 (별도 Alpha-10 로직)
+    // smallmid 카테고리는 항상 통과
     if (s.cat === 'smallmid') return true;
-    // 실시간 스캔 종목(_isLive)은 이미 Python에서 필터링됨 → 통과
-    if (s._isLive) return true;
+    if (s._isLive) {
+      // 실시간 종목: 카테고리별 등락률·거래대금 필터 적용
+      var pct = parseFloat((s.change || '0').replace('%','').replace('+','')) || 0;
+      var vol = parseFloat(s.vol) || 0;
+      if (s.cat === 'swing') {
+        if (vol < scanSettings.swingVolMin) return false;
+        if (pct < scanSettings.swingPctMin || pct > scanSettings.swingPctMax) return false;
+      }
+      if (s.cat === 'tomorrow') {
+        if (pct < scanSettings.tomorrowPctMin || pct > scanSettings.tomorrowPctMax) return false;
+      }
+      return true;
+    }
     const m = DEMO_META[s.code] || { tradingAmt: 1000, mktType: 'kospi', capType: 'large', rsi: 45 };
-    // 거래대금 필터
     if (m.tradingAmt < scanSettings.volMin) return false;
-    // 시장 필터
     if (scanSettings.mkt !== 'all' && m.mktType !== scanSettings.mkt) return false;
-    // 시가총액 필터
     if (scanSettings.cap !== 'all' && m.capType !== scanSettings.cap) return false;
-    // RSI 필터
     if (m.rsi < scanSettings.rsiMin || m.rsi > scanSettings.rsiMax) return false;
     return true;
   });
@@ -2626,12 +2665,18 @@ function filterUsStocks(stocks) {
 // ── 필터 초기화 ──
 function resetScanSettings() {
   try { localStorage.removeItem('k_scan_settings'); } catch(e) {}
-  // 설정 모달 UI도 초기화
-  document.getElementById('scan-vol-label').textContent = '500억+';
-  document.querySelectorAll('.vol-preset-btn').forEach(b => {
-    if (b.onclick && b.onclick.toString().includes('setVolPreset')) b.classList.remove('active');
-    if (b.onclick && b.onclick.toString().includes('500')) b.classList.add('active');
-  });
+  scanSettings.volMin = window.__SCAN_VOL_MIN__ || 100;
+  scanSettings.cap = 'all'; scanSettings.mkt = 'all';
+  scanSettings.rsiMin = window.__SCAN_RSI_MIN__ || 20;
+  scanSettings.rsiMax = window.__SCAN_RSI_MAX__ || 70;
+  scanSettings.swingVolMin = 100; scanSettings.swingPctMin = 0.3; scanSettings.swingPctMax = 6.0;
+  scanSettings.tomorrowPctMin = -2.0; scanSettings.tomorrowPctMax = 2.5;
+  document.getElementById('scan-vol-label').textContent = fmtNum(scanSettings.volMin) + '억+';
+  var swvEl = document.getElementById('swing-vol-min'); if (swvEl) swvEl.value = 100;
+  var swpnEl = document.getElementById('swing-pct-min'); if (swpnEl) swpnEl.value = 0.3;
+  var swpxEl = document.getElementById('swing-pct-max'); if (swpxEl) swpxEl.value = 6.0;
+  var tmnEl = document.getElementById('tomorrow-pct-min'); if (tmnEl) tmnEl.value = -2.0;
+  var tmxEl = document.getElementById('tomorrow-pct-max'); if (tmxEl) tmxEl.value = 2.5;
   document.getElementById('cap-all-btn')?.classList.add('active');
   document.querySelectorAll('[id^="cap-"]:not(#cap-all-btn)').forEach(b => b?.classList.remove('active'));
   document.getElementById('mkt-all-btn')?.classList.add('active');
@@ -2639,7 +2684,7 @@ function resetScanSettings() {
   renderCards();
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-  addLog(ts, '[설정] 스캔 필터 초기화 — 기본값 복원 (거래대금 500억+ / 전시장 / 전시총 / RSI 30~60)', 'ok');
+  addLog(ts, '[설정] 스캔 필터 초기화 — 기본값 복원 (스윙 100억+/0.3~6.0% · 내일 -2.0~+2.5%)', 'ok');
 }
 
 // ── 필터 카운트 업데이트 ──
@@ -2673,6 +2718,11 @@ let scanSettings = {
   mkt: 'all',
   rsiMin: window.__SCAN_RSI_MIN__ || 20,
   rsiMax: window.__SCAN_RSI_MAX__ || 70,
+  swingVolMin: 100,
+  swingPctMin: 0.3,
+  swingPctMax: 6.0,
+  tomorrowPctMin: -2.0,
+  tomorrowPctMax: 2.5,
 };
 
 function openSettings(evt) {
@@ -2680,6 +2730,11 @@ function openSettings(evt) {
   document.getElementById('vol-custom-inp').value = '';
   document.getElementById('rsi-min').value = scanSettings.rsiMin;
   document.getElementById('rsi-max').value = scanSettings.rsiMax;
+  document.getElementById('swing-vol-min').value = scanSettings.swingVolMin;
+  document.getElementById('swing-pct-min').value = scanSettings.swingPctMin;
+  document.getElementById('swing-pct-max').value = scanSettings.swingPctMax;
+  document.getElementById('tomorrow-pct-min').value = scanSettings.tomorrowPctMin;
+  document.getElementById('tomorrow-pct-max').value = scanSettings.tomorrowPctMax;
 
   document.querySelectorAll('[onclick*="setVolPreset"]').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('[onclick*="setVolPreset"]').forEach(b => {
@@ -2744,23 +2799,29 @@ function setMktFilter(btn, val) {
 }
 
 function applySettings() {
-  // 직접 입력값 처리
   const customVal = parseInt(document.getElementById('vol-custom-inp').value);
   if (!isNaN(customVal) && customVal > 0) scanSettings.volMin = customVal;
   scanSettings.rsiMin = parseInt(document.getElementById('rsi-min').value) || 30;
   scanSettings.rsiMax = parseInt(document.getElementById('rsi-max').value) || 60;
+  var _sv = parseFloat(document.getElementById('swing-vol-min').value);
+  var _spn = parseFloat(document.getElementById('swing-pct-min').value);
+  var _spx = parseFloat(document.getElementById('swing-pct-max').value);
+  var _tpn = parseFloat(document.getElementById('tomorrow-pct-min').value);
+  var _tpx = parseFloat(document.getElementById('tomorrow-pct-max').value);
+  scanSettings.swingVolMin    = isNaN(_sv)  ? 100  : Math.max(50, _sv);
+  scanSettings.swingPctMin    = isNaN(_spn) ? 0.3  : _spn;
+  scanSettings.swingPctMax    = isNaN(_spx) ? 6.0  : _spx;
+  scanSettings.tomorrowPctMin = isNaN(_tpn) ? -2.0 : _tpn;
+  scanSettings.tomorrowPctMax = isNaN(_tpx) ? 2.5  : _tpx;
 
-  // 스캔 인디케이터 라벨 업데이트
   document.getElementById('scan-vol-label').textContent = fmtNum(scanSettings.volMin) + '억+';
-
-  // 설정 저장
   try { localStorage.setItem('k_scan_settings', JSON.stringify(scanSettings)); } catch(e) {}
 
   closeSettings();
 
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-  addLog(ts, `[설정] 거래대금 ${fmtNum(scanSettings.volMin)}억+ / 시장:${scanSettings.mkt} / 시총:${scanSettings.cap} / RSI ${scanSettings.rsiMin}~${scanSettings.rsiMax} 적용`, 'ok');
+  addLog(ts, `[설정] 거래대금 ${fmtNum(scanSettings.volMin)}억+ / RSI ${scanSettings.rsiMin}~${scanSettings.rsiMax} / 스윙 ${scanSettings.swingVolMin}억+ ${scanSettings.swingPctMin}~${scanSettings.swingPctMax}% / 내일 ${scanSettings.tomorrowPctMin}~${scanSettings.tomorrowPctMax}% 적용`, 'ok');
 
   // ── 핵심: 필터 적용하여 카드 즉시 재렌더 ──
   renderCards();
@@ -2795,12 +2856,13 @@ try {
     return true;
   }).length;
   if (totalFiltered === 0) {
-    // volMin을 주입된 값 기준으로 리셋 (500 고정 대신 window 변수 우선)
     scanSettings = {
       volMin: window.__SCAN_VOL_MIN__ || 50,
       cap: 'all', mkt: 'all',
       rsiMin: window.__SCAN_RSI_MIN__ || 20,
-      rsiMax: window.__SCAN_RSI_MAX__ || 80
+      rsiMax: window.__SCAN_RSI_MAX__ || 80,
+      swingVolMin: 100, swingPctMin: 0.3, swingPctMax: 6.0,
+      tomorrowPctMin: -2.0, tomorrowPctMax: 2.5
     };
     try { localStorage.removeItem('k_scan_settings'); } catch(e) {}
   }
