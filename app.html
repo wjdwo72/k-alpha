@@ -2993,6 +2993,7 @@ function codeToSeed(code) {
 // ──────────────────────────────────────────────
 function buildCard(stock, rank) {
   registerStock(stock.code, stock.name);  // 레지스트리에 등록
+  _aiStockMap[stock.code] = stock;
   const gradeClass = stock.grade === 'S' ? 'grade-s' : stock.grade === 'A' ? 'grade-a' : 'grade-b';
   const scoreColor = stock.grade === 'S' ? '#ff4d6d' : stock.grade === 'A' ? 'var(--accent)' : 'var(--accent2)';
   const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : '#00ff88';
@@ -3086,7 +3087,7 @@ function buildCard(stock, rank) {
       <button class="btn-approve" id="btn-${stock.code}" onclick="openModal('${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
         ⬡ K-자동매매 승인
       </button>
-      <button class="btn-ai" id="btn-ai-${stock.code}" onclick="openAiAnalysis(event, ${JSON.stringify(stock).replace(/'/g,'&#39;')})">
+      <button class="btn-ai" id="btn-ai-${stock.code}" onclick="openAiAnalysis(event,'${stock.code}')">
         🤖 AI 분석
       </button>
     </div>
@@ -3579,6 +3580,7 @@ var SWING_SYSTEM_PROMPT = `# 역할 (Role)
 ---`;
 
 var _aiAbortCtrl = null;
+var _aiStockMap = {};
 
 function _buildUserMsg(stock) {
   var reasons = (stock.reasons || []).map(function(r){ return r.text || ''; }).join('\n');
@@ -3599,8 +3601,10 @@ function _buildUserMsg(stock) {
     + 'K 분석사유:\n' + reasons;
 }
 
-function openAiAnalysis(event, stock) {
+function openAiAnalysis(event, code) {
   event.stopPropagation();
+  var stock = _aiStockMap[code];
+  if (!stock) return;
   var overlay = document.getElementById('ai-modal-overlay');
   var subEl   = document.getElementById('ai-modal-sub');
   var content = document.getElementById('ai-modal-content');

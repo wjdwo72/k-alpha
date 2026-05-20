@@ -111,6 +111,11 @@ DEFAULTS = {
     "tg_group_chat":"","tg_group_enabled":False,
     "tg_group_interval_min":30,"tg_group_interval_label":"30분",
     "scan_blacklist":[],"scan_vol_min":50,"scan_rsi_min":20,"scan_rsi_max":75,
+    "scan_swing_vol_min":100,"scan_swing_pct_min":0.3,"scan_swing_pct_max":6.0,
+    "scan_surge_pct_min":4.0,
+    "scan_tomorrow_pct_min":-2.0,"scan_tomorrow_pct_max":2.5,
+    "scan_smallmid_vol_min":50,"scan_smallmid_vol_max":700,
+    "scan_smallmid_pct_min":-2.0,"scan_smallmid_pct_max":4.0,
     # 텔레그램 — 그룹방 2
     "tg_group2_chat":"","tg_group2_enabled":False,
     "tg_group2_interval_min":30,"tg_group2_interval_label":"30분",
@@ -441,7 +446,12 @@ def fetch_balance(token, base_url, ak, secret, acc):
         return d if d.get('rt_cd')=='0' else {'error':d.get('msg1','잔고조회실패')}
     except Exception as e: return {'error':str(e)}
 
-def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
+def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max,
+                      swing_vol_min=100, swing_pct_min=0.3, swing_pct_max=6.0,
+                      surge_pct_min=4.0,
+                      tomorrow_pct_min=-2.0, tomorrow_pct_max=2.5,
+                      smallmid_vol_min=50, smallmid_vol_max=700,
+                      smallmid_pct_min=-2.0, smallmid_pct_max=4.0):
     """
     스윙 매매 핵심 원칙 기반 종목 분류
     ① 실시간스윙  : 기술적 지지 근접 + 모멘텀 + 수급 동반
@@ -503,7 +513,8 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         #    - 거래대금 100억 이상 (수급 확인)
         #    - 등락률 +0.3%~+6% (과열 아닌 모멘텀)
         # ════════════════════════════════════════════
-        if proximity_ok and 0.3 <= pct <= 6.0 and vol_grade >= 1:
+        _sw_vol_grade_min = 1 if swing_vol_min <= 100 else (2 if swing_vol_min <= 300 else 3)
+        if proximity_ok and swing_pct_min <= pct <= swing_pct_max and vol_grade >= _sw_vol_grade_min:
             # 점수: 기본 70 + 모멘텀(최대 12) + 수급(최대 16) + RSI보너스(최대 7)
             momentum_sc = min(12, int(pct * 3))
             vol_sc      = min(16, vol_grade * 4)
@@ -520,7 +531,7 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         #    - 거래대금 100억+ (유의미한 수급 진입)
         #    - 베타 1.0+ 추정: 고변동 종목 선별
         # ════════════════════════════════════════════
-        if pct >= 4.0 and vol_grade >= 1:
+        if pct >= surge_pct_min and vol_grade >= 1:
             # 점수: 기본 65 + 모멘텀(최대 18) + 수급(최대 15)
             momentum_sc = min(18, int(pct * 2))
             vol_sc      = min(15, vol_grade * 4)
@@ -536,7 +547,7 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         #    - 거래대금 50억+ (수급 대기 추정)
         #    - 피보나치 61.8% 되돌림 구간 근사
         # ════════════════════════════════════════════
-        if -2.0 <= pct <= 2.5 and tr >= 50:
+        if tomorrow_pct_min <= pct <= tomorrow_pct_max and tr >= 50:
             # 점수: 기본 60 + 수급(최대 18) + 안정성보너스(최대 10) + 피보나치(최대 5)
             vol_sc  = min(18, vol_grade * 5)
             stab_sc = 10 if abs(pct) <= 0.5 else 5 if abs(pct) <= 1.0 else 0
@@ -553,7 +564,7 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max):
         #    - 등락률 -2%~+4% (과열 제외한 움직임)
         #    - 쌍끌이 수급 또는 피보나치 되돌림
         # ════════════════════════════════════════════
-        if 50 <= tr <= 700 and -2.0 <= pct <= 4.0:
+        if smallmid_vol_min <= tr <= smallmid_vol_max and smallmid_pct_min <= pct <= smallmid_pct_max:
             vol_sc   = min(12, tr // 55)
             mom_sc   = min(10, int(abs(pct) * 3))
             dual_sc  = 8 if dual_buying else 0
@@ -943,6 +954,77 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
         if st.session_state.scan_blacklist:
             st.caption("제외 중: " + ", ".join(st.session_state.scan_blacklist))
 
+        st.divider()
+        with st.expander("📊 카테고리별 스캔 조건 설정", expanded=False):
+            st.caption("기존 조건을 유지하면서 조정할 수 있습니다.")
+
+            st.markdown("**① 실시간스윙**")
+            st.caption("원래 기준: 거래대금 100억+ | 등락률 +0.3%~+6.0%")
+            _sw_vol = st.number_input("최소 거래대금 (억원)", min_value=10, max_value=5000,
+                value=st.session_state.scan_swing_vol_min, step=10, key="inp_sw_vol")
+            st.session_state.scan_swing_vol_min = _sw_vol
+            _sw_c1, _sw_c2 = st.columns(2)
+            with _sw_c1:
+                _sw_pmin = st.number_input("등락률 최소 (%)", min_value=-5.0, max_value=10.0,
+                    value=float(st.session_state.scan_swing_pct_min), step=0.1, format="%.1f", key="inp_sw_pmin")
+                st.session_state.scan_swing_pct_min = _sw_pmin
+            with _sw_c2:
+                _sw_pmax = st.number_input("등락률 최대 (%)", min_value=0.0, max_value=30.0,
+                    value=float(st.session_state.scan_swing_pct_max), step=0.1, format="%.1f", key="inp_sw_pmax")
+                st.session_state.scan_swing_pct_max = _sw_pmax
+
+            st.markdown("**② 급등전야**")
+            st.caption("원래 기준: 등락률 +4.0%+")
+            _su_pmin = st.number_input("등락률 최소 (%)", min_value=0.0, max_value=20.0,
+                value=float(st.session_state.scan_surge_pct_min), step=0.5, format="%.1f", key="inp_su_pmin")
+            st.session_state.scan_surge_pct_min = _su_pmin
+
+            st.markdown("**③ 내일관심**")
+            st.caption("원래 기준: 등락률 -2.0%~+2.5%")
+            _tm_c1, _tm_c2 = st.columns(2)
+            with _tm_c1:
+                _tm_pmin = st.number_input("등락률 최소 (%)", min_value=-10.0, max_value=0.0,
+                    value=float(st.session_state.scan_tomorrow_pct_min), step=0.5, format="%.1f", key="inp_tm_pmin")
+                st.session_state.scan_tomorrow_pct_min = _tm_pmin
+            with _tm_c2:
+                _tm_pmax = st.number_input("등락률 최대 (%)", min_value=0.0, max_value=10.0,
+                    value=float(st.session_state.scan_tomorrow_pct_max), step=0.5, format="%.1f", key="inp_tm_pmax")
+                st.session_state.scan_tomorrow_pct_max = _tm_pmax
+
+            st.markdown("**④ 중소형주**")
+            st.caption("원래 기준: 거래대금 50억~700억 | 등락률 -2.0%~+4.0%")
+            _sm_c1, _sm_c2 = st.columns(2)
+            with _sm_c1:
+                _sm_vmin = st.number_input("거래대금 최소 (억원)", min_value=10, max_value=5000,
+                    value=st.session_state.scan_smallmid_vol_min, step=10, key="inp_sm_vmin")
+                st.session_state.scan_smallmid_vol_min = _sm_vmin
+            with _sm_c2:
+                _sm_vmax = st.number_input("거래대금 최대 (억원)", min_value=50, max_value=10000,
+                    value=st.session_state.scan_smallmid_vol_max, step=50, key="inp_sm_vmax")
+                st.session_state.scan_smallmid_vol_max = _sm_vmax
+            _sm_p1, _sm_p2 = st.columns(2)
+            with _sm_p1:
+                _sm_pmin = st.number_input("등락률 최소 (%)", min_value=-10.0, max_value=0.0,
+                    value=float(st.session_state.scan_smallmid_pct_min), step=0.5, format="%.1f", key="inp_sm_pmin")
+                st.session_state.scan_smallmid_pct_min = _sm_pmin
+            with _sm_p2:
+                _sm_pmax = st.number_input("등락률 최대 (%)", min_value=0.0, max_value=20.0,
+                    value=float(st.session_state.scan_smallmid_pct_max), step=0.5, format="%.1f", key="inp_sm_pmax")
+                st.session_state.scan_smallmid_pct_max = _sm_pmax
+
+            if st.button("↩ 조건 초기화 (원래 기준으로)", key="btn_scan_reset", use_container_width=True):
+                st.session_state.scan_swing_vol_min = 100
+                st.session_state.scan_swing_pct_min = 0.3
+                st.session_state.scan_swing_pct_max = 6.0
+                st.session_state.scan_surge_pct_min = 4.0
+                st.session_state.scan_tomorrow_pct_min = -2.0
+                st.session_state.scan_tomorrow_pct_max = 2.5
+                st.session_state.scan_smallmid_vol_min = 50
+                st.session_state.scan_smallmid_vol_max = 700
+                st.session_state.scan_smallmid_pct_min = -2.0
+                st.session_state.scan_smallmid_pct_max = 4.0
+                st.rerun()
+
     st.divider()
 
     # ── 간편비번 저장/불러오기 ──────────────────
@@ -1080,6 +1162,19 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
                 st.rerun()
     if st.session_state.kis_token:
         st.success(f"✅ {st.session_state.kis_env} 연결됨")
+
+    if st.button("💾 API 키만 저장 (연결 없이)", use_container_width=True, key="btn_kis_save_only"):
+        if not ak or not sec or not acc:
+            st.error("앱키 / 시크릿 / 계좌번호를 모두 입력하세요")
+        else:
+            ck_v = py_save(ak, sec, acc, env_label, PASSWORD)
+            qp['ck'] = ck_v
+            server_store['ck'] = ck_v
+            st.session_state.kis_ak  = ak
+            st.session_state.kis_sec = sec
+            st.session_state.kis_acc = acc
+            st.session_state.kis_env = env_label
+            st.success("✅ API 키 저장됨 (연결 확인 없음)")
 
     st.divider()
 
@@ -1957,6 +2052,16 @@ if st.session_state.kis_token:
             st.session_state.scan_vol_min,
             st.session_state.scan_rsi_min,
             st.session_state.scan_rsi_max,
+            swing_vol_min=st.session_state.get('scan_swing_vol_min', 100),
+            swing_pct_min=st.session_state.get('scan_swing_pct_min', 0.3),
+            swing_pct_max=st.session_state.get('scan_swing_pct_max', 6.0),
+            surge_pct_min=st.session_state.get('scan_surge_pct_min', 4.0),
+            tomorrow_pct_min=st.session_state.get('scan_tomorrow_pct_min', -2.0),
+            tomorrow_pct_max=st.session_state.get('scan_tomorrow_pct_max', 2.5),
+            smallmid_vol_min=st.session_state.get('scan_smallmid_vol_min', 50),
+            smallmid_vol_max=st.session_state.get('scan_smallmid_vol_max', 700),
+            smallmid_pct_min=st.session_state.get('scan_smallmid_pct_min', -2.0),
+            smallmid_pct_max=st.session_state.get('scan_smallmid_pct_max', 4.0),
         )
         scan_count = len(all_stocks)
 
