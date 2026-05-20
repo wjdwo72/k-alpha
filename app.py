@@ -1102,6 +1102,32 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_interval_label'] = iv_p_label
             st.session_state['tg_interval_min']   = _iv_dict[iv_p_label]
 
+            cs1, cs2 = st.columns([2,1])
+            with cs1:
+                if st.button("💾 Bot Token & Chat ID 저장", key="btn_tg_save",
+                             use_container_width=True,
+                             disabled=not bool(tg_token and tg_chat)):
+                    st.session_state['tg_token'] = tg_token
+                    st.session_state['tg_chat']  = tg_chat
+                    tg_enc = base64.b64encode(
+                        json.dumps({'t':tg_token,'c':tg_chat}).encode()).decode()
+                    qp['tg'] = tg_enc
+                    server_store['tg'] = tg_enc
+                    components.html(
+                        f"<script>try{{localStorage.setItem('ka_tg_v1',{json.dumps(tg_enc)});}}catch(e){{}}</script>",
+                        height=0, scrolling=False)
+                    st.success("✅ 저장 완료")
+            with cs2:
+                if st.button("🗑 삭제", key="btn_tg_del", use_container_width=True,
+                             disabled=not bool(st.session_state.get('tg_token') or
+                                               st.session_state.get('tg_chat'))):
+                    st.session_state['tg_token'] = ''
+                    st.session_state['tg_chat']  = ''
+                    server_store['tg'] = None
+                    try: del qp['tg']
+                    except: pass
+                    st.rerun()
+
             cp1, cp2 = st.columns([2,1])
             with cp1:
                 if st.button("📱 개인방 테스트 전송", use_container_width=True, key="btn_tg_p"):
