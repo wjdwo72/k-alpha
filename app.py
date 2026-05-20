@@ -158,34 +158,40 @@ if qp.get("tg") and not st.session_state.get("tg_token"):
         st.session_state["tg_chat"]  = tg_data.get("c","")
     except: pass
 
-# 텔레그램 복원 — 그룹방
-if qp.get("tg_grp") and not st.session_state.get("tg_group_chat"):
+# 텔레그램 복원 — 그룹방 (qp 없으면 server_store 폴백)
+_tg_grp_src = qp.get("tg_grp") or server_store.get("tg_grp","")
+if _tg_grp_src and not st.session_state.get("tg_group_chat"):
     try:
-        tg_grp = json.loads(base64.b64decode(qp.get("tg_grp","")).decode())
+        tg_grp = json.loads(base64.b64decode(_tg_grp_src).decode())
         st.session_state["tg_group_chat"]             = tg_grp.get("c","")
         st.session_state["tg_group_enabled"]          = tg_grp.get("en", False)
         st.session_state["tg_group_interval_min"]     = tg_grp.get("iv", 30)
         st.session_state["tg_group_interval_label"]   = tg_grp.get("ivl","30분")
+        if not qp.get("tg_grp"): qp["tg_grp"] = _tg_grp_src
     except: pass
 
 # 텔레그램 복원 — 그룹방 2
-if qp.get("tg_grp2") and not st.session_state.get("tg_group2_chat"):
+_tg_grp2_src = qp.get("tg_grp2") or server_store.get("tg_grp2","")
+if _tg_grp2_src and not st.session_state.get("tg_group2_chat"):
     try:
-        tg_grp2 = json.loads(base64.b64decode(qp.get("tg_grp2","")).decode())
+        tg_grp2 = json.loads(base64.b64decode(_tg_grp2_src).decode())
         st.session_state["tg_group2_chat"]           = tg_grp2.get("c","")
         st.session_state["tg_group2_enabled"]        = tg_grp2.get("en", False)
         st.session_state["tg_group2_interval_min"]   = tg_grp2.get("iv", 30)
         st.session_state["tg_group2_interval_label"] = tg_grp2.get("ivl","30분")
+        if not qp.get("tg_grp2"): qp["tg_grp2"] = _tg_grp2_src
     except: pass
 
 # 텔레그램 복원 — 그룹방 3
-if qp.get("tg_grp3") and not st.session_state.get("tg_group3_chat"):
+_tg_grp3_src = qp.get("tg_grp3") or server_store.get("tg_grp3","")
+if _tg_grp3_src and not st.session_state.get("tg_group3_chat"):
     try:
-        tg_grp3 = json.loads(base64.b64decode(qp.get("tg_grp3","")).decode())
+        tg_grp3 = json.loads(base64.b64decode(_tg_grp3_src).decode())
         st.session_state["tg_group3_chat"]           = tg_grp3.get("c","")
         st.session_state["tg_group3_enabled"]        = tg_grp3.get("en", False)
         st.session_state["tg_group3_interval_min"]   = tg_grp3.get("iv", 30)
         st.session_state["tg_group3_interval_label"] = tg_grp3.get("ivl","30분")
+        if not qp.get("tg_grp3"): qp["tg_grp3"] = _tg_grp3_src
     except: pass
 
 # URL 키 자동 불러오기 + 연결
@@ -1191,6 +1197,31 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_group_interval_label'] = iv_g_label
             st.session_state['tg_group_interval_min']   = _iv_dict[iv_g_label]
 
+            cgs_g1a, cgs_g1b = st.columns([2,1])
+            with cgs_g1a:
+                if st.button("💾 그룹방 Chat ID 저장", key="btn_grp1_save",
+                             use_container_width=True,
+                             disabled=not bool(_grp_chat_val or tg_group_chat)):
+                    _sv = tg_group_chat or _grp_chat_val
+                    st.session_state['tg_group_chat'] = _sv
+                    _enc = base64.b64encode(json.dumps({
+                        'c': _sv, 'en': grp_enabled,
+                        'iv': _iv_dict[iv_g_label], 'ivl': iv_g_label,
+                    }).encode()).decode()
+                    qp['tg_grp'] = _enc
+                    server_store['tg_grp'] = _enc
+                    st.success("✅ 저장 완료")
+            with cgs_g1b:
+                if st.button("🗑 삭제", key="btn_grp1_del",
+                             use_container_width=True,
+                             disabled=not bool(st.session_state.get('tg_group_chat'))):
+                    st.session_state['tg_group_chat'] = ''
+                    st.session_state['tg_group_enabled'] = False
+                    server_store['tg_grp'] = None
+                    try: del qp['tg_grp']
+                    except: pass
+                    st.rerun()
+
             cg1, cg2 = st.columns([2,1])
             with cg1:
                 if st.button("👥 그룹방 테스트 전송", use_container_width=True,
@@ -1289,6 +1320,31 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_group2_interval_label'] = iv_g2_label
             st.session_state['tg_group2_interval_min']   = _iv_dict[iv_g2_label]
 
+            cgs_g2a, cgs_g2b = st.columns([2,1])
+            with cgs_g2a:
+                if st.button("💾 그룹방 2 Chat ID 저장", key="btn_grp2_save",
+                             use_container_width=True,
+                             disabled=not bool(_grp2_chat_val or tg_group2_chat)):
+                    _sv2 = tg_group2_chat or _grp2_chat_val
+                    st.session_state['tg_group2_chat'] = _sv2
+                    _enc2 = base64.b64encode(json.dumps({
+                        'c': _sv2, 'en': grp2_enabled,
+                        'iv': _iv_dict[iv_g2_label], 'ivl': iv_g2_label,
+                    }).encode()).decode()
+                    qp['tg_grp2'] = _enc2
+                    server_store['tg_grp2'] = _enc2
+                    st.success("✅ 저장 완료")
+            with cgs_g2b:
+                if st.button("🗑 삭제", key="btn_grp2_del",
+                             use_container_width=True,
+                             disabled=not bool(st.session_state.get('tg_group2_chat'))):
+                    st.session_state['tg_group2_chat'] = ''
+                    st.session_state['tg_group2_enabled'] = False
+                    server_store['tg_grp2'] = None
+                    try: del qp['tg_grp2']
+                    except: pass
+                    st.rerun()
+
             cg2a, cg2b = st.columns([2,1])
             with cg2a:
                 if st.button("👥 그룹방 2 테스트 전송", use_container_width=True,
@@ -1373,6 +1429,31 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                                            disabled=not grp3_enabled, key="tg_iv_g3")
             st.session_state['tg_group3_interval_label'] = iv_g3_label
             st.session_state['tg_group3_interval_min']   = _iv_dict[iv_g3_label]
+
+            cgs_g3a, cgs_g3b = st.columns([2,1])
+            with cgs_g3a:
+                if st.button("💾 그룹방 3 Chat ID 저장", key="btn_grp3_save",
+                             use_container_width=True,
+                             disabled=not bool(_grp3_chat_val or tg_group3_chat)):
+                    _sv3 = tg_group3_chat or _grp3_chat_val
+                    st.session_state['tg_group3_chat'] = _sv3
+                    _enc3 = base64.b64encode(json.dumps({
+                        'c': _sv3, 'en': grp3_enabled,
+                        'iv': _iv_dict[iv_g3_label], 'ivl': iv_g3_label,
+                    }).encode()).decode()
+                    qp['tg_grp3'] = _enc3
+                    server_store['tg_grp3'] = _enc3
+                    st.success("✅ 저장 완료")
+            with cgs_g3b:
+                if st.button("🗑 삭제", key="btn_grp3_del",
+                             use_container_width=True,
+                             disabled=not bool(st.session_state.get('tg_group3_chat'))):
+                    st.session_state['tg_group3_chat'] = ''
+                    st.session_state['tg_group3_enabled'] = False
+                    server_store['tg_grp3'] = None
+                    try: del qp['tg_grp3']
+                    except: pass
+                    st.rerun()
 
             cg3a, cg3b = st.columns([2,1])
             with cg3a:
