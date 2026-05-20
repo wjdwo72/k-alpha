@@ -1742,7 +1742,7 @@ if st.session_state.kis_token:
             elif chg >= 4: risks.append(f'+{chg:.0f}%눌림대기')
             if rr < 1.5:   risks.append(f'RR{rr}낮음')
             risk_str = '·'.join(risks) if risks else '없음'
-            lines = [f"   🤖 <b>{score}점({grade})</b> | ⚠{risk_str}"]
+            lines = [f"   🛡 {score}점({grade}) | ⚠ {risk_str}"]
             for r in reasons:
                 text = r.get('text', '')
                 if '[기본적 분석]' in text:
@@ -1774,8 +1774,8 @@ if st.session_state.kis_token:
                 _vol = c.get('vol', 0)
                 try: _vol = int(_vol)
                 except: pass
-                return (f"{icon} <b>{c['name']}</b> ({c['code']})\n"
-                        f"   💰 현재가: <b>{c['price']}원</b> {pct_str} | 거래대금 {_vol:,}억\n"
+                return (f"{icon} {c['name']} ({c['code']})\n"
+                        f"   💰 현재가: {c['price']}원 {pct_str} | 거래대금 {_vol:,}억\n"
                         f"   📈 매입가: {c['buy']}원 | 손절: {c['stop']}원 | RR {c['rr']}\n"
                         f"{_compact_ai(c)}")
             lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
@@ -1948,7 +1948,7 @@ if st.session_state.kis_token:
         elif chg >= 4: risks.append(f'+{chg:.0f}%눌림대기')
         if rr < 1.5:   risks.append(f'RR{rr}낮음')
         risk_str = '·'.join(risks) if risks else '없음'
-        lines = [f"   🤖 <b>{score}점({grade})</b> | ⚠{risk_str}"]
+        lines = [f"   🛡 {score}점({grade}) | ⚠ {risk_str}"]
         for r in card.get('reasons', []):
             text = r.get('text', '')
             if '[기본적 분석]' in text:
@@ -1962,8 +1962,11 @@ if st.session_state.kis_token:
     def _fmt2(s, cat):
         pct = s.get('changePct',0); sign = '+' if pct>=0 else ''
         card = build_card(s, cat); icon = '🔴' if s.get('grade')=='S' else '🟡'
-        return (f"{icon} <b>{s['name']}</b> ({s['code']})\n"
-                f"   💰 현재가: <b>{s['price']:,}원</b> {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
+        _pr = s.get('price',0)
+        try: _pr = int(_pr)
+        except: pass
+        return (f"{icon} {s['name']} ({s['code']})\n"
+                f"   💰 현재가: {_pr:,}원 {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
                 f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}\n"
                 f"{_compact_ai2(s, card)}")
 
