@@ -698,6 +698,9 @@ def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s
     cache = st.session_state.setdefault('_ai_brief_cache', {})
     ck = f"{code}_{kst_now().strftime('%Y%m%d%H')}"
     if ck in cache: return cache[ck]
+    # 쿼터 초과 쿨다운 (채널별 공유)
+    quota_until = st.session_state.get('_gemini_quota_until', 0)
+    if time.time() < quota_until: return None
     try: vol_fmt = f"{int(vol_i):,}억"
     except: vol_fmt = str(vol_i)
     msg = (f"종목: {name}({code})\n현재가: {price_s}원 등락: {chg_s}\n"
@@ -705,20 +708,34 @@ def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s
            f"매입가: {buy_s}원 손절: {stop_s}원 RR: {rr_s}\n\n"
            "스윙 관점 간결 분석(한국어, 항목당 1-2줄):\n"
            "1) 종합매력도X점/100-이유\n2) 핵심강점\n3) 주요리스크\n4) 매매전략")
-    try:
-        r = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gkey}",
-            json={"system_instruction":{"parts":[{"text":"너는 스윙 매매 전문가다. 반드시 한국어, 간결(200자 이내)."}]},
-                  "contents":[{"role":"user","parts":[{"text":msg}]}],
-                  "generationConfig":{"maxOutputTokens":300,"temperature":0.7}},
-            timeout=12
-        )
-        t = (r.json().get('candidates',[{}])[0]
-             .get('content',{}).get('parts',[{}])[0].get('text',''))
-        if t:
-            cache[ck] = t.strip()[:450]
-            return cache[ck]
-    except: pass
+    for attempt in range(3):
+        try:
+            r = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gkey}",
+                json={"system_instruction":{"parts":[{"text":"너는 스윙 매매 전문가다. 반드시 한국어, 간결(200자 이내)."}]},
+                      "contents":[{"role":"user","parts":[{"text":msg}]}],
+                      "generationConfig":{"maxOutputTokens":300,"temperature":0.7}},
+                timeout=15
+            )
+            data = r.json()
+            # 쿼터/레이트 리밋 오류 감지
+            err = data.get('error', {})
+            if err.get('code') in (429, 503) or 'quota' in str(err).lower() or 'rate' in str(err).lower():
+                # retry-after 파싱 (메시지에서 숫자 초 추출, 없으면 60초)
+                import re as _re
+                m = _re.search(r'retry in ([\d.]+)s', str(err))
+                wait = float(m.group(1)) if m else 60.0
+                st.session_state['_gemini_quota_until'] = time.time() + wait + 5
+                return None
+            t = (data.get('candidates',[{}])[0]
+                 .get('content',{}).get('parts',[{}])[0].get('text',''))
+            if t:
+                cache[ck] = t.strip()[:450]
+                return cache[ck]
+            break
+        except Exception:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
     return None
 
 
@@ -726,10 +743,11 @@ def _send_tg_ai(bot_token, chat_id, stocks, label, ts):
     """AI 분석 메시지 생성 후 텔레그램 전송 (Gist 카드 / KIS raw stock 모두 처리)."""
     gkey = st.session_state.get('google_api_key', '')
     if not gkey or not bot_token or not chat_id or not stocks: return
+    # 쿼터 초과 쿨다운 중이면 전체 스킵
+    if time.time() < st.session_state.get('_gemini_quota_until', 0): return
 
     def _ai_one(x):
         try:
-            # KIS raw stock (숫자 price, changePct) vs Gist 카드 (문자 price, change)
             if 'changePct' in x:
                 _pr = x.get('price', 0)
                 pct = x.get('changePct', 0); sign = '+' if pct >= 0 else ''
@@ -746,9 +764,13 @@ def _send_tg_ai(bot_token, chat_id, stocks, label, ts):
         except: return None
 
     ai_lines = [f"🤖 <b>AI 심층 분석</b> [{label}·{ts}]\n━━━━━━━━━━━━━━━━"]
-    # 병렬 호출 (최대 5개 동시)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
-        results = list(ex.map(_ai_one, stocks))
+    # 직렬 호출 (레이트 리밋 방지: 요청 사이 1초 간격)
+    results = []
+    for x in stocks:
+        results.append(_ai_one(x))
+        if time.time() < st.session_state.get('_gemini_quota_until', 0):
+            break  # 쿼터 초과 감지 시 나머지 스킵
+        time.sleep(1)
     for x, text in zip(stocks, results):
         if text:
             ai_lines.append(f"🔵 <b>{x.get('name','')} ({x.get('code','')})</b>\n{text}")
