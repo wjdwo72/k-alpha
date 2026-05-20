@@ -2016,25 +2016,19 @@ if st.session_state.kis_token:
                         f"   💰 현재가: {c['price']}원 {pct_str} | 거래대금 {_vol:,}억\n"
                         f"   📈 매입가: {c['buy']}원 | 손절: {c['stop']}원 | RR {c['rr']}\n"
                         f"{_compact_ai(c)}")
+            _n = n if n is not None else st.session_state.get('tg_ai_count', 3)
+            # 스윙+급등 합산, 내일관심+중소형 합산
+            swing_surge   = (cats_d.get('swing',[]) + cats_d.get('surge',[]))[:_n]
+            tomorrow_small = (cats_d.get('tomorrow',[]) + cats_d.get('smallmid',[]))[:_n]
             lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
                      f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
-            _n = n if n is not None else st.session_state.get('tg_ai_count', 3)
-            sl = cats_d.get('swing',[])[:_n]; ul = cats_d.get('surge',[])[:_n]
-            tl = cats_d.get('tomorrow',[])[:_n]; ml = cats_d.get('smallmid',[])[:_n]
-            if sl:
-                lines.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>")
-                for c in sl: lines.append(fmt_card(c))
-            if ul:
-                lines.append(f"\n⚡ <b>[급등전야 TOP{len(ul)}]</b>")
-                for c in ul: lines.append(fmt_card(c))
-            if tl:
-                lines.append(f"\n🔭 <b>[내일관심 TOP{len(tl)}]</b>")
-                for c in tl: lines.append(fmt_card(c))
-            if ml:
-                lines.append(f"\n⬟ <b>[중소형주 TOP{len(ml)}]</b>")
-                for c in ml: lines.append(fmt_card(c))
-            if not any([sl, ul, tl, ml]):
-                # 폴백: 모든 카드에서 거래대금 순 상위 5 표시
+            if swing_surge:
+                lines.append(f"🔥 <b>[실시간 스윙/급등 TOP{len(swing_surge)}]</b>")
+                for c in swing_surge: lines.append(fmt_card(c))
+            if tomorrow_small:
+                lines.append(f"\n♦ <b>[내일의 중소형주 TOP{len(tomorrow_small)}]</b>")
+                for c in tomorrow_small: lines.append(fmt_card(c))
+            if not swing_surge and not tomorrow_small:
                 _all = (cats_d.get('swing',[]) + cats_d.get('surge',[]) +
                         cats_d.get('tomorrow',[]) + cats_d.get('smallmid',[]))
                 if _all:
@@ -2232,25 +2226,20 @@ if st.session_state.kis_token:
 
     def _mk_msg2(iv_lbl, all_s, k_n, kd_n, ts_str, n=None):
         is_mkt = 9 <= int(kst_strftime('%H')) <= 15
-        mkt_lbl = '🟢 장중' if is_mkt else '🔴 장 마감'
+        mkt_lbl = '🟢장중' if is_mkt else '🔴장마감'
         _n2 = n if n is not None else st.session_state.get('tg_ai_count', 3)
-        sl = cats.get('swing',[])[:_n2]; ul = cats.get('surge',[])[:_n2]
-        tl = cats.get('tomorrow',[])[:_n2]; ml = cats.get('smallmid',[])[:_n2]
+        # 스윙+급등 합산, 내일관심+중소형 합산
+        swing_surge    = (cats.get('swing',[]) + cats.get('surge',[]))[:_n2]
+        tomorrow_small = (cats.get('tomorrow',[]) + cats.get('smallmid',[]))[:_n2]
         ls = [f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts_str}] {mkt_lbl}\n"
-              f"KOSPI {k_n}종목 + KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
-        if sl:
-            ls.append(f"🔥 <b>[실시간스윙 TOP{len(sl)}]</b>")
-            for s in sl: ls.append(_fmt2(s,'swing'))
-        if ul:
-            ls.append(f"\n⚡ <b>[급등전야 TOP{len(ul)}]</b>")
-            for s in ul: ls.append(_fmt2(s,'surge'))
-        if tl:
-            ls.append(f"\n🔭 <b>[내일관심 TOP{len(tl)}]</b>")
-            for s in tl: ls.append(_fmt2(s,'tomorrow'))
-        if ml:
-            ls.append(f"\n⬟ <b>[중소형주 TOP{len(ml)}]</b>")
-            for s in ml: ls.append(_fmt2(s,'smallmid'))
-        if not any([sl, ul, tl, ml]):
+              f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
+        if swing_surge:
+            ls.append(f"🔥 <b>[실시간 스윙/급등 TOP{len(swing_surge)}]</b>")
+            for s in swing_surge: ls.append(_fmt2(s, 'swing'))
+        if tomorrow_small:
+            ls.append(f"\n♦ <b>[내일의 중소형주 TOP{len(tomorrow_small)}]</b>")
+            for s in tomorrow_small: ls.append(_fmt2(s, 'smallmid'))
+        if not swing_surge and not tomorrow_small:
             fb = sorted(all_s, key=lambda x:x.get('trAmt',0), reverse=True)[:10]
             ls.append("📊 <b>[거래대금 상위 TOP10]</b>")
             for s in fb: ls.append(_fmt2(s,'swing'))
