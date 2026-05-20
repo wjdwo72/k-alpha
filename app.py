@@ -1771,9 +1771,12 @@ if st.session_state.kis_token:
             mkt_lbl = '🟢장중' if is_mkt else '🔴장마감'
             def fmt_card(c):
                 pct_str = c.get('change','0%'); icon = '🔴' if c.get('grade')=='S' else '🟡'
+                _vol = c.get('vol', 0)
+                try: _vol = int(_vol)
+                except: pass
                 return (f"{icon} <b>{c['name']}</b> ({c['code']})\n"
-                        f"   💰 {c['price']}원 {pct_str} | {c.get('vol',0):,}억\n"
-                        f"   📈 매입:{c['buy']} | 손절:{c['stop']} | RR {c['rr']}\n"
+                        f"   💰 현재가: <b>{c['price']}원</b> {pct_str} | 거래대금 {_vol:,}억\n"
+                        f"   📈 매입가: {c['buy']}원 | 손절: {c['stop']}원 | RR {c['rr']}\n"
                         f"{_compact_ai(c)}")
             lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
                      f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
