@@ -1,7 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_autorefresh import st_autorefresh
-import requests, json, os, base64, urllib3, time, math
+import requests, json, os, base64, urllib3, time, math, concurrent.futures
 from datetime import datetime, timezone, timedelta
 
 KST = timezone(timedelta(hours=9))
@@ -690,6 +690,77 @@ def build_card(s, cat):
         ],
         'chart3m': [], 'chartD': [], 'cat': cat,
     }
+
+def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s, rr_s):
+    """Gemini AI 간략 분석 (시간당 세션 캐시). None 반환 시 생략."""
+    gkey = st.session_state.get('google_api_key', '')
+    if not gkey: return None
+    cache = st.session_state.setdefault('_ai_brief_cache', {})
+    ck = f"{code}_{kst_now().strftime('%Y%m%d%H')}"
+    if ck in cache: return cache[ck]
+    try: vol_fmt = f"{int(vol_i):,}억"
+    except: vol_fmt = str(vol_i)
+    msg = (f"종목: {name}({code})\n현재가: {price_s}원 등락: {chg_s}\n"
+           f"K점수: {score}점({grade}) 거래대금: {vol_fmt}\n"
+           f"매입가: {buy_s}원 손절: {stop_s}원 RR: {rr_s}\n\n"
+           "스윙 관점 간결 분석(한국어, 항목당 1-2줄):\n"
+           "1) 종합매력도X점/100-이유\n2) 핵심강점\n3) 주요리스크\n4) 매매전략")
+    try:
+        r = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gkey}",
+            json={"system_instruction":{"parts":[{"text":"너는 스윙 매매 전문가다. 반드시 한국어, 간결(200자 이내)."}]},
+                  "contents":[{"role":"user","parts":[{"text":msg}]}],
+                  "generationConfig":{"maxOutputTokens":300,"temperature":0.7}},
+            timeout=12
+        )
+        t = (r.json().get('candidates',[{}])[0]
+             .get('content',{}).get('parts',[{}])[0].get('text',''))
+        if t:
+            cache[ck] = t.strip()[:450]
+            return cache[ck]
+    except: pass
+    return None
+
+
+def _send_tg_ai(bot_token, chat_id, stocks, label, ts):
+    """AI 분석 메시지 생성 후 텔레그램 전송 (Gist 카드 / KIS raw stock 모두 처리)."""
+    gkey = st.session_state.get('google_api_key', '')
+    if not gkey or not bot_token or not chat_id or not stocks: return
+
+    def _ai_one(x):
+        try:
+            # KIS raw stock (숫자 price, changePct) vs Gist 카드 (문자 price, change)
+            if 'changePct' in x:
+                _pr = x.get('price', 0)
+                pct = x.get('changePct', 0); sign = '+' if pct >= 0 else ''
+                card = build_card(x, 'swing')
+                return _gemini_brief(x['code'], x['name'], f"{int(_pr):,}", f"{sign}{pct:.2f}%",
+                                     x.get('score',70), x.get('grade','B'), x.get('trAmt',0),
+                                     card['buy'], card['stop'], card['rr'])
+            else:
+                return _gemini_brief(x.get('code',''), x.get('name',''),
+                                     str(x.get('price','?')), str(x.get('change','?')),
+                                     x.get('score',70), x.get('grade','B'),
+                                     x.get('vol', x.get('trAmt',0)),
+                                     str(x.get('buy','?')), str(x.get('stop','?')), str(x.get('rr','?')))
+        except: return None
+
+    ai_lines = [f"🤖 <b>AI 심층 분석</b> [{label}·{ts}]\n━━━━━━━━━━━━━━━━"]
+    # 병렬 호출 (최대 5개 동시)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+        results = list(ex.map(_ai_one, stocks))
+    for x, text in zip(stocks, results):
+        if text:
+            ai_lines.append(f"🔵 <b>{x.get('name','')} ({x.get('code','')})</b>\n{text}")
+    if len(ai_lines) > 1:
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id":chat_id,"text":"\n\n".join(ai_lines)[:4000],"parse_mode":"HTML"},
+                timeout=10
+            )
+        except: pass
+
 
 # ════ 1. 법적 고지 ════
 if not st.session_state.agreed:
@@ -2051,18 +2122,23 @@ if st.session_state.kis_token:
         _now_ts   = kst_strftime('%H:%M:%S')
         _k_n = len(kospi_stocks); _kd_n = len(kosdaq_stocks)
 
+        def _gist_ai_stocks(n):
+            return ((scan_result.get('swing',[]) + scan_result.get('surge',[]))[:n] +
+                    (scan_result.get('tomorrow',[]) + scan_result.get('smallmid',[]))[:n])
+
         # 개인방 — 독립 bucket
         if _tg_tok and _tg_chat:
             _bkt_p = int(time.time() // (_iv_p * 60))
             if _bkt_p != st.session_state.get('_tg_bkt_p', -1):
                 st.session_state['_tg_bkt_p'] = _bkt_p
                 try:
-                    msg = _build_tg_lines(_iv_p_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
-                                          n=st.session_state.get('tg_ai_count_p', 3))
+                    _n_p = st.session_state.get('tg_ai_count_p', 3)
+                    msg = _build_tg_lines(_iv_p_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count, n=_n_p)
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_tg_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
                         st.toast(f"📱 개인방 전송 완료 ({_now_ts})", icon="✅")
+                        _send_tg_ai(_tg_tok, _tg_chat, _gist_ai_stocks(_n_p), _iv_p_lbl, _now_ts)
                 except Exception as e:
                     st.caption(f"개인방 텔레그램 오류: {e}")
 
@@ -2072,12 +2148,13 @@ if st.session_state.kis_token:
             if _bkt_g != st.session_state.get('_tg_bkt_g', -1):
                 st.session_state['_tg_bkt_g'] = _bkt_g
                 try:
-                    msg = _build_tg_lines(_iv_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
-                                          n=st.session_state.get('tg_ai_count_g1', 3))
+                    _n_g1 = st.session_state.get('tg_ai_count_g1', 3)
+                    msg = _build_tg_lines(_iv_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count, n=_n_g1)
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_grp_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
                         st.toast(f"👥 그룹방 전송 완료 ({_now_ts})", icon="✅")
+                        _send_tg_ai(_tg_tok, _grp_chat, _gist_ai_stocks(_n_g1), _iv_g_lbl, _now_ts)
                 except Exception as e:
                     st.caption(f"그룹방 텔레그램 오류: {e}")
 
@@ -2091,12 +2168,13 @@ if st.session_state.kis_token:
             if _bkt_g2g != st.session_state.get('_tg_bkt_g2g', -1):
                 st.session_state['_tg_bkt_g2g'] = _bkt_g2g
                 try:
-                    msg = _build_tg_lines(_iv_g2_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
-                                          n=st.session_state.get('tg_ai_count_g2', 3))
+                    _n_g2 = st.session_state.get('tg_ai_count_g2', 3)
+                    msg = _build_tg_lines(_iv_g2_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count, n=_n_g2)
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_grp2_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
                         st.toast(f"👥 그룹방 2 전송 완료 ({_now_ts})", icon="✅")
+                        _send_tg_ai(_tg_tok, _grp2_chat_g, _gist_ai_stocks(_n_g2), _iv_g2_g_lbl, _now_ts)
                 except Exception as e:
                     st.caption(f"그룹방 2 텔레그램 오류: {e}")
 
@@ -2110,12 +2188,13 @@ if st.session_state.kis_token:
             if _bkt_g3g != st.session_state.get('_tg_bkt_g3g', -1):
                 st.session_state['_tg_bkt_g3g'] = _bkt_g3g
                 try:
-                    msg = _build_tg_lines(_iv_g3_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
-                                          n=st.session_state.get('tg_ai_count_g3', 3))
+                    _n_g3 = st.session_state.get('tg_ai_count_g3', 3)
+                    msg = _build_tg_lines(_iv_g3_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count, n=_n_g3)
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_grp3_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
                         st.toast(f"👥 그룹방 3 전송 완료 ({_now_ts})", icon="✅")
+                        _send_tg_ai(_tg_tok, _grp3_chat_g, _gist_ai_stocks(_n_g3), _iv_g3_g_lbl, _now_ts)
                 except Exception as e:
                     st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
@@ -2246,18 +2325,23 @@ if st.session_state.kis_token:
         ls.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔 완료 · 다음 알림 {iv_lbl} 후")
         return "\n\n".join(ls)
 
+    def _kis_ai_stocks(n):
+        return ((cats.get('swing',[]) + cats.get('surge',[]))[:n] +
+                (cats.get('tomorrow',[]) + cats.get('smallmid',[]))[:n])
+
     # 개인방 — 독립 bucket
     if _tg_tok2 and _tg_chat2 and all_stocks:
         _bkt_p2 = int(time.time() // (_iv_p2 * 60))
         if _bkt_p2 != st.session_state.get('_tg_bkt_p', -1):
             st.session_state['_tg_bkt_p'] = _bkt_p2
             try:
-                msg2 = _mk_msg2(_iv_p2_lbl, all_stocks, _kn2, _kdn2, _now2,
-                                n=st.session_state.get('tg_ai_count_p', 3))
+                _n_kp = st.session_state.get('tg_ai_count_p', 3)
+                msg2 = _mk_msg2(_iv_p2_lbl, all_stocks, _kn2, _kdn2, _now2, n=_n_kp)
                 r2 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_tg_chat2,"text":msg2,"parse_mode":"HTML"}, timeout=10)
                 if r2.json().get('ok'):
                     st.toast(f"📱 개인방 전송 완료 ({_now2})", icon="✅")
+                    _send_tg_ai(_tg_tok2, _tg_chat2, _kis_ai_stocks(_n_kp), _iv_p2_lbl, _now2)
             except Exception as e:
                 st.caption(f"개인방 텔레그램 오류: {e}")
 
@@ -2267,12 +2351,13 @@ if st.session_state.kis_token:
         if _bkt_g2 != st.session_state.get('_tg_bkt_g', -1):
             st.session_state['_tg_bkt_g'] = _bkt_g2
             try:
-                msg2g = _mk_msg2(_iv_g2_lbl, all_stocks, _kn2, _kdn2, _now2,
-                                 n=st.session_state.get('tg_ai_count_g1', 3))
+                _n_kg1 = st.session_state.get('tg_ai_count_g1', 3)
+                msg2g = _mk_msg2(_iv_g2_lbl, all_stocks, _kn2, _kdn2, _now2, n=_n_kg1)
                 r2g = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_grp_chat2,"text":msg2g,"parse_mode":"HTML"}, timeout=10)
                 if r2g.json().get('ok'):
                     st.toast(f"👥 그룹방 전송 완료 ({_now2})", icon="✅")
+                    _send_tg_ai(_tg_tok2, _grp_chat2, _kis_ai_stocks(_n_kg1), _iv_g2_lbl, _now2)
             except Exception as e:
                 st.caption(f"그룹방 텔레그램 오류: {e}")
 
@@ -2286,12 +2371,13 @@ if st.session_state.kis_token:
         if _bkt_g2b != st.session_state.get('_tg_bkt_g2', -1):
             st.session_state['_tg_bkt_g2'] = _bkt_g2b
             try:
-                msg2g2 = _mk_msg2(_iv_g2b_lbl, all_stocks, _kn2, _kdn2, _now2,
-                                  n=st.session_state.get('tg_ai_count_g2', 3))
+                _n_kg2 = st.session_state.get('tg_ai_count_g2', 3)
+                msg2g2 = _mk_msg2(_iv_g2b_lbl, all_stocks, _kn2, _kdn2, _now2, n=_n_kg2)
                 r2g2 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_grp2_chat2,"text":msg2g2,"parse_mode":"HTML"}, timeout=10)
                 if r2g2.json().get('ok'):
                     st.toast(f"👥 그룹방 2 전송 완료 ({_now2})", icon="✅")
+                    _send_tg_ai(_tg_tok2, _grp2_chat2, _kis_ai_stocks(_n_kg2), _iv_g2b_lbl, _now2)
             except Exception as e:
                 st.caption(f"그룹방 2 텔레그램 오류: {e}")
 
@@ -2305,12 +2391,13 @@ if st.session_state.kis_token:
         if _bkt_g3b != st.session_state.get('_tg_bkt_g3', -1):
             st.session_state['_tg_bkt_g3'] = _bkt_g3b
             try:
-                msg2g3 = _mk_msg2(_iv_g3b_lbl, all_stocks, _kn2, _kdn2, _now2,
-                                  n=st.session_state.get('tg_ai_count_g3', 3))
+                _n_kg3 = st.session_state.get('tg_ai_count_g3', 3)
+                msg2g3 = _mk_msg2(_iv_g3b_lbl, all_stocks, _kn2, _kdn2, _now2, n=_n_kg3)
                 r2g3 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_grp3_chat2,"text":msg2g3,"parse_mode":"HTML"}, timeout=10)
                 if r2g3.json().get('ok'):
                     st.toast(f"👥 그룹방 3 전송 완료 ({_now2})", icon="✅")
+                    _send_tg_ai(_tg_tok2, _grp3_chat2, _kis_ai_stocks(_n_kg3), _iv_g3b_lbl, _now2)
             except Exception as e:
                 st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
