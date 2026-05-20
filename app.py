@@ -124,8 +124,9 @@ DEFAULTS = {
     "tg_group3_interval_min":30,"tg_group3_interval_label":"30분",
     # Google AI Studio (Gemini)
     "google_api_key":"",
-    # 텔레그램 AI 분석 전송 갯수
-    "tg_ai_count": 5,
+    # 텔레그램 AI 분석 전송 갯수 (전체 기본값 + 채팅방별)
+    "tg_ai_count": 3,
+    "tg_ai_count_p": 3, "tg_ai_count_g1": 3, "tg_ai_count_g2": 3, "tg_ai_count_g3": 3,
 }
 for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
@@ -135,7 +136,8 @@ for k,v in DEFAULTS.items():
 def get_server_store():
     return {"ck": None, "cp": None, "tg": None, "tg_grp": None,
             "tg_grp2": None, "tg_grp3": None, "agreed": False,
-            "scan_data": None, "scan_ts": 0, "scan_str": ""}
+            "scan_data": None, "scan_ts": 0, "scan_str": "",
+            "google_key": None}
 
 server_store = get_server_store()
 
@@ -197,6 +199,15 @@ if _tg_grp3_src and not st.session_state.get("tg_group3_chat"):
         st.session_state["tg_group3_interval_min"]   = tg_grp3.get("iv", 30)
         st.session_state["tg_group3_interval_label"] = tg_grp3.get("ivl","30분")
         if not qp.get("tg_grp3"): qp["tg_grp3"] = _tg_grp3_src
+    except: pass
+
+# Google API key restore
+_gkey_src = qp.get("gkey") or server_store.get("google_key", "")
+if _gkey_src and not st.session_state.get("google_api_key"):
+    try:
+        _gkey = base64.b64decode(_gkey_src).decode()
+        st.session_state["google_api_key"] = _gkey
+        if not qp.get("gkey"): qp["gkey"] = _gkey_src
     except: pass
 
 # URL 키 자동 불러오기 + 연결
@@ -1269,6 +1280,13 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_interval_label'] = iv_p_label
             st.session_state['tg_interval_min']   = _iv_dict[iv_p_label]
 
+            _ai_cnt_p = st.slider("🤖 AI 분석 카테고리당 종목 수",
+                                   min_value=1, max_value=10,
+                                   value=st.session_state.get('tg_ai_count_p', 3),
+                                   key="sl_ai_cnt_p")
+            st.session_state['tg_ai_count_p'] = _ai_cnt_p
+            st.caption(f"개인방: 카테고리당 {_ai_cnt_p}종목씩 전송")
+
             cs1, cs2 = st.columns([2,1])
             with cs1:
                 if st.button("💾 Bot Token & Chat ID 저장", key="btn_tg_save",
@@ -1357,6 +1375,13 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                                            disabled=not grp_enabled, key="tg_iv_g")
             st.session_state['tg_group_interval_label'] = iv_g_label
             st.session_state['tg_group_interval_min']   = _iv_dict[iv_g_label]
+
+            _ai_cnt_g1 = st.slider("🤖 AI 분석 카테고리당 종목 수",
+                                    min_value=1, max_value=10,
+                                    value=st.session_state.get('tg_ai_count_g1', 3),
+                                    disabled=not grp_enabled, key="sl_ai_cnt_g1")
+            st.session_state['tg_ai_count_g1'] = _ai_cnt_g1
+            st.caption(f"그룹방 1: 카테고리당 {_ai_cnt_g1}종목씩 전송")
 
             cgs_g1a, cgs_g1b = st.columns([2,1])
             with cgs_g1a:
@@ -1481,6 +1506,13 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_group2_interval_label'] = iv_g2_label
             st.session_state['tg_group2_interval_min']   = _iv_dict[iv_g2_label]
 
+            _ai_cnt_g2 = st.slider("🤖 AI 분석 카테고리당 종목 수",
+                                    min_value=1, max_value=10,
+                                    value=st.session_state.get('tg_ai_count_g2', 3),
+                                    disabled=not grp2_enabled, key="sl_ai_cnt_g2")
+            st.session_state['tg_ai_count_g2'] = _ai_cnt_g2
+            st.caption(f"그룹방 2: 카테고리당 {_ai_cnt_g2}종목씩 전송")
+
             cgs_g2a, cgs_g2b = st.columns([2,1])
             with cgs_g2a:
                 if st.button("💾 그룹방 2 Chat ID 저장", key="btn_grp2_save",
@@ -1591,6 +1623,13 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_group3_interval_label'] = iv_g3_label
             st.session_state['tg_group3_interval_min']   = _iv_dict[iv_g3_label]
 
+            _ai_cnt_g3 = st.slider("🤖 AI 분석 카테고리당 종목 수",
+                                    min_value=1, max_value=10,
+                                    value=st.session_state.get('tg_ai_count_g3', 3),
+                                    disabled=not grp3_enabled, key="sl_ai_cnt_g3")
+            st.session_state['tg_ai_count_g3'] = _ai_cnt_g3
+            st.caption(f"그룹방 3: 카테고리당 {_ai_cnt_g3}종목씩 전송")
+
             cgs_g3a, cgs_g3b = st.columns([2,1])
             with cgs_g3a:
                 if st.button("💾 그룹방 3 Chat ID 저장", key="btn_grp3_save",
@@ -1674,15 +1713,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 server_store['tg_grp3'] = grp3_enc
 
         st.divider()
-        st.markdown("**📊 분석 내용 전송 설정**")
-        tg_ai_count = st.slider(
-            "카테고리당 종목 갯수 (최대 10개)",
-            min_value=1, max_value=10,
-            value=st.session_state.get('tg_ai_count', 5),
-            key="tg_ai_count_sl"
-        )
-        st.session_state['tg_ai_count'] = tg_ai_count
-        st.caption(f"각 카테고리(스윙·급등·내일관심·중소형주)당 {tg_ai_count}종목씩 분석 내용 포함 전송")
+        st.caption("💡 AI 분석 종목 수는 각 채팅방 탭에서 개별 설정할 수 있습니다.")
 
     # ── 🤖 Google AI Studio (Gemini) ──────────────────────────────
     with st.expander("🤖 Google AI 분석 설정 (Gemini)", expanded=False):
@@ -1694,8 +1725,23 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             placeholder="AIzaSy...",
             key="google_key_inp"
         )
-        if google_key:
-            st.session_state['google_api_key'] = google_key
+        _gk_c1, _gk_c2 = st.columns([3, 1])
+        with _gk_c1:
+            if st.button("💾 API 키 저장", key="btn_gkey_save", use_container_width=True,
+                         disabled=not bool(google_key)):
+                st.session_state['google_api_key'] = google_key
+                _gkey_enc = base64.b64encode(google_key.encode()).decode()
+                qp['gkey'] = _gkey_enc
+                server_store['google_key'] = _gkey_enc
+                st.success("✅ Google API 키 저장됨")
+        with _gk_c2:
+            if st.button("🗑 삭제", key="btn_gkey_del", use_container_width=True):
+                st.session_state['google_api_key'] = ''
+                server_store['google_key'] = None
+                try:
+                    if 'gkey' in qp: del qp['gkey']
+                except: pass
+                st.rerun()
         ok_google = bool(st.session_state.get('google_api_key'))
         st.markdown(
             f'<div style="padding:6px 10px;font-family:monospace;font-size:11px;'
@@ -1926,7 +1972,7 @@ if st.session_state.kis_token:
             except: pass
             return _ai_reasons(c.get('reasons',[]), rsi, chg, rr, score, grade)
 
-        def _build_tg_lines(iv_label_str, cats_d, k_n, kd_n, ts_str, total_n):
+        def _build_tg_lines(iv_label_str, cats_d, k_n, kd_n, ts_str, total_n, n=None):
             """cats_d는 카드 dict 리스트 (scan_result 형태 — Gist/직접 모두 호환)"""
             is_mkt  = 9 <= int(kst_strftime('%H')) <= 15
             mkt_lbl = '🟢장중' if is_mkt else '🔴장마감'
@@ -1941,7 +1987,7 @@ if st.session_state.kis_token:
                         f"{_compact_ai(c)}")
             lines = [f"📡 <b>K-ALPHA {iv_label_str} 스캔</b> [{ts_str}] {mkt_lbl}\n"
                      f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
-            _n = st.session_state.get('tg_ai_count', 5)
+            _n = n if n is not None else st.session_state.get('tg_ai_count', 3)
             sl = cats_d.get('swing',[])[:_n]; ul = cats_d.get('surge',[])[:_n]
             tl = cats_d.get('tomorrow',[])[:_n]; ml = cats_d.get('smallmid',[])[:_n]
             if sl:
@@ -1986,7 +2032,8 @@ if st.session_state.kis_token:
             if _bkt_p != st.session_state.get('_tg_bkt_p', -1):
                 st.session_state['_tg_bkt_p'] = _bkt_p
                 try:
-                    msg = _build_tg_lines(_iv_p_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
+                    msg = _build_tg_lines(_iv_p_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
+                                          n=st.session_state.get('tg_ai_count_p', 3))
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_tg_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
@@ -2000,7 +2047,8 @@ if st.session_state.kis_token:
             if _bkt_g != st.session_state.get('_tg_bkt_g', -1):
                 st.session_state['_tg_bkt_g'] = _bkt_g
                 try:
-                    msg = _build_tg_lines(_iv_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
+                    msg = _build_tg_lines(_iv_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
+                                          n=st.session_state.get('tg_ai_count_g1', 3))
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_grp_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
@@ -2018,7 +2066,8 @@ if st.session_state.kis_token:
             if _bkt_g2g != st.session_state.get('_tg_bkt_g2g', -1):
                 st.session_state['_tg_bkt_g2g'] = _bkt_g2g
                 try:
-                    msg = _build_tg_lines(_iv_g2_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
+                    msg = _build_tg_lines(_iv_g2_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
+                                          n=st.session_state.get('tg_ai_count_g2', 3))
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_grp2_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
@@ -2036,7 +2085,8 @@ if st.session_state.kis_token:
             if _bkt_g3g != st.session_state.get('_tg_bkt_g3g', -1):
                 st.session_state['_tg_bkt_g3g'] = _bkt_g3g
                 try:
-                    msg = _build_tg_lines(_iv_g3_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count)
+                    msg = _build_tg_lines(_iv_g3_g_lbl, scan_result, _k_n, _kd_n, _now_ts, scan_count,
+                                          n=st.session_state.get('tg_ai_count_g3', 3))
                     r = requests.post(f"https://api.telegram.org/bot{_tg_tok}/sendMessage",
                         json={"chat_id":_grp3_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
@@ -2149,10 +2199,10 @@ if st.session_state.kis_token:
                 f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}\n"
                 f"{_compact_ai2(s, card)}")
 
-    def _mk_msg2(iv_lbl, all_s, k_n, kd_n, ts_str):
+    def _mk_msg2(iv_lbl, all_s, k_n, kd_n, ts_str, n=None):
         is_mkt = 9 <= int(kst_strftime('%H')) <= 15
         mkt_lbl = '🟢 장중' if is_mkt else '🔴 장 마감'
-        _n2 = st.session_state.get('tg_ai_count', 5)
+        _n2 = n if n is not None else st.session_state.get('tg_ai_count', 3)
         sl = cats.get('swing',[])[:_n2]; ul = cats.get('surge',[])[:_n2]
         tl = cats.get('tomorrow',[])[:_n2]; ml = cats.get('smallmid',[])[:_n2]
         ls = [f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts_str}] {mkt_lbl}\n"
@@ -2182,7 +2232,8 @@ if st.session_state.kis_token:
         if _bkt_p2 != st.session_state.get('_tg_bkt_p', -1):
             st.session_state['_tg_bkt_p'] = _bkt_p2
             try:
-                msg2 = _mk_msg2(_iv_p2_lbl, all_stocks, _kn2, _kdn2, _now2)
+                msg2 = _mk_msg2(_iv_p2_lbl, all_stocks, _kn2, _kdn2, _now2,
+                                n=st.session_state.get('tg_ai_count_p', 3))
                 r2 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_tg_chat2,"text":msg2,"parse_mode":"HTML"}, timeout=10)
                 if r2.json().get('ok'):
@@ -2196,7 +2247,8 @@ if st.session_state.kis_token:
         if _bkt_g2 != st.session_state.get('_tg_bkt_g', -1):
             st.session_state['_tg_bkt_g'] = _bkt_g2
             try:
-                msg2g = _mk_msg2(_iv_g2_lbl, all_stocks, _kn2, _kdn2, _now2)
+                msg2g = _mk_msg2(_iv_g2_lbl, all_stocks, _kn2, _kdn2, _now2,
+                                 n=st.session_state.get('tg_ai_count_g1', 3))
                 r2g = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_grp_chat2,"text":msg2g,"parse_mode":"HTML"}, timeout=10)
                 if r2g.json().get('ok'):
@@ -2214,7 +2266,8 @@ if st.session_state.kis_token:
         if _bkt_g2b != st.session_state.get('_tg_bkt_g2', -1):
             st.session_state['_tg_bkt_g2'] = _bkt_g2b
             try:
-                msg2g2 = _mk_msg2(_iv_g2b_lbl, all_stocks, _kn2, _kdn2, _now2)
+                msg2g2 = _mk_msg2(_iv_g2b_lbl, all_stocks, _kn2, _kdn2, _now2,
+                                  n=st.session_state.get('tg_ai_count_g2', 3))
                 r2g2 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_grp2_chat2,"text":msg2g2,"parse_mode":"HTML"}, timeout=10)
                 if r2g2.json().get('ok'):
@@ -2232,7 +2285,8 @@ if st.session_state.kis_token:
         if _bkt_g3b != st.session_state.get('_tg_bkt_g3', -1):
             st.session_state['_tg_bkt_g3'] = _bkt_g3b
             try:
-                msg2g3 = _mk_msg2(_iv_g3b_lbl, all_stocks, _kn2, _kdn2, _now2)
+                msg2g3 = _mk_msg2(_iv_g3b_lbl, all_stocks, _kn2, _kdn2, _now2,
+                                  n=st.session_state.get('tg_ai_count_g3', 3))
                 r2g3 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
                     json={"chat_id":_grp3_chat2,"text":msg2g3,"parse_mode":"HTML"}, timeout=10)
                 if r2g3.json().get('ok'):

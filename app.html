@@ -1912,7 +1912,10 @@ if (IS_STREAMLIT) {
     '.cards-grid { height:auto !important; overflow:visible !important; }',
     '#tab-portfolio { height:auto !important; overflow:visible !important; }',
     '.portfolio-summary, .pf-market-tabs, .pf-holdings, #pf-holdings-kr, #pf-holdings-us { height:auto !important; overflow:visible !important; }',
-    '#section-kr, #section-us { height:auto !important; overflow:visible !important; }'
+    '#section-kr, #section-us { height:auto !important; overflow:visible !important; }',
+    /* Streamlit iframe: modals use position:absolute so scrollIntoView works */
+    '.modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }',
+    '#ai-modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }'
   ].join('');
   document.head.appendChild(_ss);
 }
@@ -2690,7 +2693,9 @@ function openSettings() {
     const m = b.onclick?.toString().match(/setMktFilter\(this,'(\w+)'\)/);
     if (m && m[1] === scanSettings.mkt) b.classList.add('active');
   });
-  document.getElementById('settings-modal').classList.add('show');
+  var _sm = document.getElementById('settings-modal');
+  _sm.classList.add('show');
+  if (IS_STREAMLIT) { try { _sm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {} }
 }
 
 function closeSettings() {
@@ -3392,7 +3397,9 @@ function openModal(code, name, buy, target, stop, rr, score, grade) {
     <div class="modal-info-row"><span class="modal-info-label">K 점수</span><span class="modal-info-val">${score}점 (${grade}등급)</span></div>
     <div class="modal-info-row"><span class="modal-info-label">API 엔드포인트</span><span class="modal-info-val" style="color:var(--text-dim);font-size:9px">uapi/domestic-stock/v1/trading/order-cash</span></div>
   `;
-  document.getElementById('modal').classList.add('show');
+  var _mod = document.getElementById('modal');
+  _mod.classList.add('show');
+  if (IS_STREAMLIT) { try { _mod.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {} }
 }
 
 function closeModal() {
@@ -3619,6 +3626,7 @@ function openAiAnalysis(event, code) {
       + '<span style="color:#4a5568;font-size:11px">─ 로컬 KIS 분석 (미리보기) ─\n</span>'
       + generateSwingReport(stock);
     overlay.classList.add('show');
+    if (IS_STREAMLIT) { try { overlay.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {} }
 
     if (_aiAbortCtrl) { try { _aiAbortCtrl.abort(); } catch(e){} }
     _aiAbortCtrl = new AbortController();
@@ -3656,6 +3664,7 @@ function openAiAnalysis(event, code) {
     // API 키 없음 → 로컬 분석 즉시 표시
     content.textContent = generateSwingReport(stock);
     overlay.classList.add('show');
+    if (IS_STREAMLIT) { try { overlay.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {} }
   }
 }
 
