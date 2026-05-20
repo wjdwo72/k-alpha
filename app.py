@@ -1978,7 +1978,30 @@ if st.session_state.kis_token:
             chg = 0.0
             try: chg = float(str(c.get('change','0%')).replace('%','').replace('+',''))
             except: pass
-            return _ai_reasons(c.get('reasons',[]), rsi, chg, rr, score, grade)
+            reasons = c.get('reasons', [])
+            if not reasons:
+                tr = 0
+                try: tr = int(c.get('vol', 0))
+                except: pass
+                mkt = c.get('mkt', 'kospi')
+                fund_parts = []
+                if tr >= 2000: fund_parts.append("기관·외국인 대규모 순매수 추정")
+                elif tr >= 800: fund_parts.append("기관 매수세 유입 추정")
+                elif tr >= 300: fund_parts.append("외국인·기관 중형 수급 진입 추정")
+                else: fund_parts.append("개인 중심 수급 · 단기 모멘텀 주도")
+                if chg >= 4: fund_parts.append("단기 실적 개선 뉴스 반응")
+                elif chg >= 1: fund_parts.append("점진적 실적 개선 기대")
+                fund_parts.append("KOSPI 대형주" if mkt == 'kospi' else "KOSDAQ 중소형주 · 고성장 섹터")
+                h = kst_now().hour
+                if 9 <= h < 11: macro_p = "오전 장 · 외국인·기관 방향성 구간"
+                elif 11 <= h < 13: macro_p = "점심 전후 · 단기 변동성 주의"
+                else: macro_p = "오후 장 · 프로그램 매매 구간"
+                if chg >= 3: macro_p += " · 금리·환율 우호 또는 섹터 호재"
+                reasons = [
+                    {'icon':'🏢', 'text': '[기본적 분석] ' + ' · '.join(fund_parts)},
+                    {'icon':'🌐', 'text': '[외부요인] ' + macro_p},
+                ]
+            return _ai_reasons(reasons, rsi, chg, rr, score, grade)
 
         def _build_tg_lines(iv_label_str, cats_d, k_n, kd_n, ts_str, total_n, n=None):
             """cats_d는 카드 dict 리스트 (scan_result 형태 — Gist/직접 모두 호환)"""

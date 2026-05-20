@@ -1496,7 +1496,7 @@
         <span>KOSPI/KOSDAQ 전 종목 실시간 스캔 중 · 거래대금 <span id="scan-vol-label">--억+</span> 필터</span>
         <div class="scan-bar"><div class="scan-bar-fill"></div></div>
         <span id="filter-count">조건 충족: 73 종목</span>
-        <button onclick="openSettings()" style="margin-left:8px;padding:3px 10px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:10px;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px">⚙ 필터설정</button>
+        <button onclick="openSettings(event)" style="margin-left:8px;padding:3px 10px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:10px;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px">⚙ 필터설정</button>
       </div>
 
       <div class="tabs" id="tabs-kr">
@@ -1771,7 +1771,7 @@
       <button onclick="fullRefresh()" id="sidebar-refresh-btn" style="width:100%;margin-top:8px;padding:9px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
         <span id="sidebar-refresh-icon" style="font-size:14px">↻</span> 전체 새로고침
       </button>
-      <button onclick="openSettings()" style="width:100%;margin-top:6px;padding:8px;background:rgba(0,212,255,0.08);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px">⚙ 스캔 필터 설정</button>
+      <button onclick="openSettings(event)" style="width:100%;margin-top:6px;padding:8px;background:rgba(0,212,255,0.08);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px">⚙ 스캔 필터 설정</button>
     </div>
 
     <div class="data-footer">
@@ -1913,9 +1913,12 @@ if (IS_STREAMLIT) {
     '#tab-portfolio { height:auto !important; overflow:visible !important; }',
     '.portfolio-summary, .pf-market-tabs, .pf-holdings, #pf-holdings-kr, #pf-holdings-us { height:auto !important; overflow:visible !important; }',
     '#section-kr, #section-us { height:auto !important; overflow:visible !important; }',
-    /* Streamlit iframe: modals use position:absolute so scrollIntoView works */
     '.modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }',
-    '#ai-modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }'
+    '.modal-overlay.show { display:block !important; }',
+    '.modal-overlay.show > .modal { position:absolute !important; left:50% !important; transform:translateX(-50%) !important; margin:0 !important; }',
+    '#ai-modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }',
+    '#ai-modal-overlay.show { display:block !important; }',
+    '#ai-modal-overlay.show #ai-modal-box { position:absolute !important; left:50% !important; transform:translateX(-50%) !important; margin:0 !important; }'
   ].join('');
   document.head.appendChild(_ss);
 }
@@ -2672,7 +2675,7 @@ let scanSettings = {
   rsiMax: window.__SCAN_RSI_MAX__ || 70,
 };
 
-function openSettings() {
+function openSettings(evt) {
   document.getElementById('vol-current-display').textContent = fmtNum(scanSettings.volMin) + '억+';
   document.getElementById('vol-custom-inp').value = '';
   document.getElementById('rsi-min').value = scanSettings.rsiMin;
@@ -2694,7 +2697,7 @@ function openSettings() {
     if (m && m[1] === scanSettings.mkt) b.classList.add('active');
   });
   var _sm = document.getElementById('settings-modal');
-  _positionModalForStreamlit(_sm);
+  _positionModalForStreamlit(_sm, evt && evt.clientY);
   _sm.classList.add('show');
 }
 
@@ -3091,7 +3094,7 @@ function buildCard(stock, rank) {
         <div class="vol-label"><span>컨버전스 강도</span><span style="color:${catColor}">${stock.vol}%</span></div>
         <div class="vol-bar"><div class="vol-bar-fill" style="width:${stock.vol}%;background:linear-gradient(90deg,${catColor},var(--accent2))"></div></div>
       </div>
-      <button class="btn-approve" id="btn-${stock.code}" onclick="openModal('${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
+      <button class="btn-approve" id="btn-${stock.code}" onclick="openModal(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
         ⬡ K-자동매매 승인
       </button>
       <button class="btn-ai" id="btn-ai-${stock.code}" onclick="openAiAnalysis(event,'${stock.code}')">
@@ -3130,7 +3133,7 @@ function renderCards() {
         <div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 종목이 없습니다</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;line-height:2;margin-bottom:10px">${diagLines.length ? diagLines.join('<br>') : '모든 조건 검토 필요'}</div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button onclick="openSettings()" style="padding:6px 14px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">⚙ 필터 조정</button>
+          <button onclick="openSettings(event)" style="padding:6px 14px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">⚙ 필터 조정</button>
           <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
         </div>
       </div></div>`;
@@ -3343,7 +3346,7 @@ function buildUsCard(stock, rank) {
       </div>
       <button class="btn-approve" style="border-color:#6eb5ff;color:#6eb5ff;background:rgba(110,181,255,0.1)"
         id="btn-${stock.code}"
-        onclick="openModal('${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
+        onclick="openModal(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
         ⬡ U-자동매매 승인
       </button>
     </div>
@@ -3388,7 +3391,7 @@ function renderUsCards() {
 // ──────────────────────────────────────────────
 // MODAL
 // ──────────────────────────────────────────────
-function openModal(code, name, buy, target, stop, rr, score, grade) {
+function openModal(evt, code, name, buy, target, stop, rr, score, grade) {
   currentModal = { code, name, buy, target, stop, rr, score, grade };
   document.getElementById('modal-info').innerHTML = `
     <div class="modal-info-row"><span class="modal-info-label">종목</span><span class="modal-info-val">${name} (${code})</span></div>
@@ -3400,7 +3403,7 @@ function openModal(code, name, buy, target, stop, rr, score, grade) {
     <div class="modal-info-row"><span class="modal-info-label">API 엔드포인트</span><span class="modal-info-val" style="color:var(--text-dim);font-size:9px">uapi/domestic-stock/v1/trading/order-cash</span></div>
   `;
   var _mod = document.getElementById('modal');
-  _positionModalForStreamlit(_mod);
+  _positionModalForStreamlit(_mod, evt && evt.clientY);
   _mod.classList.add('show');
 }
 
@@ -3612,18 +3615,21 @@ function _buildUserMsg(stock) {
     + 'K 분석사유:\n' + reasons;
 }
 
-function _positionModalForStreamlit(el) {
+function _positionModalForStreamlit(el, clickY) {
   if (!IS_STREAMLIT) return;
   try {
-    var top = (window.visualViewport && window.visualViewport.pageTop) || window.scrollY || 0;
-    var h   = (window.visualViewport && window.visualViewport.height)  || window.innerHeight || 700;
-    el.style.top    = top + 'px';
-    el.style.height = h + 'px';
+    var box = el.querySelector('.modal, #ai-modal-box');
+    if (!box) return;
+    var y = (clickY !== undefined && clickY > 0) ? Math.max(10, clickY - 20) : 200;
+    box.style.top = y + 'px';
   } catch(e) {}
 }
 function _resetModalPosition(el) {
   if (!IS_STREAMLIT) return;
-  el.style.top = ''; el.style.height = '';
+  try {
+    var box = el.querySelector('.modal, #ai-modal-box');
+    if (box) box.style.top = '';
+  } catch(e) {}
 }
 
 function openAiAnalysis(event, code) {
@@ -3643,7 +3649,7 @@ function openAiAnalysis(event, code) {
     content.innerHTML = '<span class="ai-loading">⏳ Gemini AI 분석 중... 잠시만 기다려 주세요.</span>\n\n'
       + '<span style="color:#4a5568;font-size:11px">─ 로컬 KIS 분석 (미리보기) ─\n</span>'
       + generateSwingReport(stock);
-    _positionModalForStreamlit(overlay);
+    _positionModalForStreamlit(overlay, event.clientY);
     overlay.classList.add('show');
 
     if (_aiAbortCtrl) { try { _aiAbortCtrl.abort(); } catch(e){} }
@@ -3681,7 +3687,7 @@ function openAiAnalysis(event, code) {
   } else {
     // API 키 없음 → 로컬 분석 즉시 표시
     content.textContent = generateSwingReport(stock);
-    _positionModalForStreamlit(overlay);
+    _positionModalForStreamlit(overlay, event.clientY);
     overlay.classList.add('show');
   }
 }
@@ -5212,7 +5218,7 @@ setTimeout(function() {
 </div>
 
 <!-- ⚙ 필터 플로팅 버튼 (항상 표시, 모든 환경) -->
-<button id="filter-fab" onclick="openSettings()" title="스캔 필터 설정">⚙</button>
+<button id="filter-fab" onclick="openSettings(event)" title="스캔 필터 설정">⚙</button>
 
 <!-- 차트 링크 팝업 -->
 <div class="chart-popup-overlay" id="chart-popup-overlay" onclick="closeChartPopup()"></div>
