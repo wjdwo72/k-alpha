@@ -763,6 +763,58 @@ div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,
     st.markdown('<div class="del-btn">',unsafe_allow_html=True)
     st.button('⌫  지우기',key='pb_del',on_click=press_del,use_container_width=True)
     st.markdown('</div>',unsafe_allow_html=True)
+
+    st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+
+    with st.expander("⚠ 투자 위험 고지", expanded=False):
+        st.markdown("""<div style="font-size:11px;color:#94a3b8;line-height:2;font-family:monospace">
+• 개발자는 투자 결과에 대해 <b style="color:#ff4d6d">일체의 법적 책임을 지지 않습니다</b><br>
+• 모든 분석·신호는 <b style="color:#ffc800">참고 목적</b>이며 결과를 보장하지 않습니다<br>
+• <b style="color:#ff4d6d">원금 손실 위험</b>이 있으며 최종 판단은 <b>이용자 본인</b>에게 있습니다<br>
+• 자동매매 손실·오류에 대해 개발자는 <b style="color:#ff4d6d">법적 책임을 지지 않습니다</b><br>
+• 한국투자증권과 <b style="color:#ffc800">무관한 독립 개인 개발 도구</b>입니다
+</div>""", unsafe_allow_html=True)
+
+    with st.expander("⚙ PIN 설정", expanded=False):
+        _use_p = st.toggle("🔒 PIN 잠금 사용", value=st.session_state.use_pin, key="pin_tog_lock")
+        if _use_p != st.session_state.use_pin:
+            st.session_state.use_pin = _use_p
+            if not _use_p:
+                qp['no_pin'] = '1'
+                st.session_state.auth = True
+                st.rerun()
+            else:
+                try: del qp['no_pin']
+                except: pass
+
+        st.divider()
+        st.markdown("**🔑 PIN 변경**")
+        _old_pin  = st.text_input("현재 PIN", type="password", max_chars=4, placeholder="현재 4자리", key="pin_chg_old")
+        _new_pin  = st.text_input("새 PIN",   type="password", max_chars=4, placeholder="새 4자리",  key="pin_chg_new")
+        _new_pin2 = st.text_input("새 PIN 확인", type="password", max_chars=4, placeholder="새 4자리 재입력", key="pin_chg_new2")
+        if st.button("💾 PIN 변경 저장", key="btn_pin_chg", use_container_width=True):
+            if _old_pin != PASSWORD:
+                st.error("❌ 현재 PIN이 틀렸습니다")
+            elif len(_new_pin) != 4 or not _new_pin.isdigit():
+                st.error("❌ 새 PIN은 숫자 4자리여야 합니다")
+            elif _new_pin != _new_pin2:
+                st.error("❌ 새 PIN이 일치하지 않습니다")
+            else:
+                server_store['app_pin'] = _new_pin
+                # KIS 키 재암호화
+                if qp.get('ck'):
+                    try:
+                        _d = py_load(qp['ck'], PASSWORD)
+                        _new_ck = py_save(_d['ak'], _d['sec'], _d['acc'], _d.get('env','실전투자'), _new_pin)
+                        qp['ck'] = _new_ck
+                        server_store['ck'] = _new_ck
+                        _new_cp = base64.b64encode((_new_pin+':kalpha').encode()).decode()
+                        qp['cp'] = _new_cp
+                        server_store['cp'] = _new_cp
+                    except: pass
+                st.success(f"✅ PIN이 {_new_pin}으로 변경됐습니다. 다음 접속부터 적용됩니다.")
+                st.rerun()
+
     st.stop()
 
 # ════ 3. 자동 새로고침 ════
