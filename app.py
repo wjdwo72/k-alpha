@@ -127,6 +127,8 @@ DEFAULTS = {
     # 텔레그램 AI 분석 전송 갯수 (전체 기본값 + 채팅방별)
     "tg_ai_count": 3,
     "tg_ai_count_p": 3, "tg_ai_count_g1": 3, "tg_ai_count_g2": 3, "tg_ai_count_g3": 3,
+    # 그룹방 AI 분석 전송 여부 (개인방은 기본 활성, 그룹방은 선택)
+    "tg_ai_send_g1": False, "tg_ai_send_g2": False, "tg_ai_send_g3": False,
 }
 for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
@@ -1474,7 +1476,11 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                                     value=st.session_state.get('tg_ai_count_g1', 3),
                                     disabled=not grp_enabled, key="sl_ai_cnt_g1")
             st.session_state['tg_ai_count_g1'] = _ai_cnt_g1
-            st.caption(f"그룹방 1: 카테고리당 {_ai_cnt_g1}종목씩 전송")
+            _ai_send_g1 = st.checkbox("🤖 그룹방 1 AI 분석 자동 전송",
+                                       value=st.session_state.get('tg_ai_send_g1', False),
+                                       disabled=not grp_enabled, key="cb_ai_send_g1")
+            st.session_state['tg_ai_send_g1'] = _ai_send_g1
+            st.caption(f"그룹방 1: 카테고리당 {_ai_cnt_g1}종목씩" + (" AI 포함" if _ai_send_g1 else " AI 미전송") + " 전송")
 
             cgs_g1a, cgs_g1b = st.columns([2,1])
             with cgs_g1a:
@@ -1604,7 +1610,11 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                                     value=st.session_state.get('tg_ai_count_g2', 3),
                                     disabled=not grp2_enabled, key="sl_ai_cnt_g2")
             st.session_state['tg_ai_count_g2'] = _ai_cnt_g2
-            st.caption(f"그룹방 2: 카테고리당 {_ai_cnt_g2}종목씩 전송")
+            _ai_send_g2 = st.checkbox("🤖 그룹방 2 AI 분석 자동 전송",
+                                       value=st.session_state.get('tg_ai_send_g2', False),
+                                       disabled=not grp2_enabled, key="cb_ai_send_g2")
+            st.session_state['tg_ai_send_g2'] = _ai_send_g2
+            st.caption(f"그룹방 2: 카테고리당 {_ai_cnt_g2}종목씩" + (" AI 포함" if _ai_send_g2 else " AI 미전송") + " 전송")
 
             cgs_g2a, cgs_g2b = st.columns([2,1])
             with cgs_g2a:
@@ -1721,7 +1731,11 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                                     value=st.session_state.get('tg_ai_count_g3', 3),
                                     disabled=not grp3_enabled, key="sl_ai_cnt_g3")
             st.session_state['tg_ai_count_g3'] = _ai_cnt_g3
-            st.caption(f"그룹방 3: 카테고리당 {_ai_cnt_g3}종목씩 전송")
+            _ai_send_g3 = st.checkbox("🤖 그룹방 3 AI 분석 자동 전송",
+                                       value=st.session_state.get('tg_ai_send_g3', False),
+                                       disabled=not grp3_enabled, key="cb_ai_send_g3")
+            st.session_state['tg_ai_send_g3'] = _ai_send_g3
+            st.caption(f"그룹방 3: 카테고리당 {_ai_cnt_g3}종목씩" + (" AI 포함" if _ai_send_g3 else " AI 미전송") + " 전송")
 
             cgs_g3a, cgs_g3b = st.columns([2,1])
             with cgs_g3a:
@@ -2176,7 +2190,8 @@ if st.session_state.kis_token:
                         json={"chat_id":_grp_chat,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
                         st.toast(f"👥 그룹방 전송 완료 ({_now_ts})", icon="✅")
-                        _send_tg_ai(_tg_tok, _grp_chat, _gist_ai_stocks(_n_g1), _iv_g_lbl, _now_ts)
+                        if st.session_state.get('tg_ai_send_g1', False):
+                            _send_tg_ai(_tg_tok, _grp_chat, _gist_ai_stocks(_n_g1), _iv_g_lbl, _now_ts)
                 except Exception as e:
                     st.caption(f"그룹방 텔레그램 오류: {e}")
 
@@ -2196,7 +2211,8 @@ if st.session_state.kis_token:
                         json={"chat_id":_grp2_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
                         st.toast(f"👥 그룹방 2 전송 완료 ({_now_ts})", icon="✅")
-                        _send_tg_ai(_tg_tok, _grp2_chat_g, _gist_ai_stocks(_n_g2), _iv_g2_g_lbl, _now_ts)
+                        if st.session_state.get('tg_ai_send_g2', False):
+                            _send_tg_ai(_tg_tok, _grp2_chat_g, _gist_ai_stocks(_n_g2), _iv_g2_g_lbl, _now_ts)
                 except Exception as e:
                     st.caption(f"그룹방 2 텔레그램 오류: {e}")
 
@@ -2216,7 +2232,8 @@ if st.session_state.kis_token:
                         json={"chat_id":_grp3_chat_g,"text":msg,"parse_mode":"HTML"}, timeout=10)
                     if r.json().get('ok'):
                         st.toast(f"👥 그룹방 3 전송 완료 ({_now_ts})", icon="✅")
-                        _send_tg_ai(_tg_tok, _grp3_chat_g, _gist_ai_stocks(_n_g3), _iv_g3_g_lbl, _now_ts)
+                        if st.session_state.get('tg_ai_send_g3', False):
+                            _send_tg_ai(_tg_tok, _grp3_chat_g, _gist_ai_stocks(_n_g3), _iv_g3_g_lbl, _now_ts)
                 except Exception as e:
                     st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
@@ -2332,7 +2349,7 @@ if st.session_state.kis_token:
         # 스윙+급등 합산, 내일관심+중소형 합산
         swing_surge    = (cats.get('swing',[]) + cats.get('surge',[]))[:_n2]
         tomorrow_small = (cats.get('tomorrow',[]) + cats.get('smallmid',[]))[:_n2]
-        ls = [f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts_str}] {mkt_lbl}\n"
+        ls = [f"📡 <b>K-ALPHA {iv_lbl} 스캔</b> [{ts_str}] {mkt_lbl}\n"
               f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
         if swing_surge:
             ls.append(f"🔥 <b>[실시간 스윙/급등 TOP{len(swing_surge)}]</b>")
@@ -2379,7 +2396,8 @@ if st.session_state.kis_token:
                     json={"chat_id":_grp_chat2,"text":msg2g,"parse_mode":"HTML"}, timeout=10)
                 if r2g.json().get('ok'):
                     st.toast(f"👥 그룹방 전송 완료 ({_now2})", icon="✅")
-                    _send_tg_ai(_tg_tok2, _grp_chat2, _kis_ai_stocks(_n_kg1), _iv_g2_lbl, _now2)
+                    if st.session_state.get('tg_ai_send_g1', False):
+                        _send_tg_ai(_tg_tok2, _grp_chat2, _kis_ai_stocks(_n_kg1), _iv_g2_lbl, _now2)
             except Exception as e:
                 st.caption(f"그룹방 텔레그램 오류: {e}")
 
@@ -2399,7 +2417,8 @@ if st.session_state.kis_token:
                     json={"chat_id":_grp2_chat2,"text":msg2g2,"parse_mode":"HTML"}, timeout=10)
                 if r2g2.json().get('ok'):
                     st.toast(f"👥 그룹방 2 전송 완료 ({_now2})", icon="✅")
-                    _send_tg_ai(_tg_tok2, _grp2_chat2, _kis_ai_stocks(_n_kg2), _iv_g2b_lbl, _now2)
+                    if st.session_state.get('tg_ai_send_g2', False):
+                        _send_tg_ai(_tg_tok2, _grp2_chat2, _kis_ai_stocks(_n_kg2), _iv_g2b_lbl, _now2)
             except Exception as e:
                 st.caption(f"그룹방 2 텔레그램 오류: {e}")
 
@@ -2419,7 +2438,8 @@ if st.session_state.kis_token:
                     json={"chat_id":_grp3_chat2,"text":msg2g3,"parse_mode":"HTML"}, timeout=10)
                 if r2g3.json().get('ok'):
                     st.toast(f"👥 그룹방 3 전송 완료 ({_now2})", icon="✅")
-                    _send_tg_ai(_tg_tok2, _grp3_chat2, _kis_ai_stocks(_n_kg3), _iv_g3b_lbl, _now2)
+                    if st.session_state.get('tg_ai_send_g3', False):
+                        _send_tg_ai(_tg_tok2, _grp3_chat2, _kis_ai_stocks(_n_kg3), _iv_g3b_lbl, _now2)
             except Exception as e:
                 st.caption(f"그룹방 3 텔레그램 오류: {e}")
 
