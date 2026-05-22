@@ -142,6 +142,17 @@ def get_server_store():
             "google_key": None}
 
 server_store = get_server_store()
+# 공유 설정 PC ↔ Mobile 복원
+_SYNC_KEYS = ['scan_refresh_min','scan_vol_min','scan_rsi_min','scan_rsi_max',
+              'scan_cap','scan_mkt','scan_swing_vol_min','scan_swing_pct_min','scan_swing_pct_max',
+              'scan_tomorrow_pct_min','scan_tomorrow_pct_max',
+              'tg_ai_count_p','tg_ai_count_g1','tg_ai_count_g2','tg_ai_count_g3',
+              'tg_ai_send_g1','tg_ai_send_g2','tg_ai_send_g3']
+if not st.session_state.get('_synced'):
+    for _sk, _sv in (server_store.get('ss') or {}).items():
+        if _sk in _SYNC_KEYS:
+            st.session_state[_sk] = _sv
+    st.session_state['_synced'] = True
 
 qp = st.query_params
 
@@ -809,11 +820,12 @@ if not st.session_state.agreed:
     ❗ 개발자는 금융투자업자가 아니며 이용으로 인한 직접·간접 손해에 대해 민사·형사상 책임을 지지 않습니다.
   </div>
 </div>""", unsafe_allow_html=True)
+    _agree_cb = st.checkbox("위 내용을 확인하였으며 동의합니다", key="agree_cb")
     c1,c2=st.columns(2)
     with c1:
         if st.button("✗ 동의하지 않음", use_container_width=True): st.warning("동의가 필요합니다.")
     with c2:
-        if st.button("✓ 동의하고 시작", use_container_width=True, type="primary"):
+        if st.button("✓ 동의하고 시작", use_container_width=True, type="primary", disabled=not _agree_cb):
             st.session_state.agreed=True; qp['agreed']='1'; st.rerun()
     st.stop()
 
@@ -904,16 +916,23 @@ border-radius:10px;padding:12px 14px;margin-bottom:10px;font-family:'Share Tech 
         _cur_pin_inp = st.text_input("현재 PIN", type="password", max_chars=4,
                                       placeholder="현재 4자리", key="pin_cur_inp")
 
+        _pin_mode = st.radio("해제 방식",
+                             ["🔓 이번만 해제 (PIN 계속 유지)", "🔑 영구 해제 (다음부터 PIN 불필요)"],
+                             horizontal=True, key="pin_mode_radio")
+
         pc1, pc2 = st.columns(2)
         with pc1:
-            if st.button("🔓 PIN 사용 해제", key="btn_pin_disable", use_container_width=True):
+            if st.button("확인", key="btn_pin_disable", use_container_width=True):
                 if _cur_pin_inp == PASSWORD:
-                    st.session_state.use_pin = False
+                    if "영구 해제" in _pin_mode:
+                        st.session_state.use_pin = False
+                        qp['no_pin'] = '1'
+                        try: del qp['cp']
+                        except: pass
+                        st.success("✅ PIN이 영구 해제됐습니다.")
+                    else:
+                        st.success("✅ 이번만 해제됐습니다. 다음 접속 시 PIN이 필요합니다.")
                     st.session_state.auth = True
-                    qp['no_pin'] = '1'
-                    try: del qp['cp']
-                    except: pass
-                    st.success("✅ PIN 잠금이 해제됐습니다.")
                     st.rerun()
                 else:
                     st.error("❌ PIN이 틀렸습니다")
@@ -2450,7 +2469,10 @@ if not os.path.exists("app.html"):
 # scan_json 최종 안전장치 — scan_result와 동기화
 if scan_result.get('swing') or scan_result.get('surge') or scan_result.get('tomorrow') or scan_result.get('smallmid'):
     scan_json = json.dumps(scan_result, ensure_ascii=False)
-with open("app.html","r",encoding="utf-8") as f: html=f.read()
+@st.cache_data(ttl=86400, show_spinner=False)
+def _load_app_html():
+    with open("app.html","r",encoding="utf-8") as f: return f.read()
+html = _load_app_html()
 inject=f"""<script>
 window.__STREAMLIT_MODE__ = true;
 window.__KIS_TOKEN__    = {json.dumps(st.session_state.kis_token or '')};
@@ -2473,4 +2495,7 @@ window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
 window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
 </script>"""
 html=html.replace("</head>",inject+"\n</head>")
+# 설정 서버 저장 (PC ↔ Mobile 연동)
+server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
+
 components.html(html,height=15000,scrolling=False)
