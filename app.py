@@ -754,10 +754,9 @@ def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s
 
 def _send_tg_ai(bot_token, chat_id, stocks, label, ts):
     """AI 분석 메시지 생성 후 텔레그램 전송 (Gist 카드 / KIS raw stock 모두 처리)."""
+    if not bot_token or not chat_id or not stocks: return
     gkey = st.session_state.get('google_api_key', '')
-    if not gkey or not bot_token or not chat_id or not stocks: return
-    # 쿼터 초과 쿨다운 중이면 전체 스킵
-    if time.time() < st.session_state.get('_gemini_quota_until', 0): return
+    quota_until = st.session_state.get('_gemini_quota_until', 0)
 
     def _ai_one(x):
         try:
@@ -777,24 +776,36 @@ def _send_tg_ai(bot_token, chat_id, stocks, label, ts):
         except: return None
 
     ai_lines = [f"🤖 <b>AI 심층 분석</b> [{label}·{ts}]\n━━━━━━━━━━━━━━━━"]
-    # 직렬 호출 (레이트 리밋 방지: 요청 사이 1초 간격)
-    results = []
-    for x in stocks:
-        results.append(_ai_one(x))
-        if time.time() < st.session_state.get('_gemini_quota_until', 0):
-            break  # 쿼터 초과 감지 시 나머지 스킵
-        time.sleep(1)
-    for x, text in zip(stocks, results):
-        if text:
-            ai_lines.append(f"🔵 <b>{x.get('name','')} ({x.get('code','')})</b>\n{text}")
-    if len(ai_lines) > 1:
-        try:
-            requests.post(
-                f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                json={"chat_id":chat_id,"text":"\n\n".join(ai_lines)[:4000],"parse_mode":"HTML"},
-                timeout=10
-            )
-        except: pass
+
+    if not gkey:
+        # API 키 미설정 — 종목 목록만 발송
+        for x in stocks:
+            ai_lines.append(f"🔵 <b>{x.get('name','')} ({x.get('code','')})</b>\n⚙ Gemini API 키 미설정 · 앱 설정에서 입력하세요")
+    elif time.time() < quota_until:
+        # 쿼터 쿨다운 — 남은 시간 표시
+        remain = max(0, int(quota_until - time.time()))
+        ai_lines.append(f"⏱ API 일일 한도 초과 · 약 {remain//60}분 후 재시도 예정")
+        for x in stocks:
+            ai_lines.append(f"🔵 <b>{x.get('name','')} ({x.get('code','')})</b>\n— 한도 초과로 분석 생략")
+    else:
+        # 직렬 호출 (레이트 리밋 방지: 요청 사이 1초 간격)
+        results = []
+        for x in stocks:
+            results.append(_ai_one(x))
+            if time.time() < st.session_state.get('_gemini_quota_until', 0):
+                break  # 쿼터 초과 감지 시 나머지 스킵
+            time.sleep(1)
+        for x, text in zip(stocks, results):
+            name = x.get('name',''); code = x.get('code','')
+            ai_lines.append(f"🔵 <b>{name} ({code})</b>\n{text or '— AI 분석 대기 중'}")
+
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={"chat_id":chat_id,"text":"\n\n".join(ai_lines)[:4000],"parse_mode":"HTML"},
+            timeout=10
+        )
+    except: pass
 
 
 # ════ 1. 법적 고지 ════
@@ -869,9 +880,9 @@ div[data-testid="column"]:last-child .stButton button{background:rgba(0,212,255,
 .del-btn .stButton button{width:100%!important;height:52px!important;background:#0d1220!important;color:#64748b!important;border:1px solid #1a2535!important;border-radius:10px!important;font-size:14px!important;padding:0!important}
 </style>""", unsafe_allow_html=True)
 
-    # ── 1. 면책조항 (PIN 위에 표시) ──────────────
+    # ── 1. 면책조항 + 체크박스 (PIN 위에 표시) ──────
     st.markdown("""<div style="background:#0a0e1a;border:1px solid rgba(255,165,0,0.35);
-border-radius:10px;padding:12px 14px;margin-bottom:10px;font-family:'Share Tech Mono',monospace">
+border-radius:10px;padding:12px 14px;margin-bottom:6px;font-family:'Share Tech Mono',monospace">
   <div style="color:#ffc800;font-size:11px;font-weight:700;margin-bottom:8px">⚠ 투자 위험 고지 및 면책 조항</div>
   <div style="font-size:10px;color:#64748b;line-height:1.9">
     • 개발자는 투자 결과에 대해 <b style="color:#ff4d6d">일체의 법적 책임을 지지 않습니다</b><br>
@@ -880,6 +891,12 @@ border-radius:10px;padding:12px 14px;margin-bottom:10px;font-family:'Share Tech 
     • 한국투자증권과 <b style="color:#ffc800">무관한 독립 개인 개발 도구</b>입니다
   </div>
 </div>""", unsafe_allow_html=True)
+    _pin_discl = st.checkbox("위 면책 조항에 동의합니다", key="_pin_discl_cb")
+    if not _pin_discl:
+        st.caption("🔒 동의 체크 후 PIN 입력이 활성화됩니다.")
+        with st.expander("⚙ PIN 설정 (해제 / 변경)", expanded=False):
+            st.caption("면책 조항에 먼저 동의하세요.")
+        st.stop()
 
     # ── 2. K·ALPHA 타이틀 + PIN 입력 ─────────────
     dots=''.join([f'<div style="width:12px;height:12px;border-radius:50%;'
