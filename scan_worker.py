@@ -532,9 +532,7 @@ def main():
     if not any([send_personal, send_group, send_group2, send_group3]):
         print("⏭ 전송 대상 없음"); return
 
-    # ── Gist에서 앱이 저장한 scan_result 읽기 ──
-    # GitHub Actions(해외 서버)에서는 KIS API가 IP 차단으로 항상 실패하므로
-    # Gist 데이터가 없으면 스캔 없이 종료 (앱이 열려있어야 Gist에 저장됨)
+    # ── 1순위: Gist에서 앱이 저장한 scan_result 읽기 ──
     scan_result = None
     kospi_n = 0; kosdaq_n = 0; total_n = 0
 
@@ -561,18 +559,53 @@ def main():
                     total_n  = _gs.get('total', kospi_n + kosdaq_n)
                     print(f"  ✅ Gist 데이터 사용 (KOSPI {kospi_n}+KOSDAQ {kosdaq_n}종목)")
                 else:
-                    print("  ⚠ Gist 데이터 있으나 스캔 결과 0건 — 앱이 열려 있어야 저장됩니다")
+                    print("  ⚠ Gist 결과 0건 — KIS 직접 스캔 시도")
             else:
-                print("  ⚠ Gist kalpha_scan.json 없음 — 앱을 먼저 실행해 데이터를 저장해주세요")
+                print("  ⚠ Gist kalpha_scan.json 없음 — KIS 직접 스캔 시도")
         except Exception as e:
-            print(f"⚠ Gist 로드 실패: {e}")
+            print(f"⚠ Gist 로드 실패: {e} — KIS 직접 스캔 시도")
     else:
-        print("⚠ GIST_ID 또는 GH_TOKEN 없음")
+        print("⚠ GIST_ID 또는 GH_TOKEN 없음 — KIS 직접 스캔 시도")
 
-    # Gist 데이터 없으면 종료 (GitHub Actions에서 KIS는 해외IP 차단으로 항상 실패)
+    # ── 2순위: Gist가 비어있으면 KIS 직접 스캔 ──
     if not scan_result:
-        print("⏭ 스캔 데이터 없음 — 앱(Streamlit)을 열어두면 Gist에 자동 저장됩니다")
-        return
+        print("🔑 KIS 토큰 발급 중...")
+        token = get_token()
+        if not token:
+            print("❌ 토큰 발급 실패 — 종료"); return
+
+        print("📊 거래량 순위 조회 (KOSPI 300 + KOSDAQ 100)...")
+        kospi_raw  = fetch_ranking(token, 'J', 300)
+        kosdaq_raw = fetch_ranking(token, 'Q', 100)
+        all_s = kospi_raw + kosdaq_raw
+        kospi_n  = len(kospi_raw)
+        kosdaq_n = len(kosdaq_raw)
+        total_n  = len(all_s)
+        print(f"  KOSPI {kospi_n} + KOSDAQ {kosdaq_n} = {total_n}종목")
+
+        if not all_s:
+            print("❌ 종목 조회 결과 없음"); return
+
+        cats = categorize(all_s)
+        print(f"  스윙:{len(cats['swing'])} 급등:{len(cats['surge'])} "
+              f"내일:{len(cats['tomorrow'])} 중소형:{len(cats['smallmid'])}")
+
+        scan_result = {
+            'swing':    [build_card(s,'swing')    for s in cats['swing']],
+            'surge':    [build_card(s,'surge')    for s in cats['surge']],
+            'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
+            'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
+            'ts': ts, 'total': total_n,
+            'kospi_n': kospi_n, 'kosdaq_n': kosdaq_n,
+            'updated_at': time.time(),
+            'is_manual': is_manual,
+            'market_open': market_open,
+        }
+        # Gist에 저장해 앱도 즉시 사용 가능하게
+        save_to_gist(scan_result)
+
+    if not scan_result:
+        print("⏭ 스캔 데이터 없음"); return
 
     if not TG_TOKEN:
         print("⚠ TG_TOKEN 없음 — 텔레그램 전송 건너뜀"); return
