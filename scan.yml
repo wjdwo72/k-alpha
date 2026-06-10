@@ -1,0 +1,49 @@
+name: K-ALPHA Auto Scan
+
+on:
+  schedule:
+    - cron: '0,10,20,30,40,50 23 * * 0,1,2,3,4'
+    - cron: '0,10,20,30,40,50 0,1,2,3,4,5 * * 1-5'
+    - cron: '0,10,20,30 6 * * 1-5'
+    - cron: '0 11 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      interval:
+        description: '수동 스캔 간격(분). 비워두면 기본값.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests urllib3
+      - name: K-ALPHA 스캔 실행
+        env:
+          KIS_AK:             ${{ secrets.KIS_AK }}
+          KIS_SEC:            ${{ secrets.KIS_SEC }}
+          KIS_ACC:            ${{ secrets.KIS_ACC }}
+          KIS_ENV:            ${{ secrets.KIS_ENV }}
+          TG_TOKEN:           ${{ secrets.TG_TOKEN }}
+          TG_CHAT:            ${{ secrets.TG_CHAT }}
+          INTERVAL:           ${{ secrets.INTERVAL }}
+          TG_GROUP_CHAT:      ${{ secrets.TG_GROUP_CHAT }}
+          TG_GROUP_INTERVAL:  ${{ secrets.TG_GROUP_INTERVAL }}
+          TG_GROUP2_CHAT:     ${{ secrets.TG_GROUP2_CHAT }}
+          TG_GROUP2_INTERVAL: ${{ secrets.TG_GROUP2_INTERVAL }}
+          TG_GROUP3_CHAT:     ${{ secrets.TG_GROUP3_CHAT }}
+          TG_GROUP3_INTERVAL: ${{ secrets.TG_GROUP3_INTERVAL }}
+          GIST_ID:            ${{ secrets.GIST_ID }}
+          GH_TOKEN:           ${{ secrets.GH_TOKEN }}
+          MANUAL_INTERVAL:    ${{ github.event.inputs.interval }}
+          GITHUB_EVENT_NAME:  ${{ github.event_name }}
+        run: python scan_worker.py

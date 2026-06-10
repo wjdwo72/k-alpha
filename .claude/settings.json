@@ -1,0 +1,16 @@
+﻿{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /c/Users/user/Desktop/k-alpha-main && git diff --quiet HEAD 2>/dev/null; if [ $? -ne 0 ]; then git add -A && git commit -m \"auto: Claude Code auto-commit $(date +%Y-%m-%d_%H:%M)\" && git push; fi",
+            "timeout": 60,
+            "statusMessage": "GitHub auto-sync..."
+          }
+        ]
+      }
+    ]
+  }
+}

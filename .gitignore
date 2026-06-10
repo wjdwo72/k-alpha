@@ -1,0 +1,15 @@
+# 중복 압축 해제 폴더
+k-alpha-main/
+
+# 로컬 전용 HTML
+k-alpha-termina.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# OS
+.DS_Store
+Thumbs.db
