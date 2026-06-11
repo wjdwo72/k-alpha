@@ -392,6 +392,32 @@ if not qp.get("ck") and server_store.get("ck"):
     qp["agreed"] = "1"
     st.rerun()
 
+# Gist에서 설정 복원 (재시작·절전 후 server_store와 URL이 비어있을 때)
+if not st.session_state.get("tg_token") and not qp.get("tg") and not server_store.get("_cfg_loaded"):
+    try:
+        _gc_id  = _get_secret('GIST_ID')
+        _gc_tok = _get_secret('GH_TOKEN')
+        if _gc_id and _gc_tok:
+            _gc_r = requests.get(
+                f"https://api.github.com/gists/{_gc_id}",
+                headers={'Authorization':f'token {_gc_tok}',
+                         'Accept':'application/vnd.github.v3+json'},
+                timeout=5)
+            _gc_content = _gc_r.json().get('files',{}).get('kalpha_config.json',{}).get('content','')
+            if _gc_content:
+                _gc = json.loads(_gc_content)
+                if _gc.get('tg_token'): st.session_state['tg_token'] = _gc['tg_token']
+                if _gc.get('tg_chat'):  st.session_state['tg_chat']  = _gc['tg_chat']
+                for _k in ['tg_all_enabled','tg_interval_min','scan_refresh_min',
+                           'tg_group_enabled','tg_group_chat','tg_group_interval_min',
+                           'tg_group2_enabled','tg_group2_chat','tg_group2_interval_min',
+                           'tg_group3_enabled','tg_group3_chat','tg_group3_interval_min',
+                           'tg_send_start_p','tg_send_end_p']:
+                    if _gc.get(_k) is not None:
+                        st.session_state[_k] = _gc[_k]
+            server_store['_cfg_loaded'] = True
+    except: pass
+
 if qp.get("agreed")=="1" or server_store.get("agreed"):
     st.session_state.agreed = True
 if qp.get("no_pin")=="1" or server_store.get("no_pin")=="1": st.session_state.use_pin = False
@@ -1582,6 +1608,8 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
             if not _gid or not _ght:
                 return False, 'GIST_ID / GH_TOKEN 환경변수 없음'
             cfg = {
+                'tg_token':              st.session_state.get('tg_token', ''),
+                'tg_chat':               st.session_state.get('tg_chat', ''),
                 'tg_all_enabled':        st.session_state.get('tg_all_enabled', True),
                 'scan_refresh_min':      st.session_state.get('scan_refresh_min', 10),
                 'tg_interval_min':       st.session_state.get('tg_interval_min', 10),
