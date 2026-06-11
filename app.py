@@ -2634,6 +2634,16 @@ all_stocks=[]; kospi_stocks=[]; kosdaq_stocks=[]; balance={}
 GIST_ID      = _get_secret('GIST_ID')
 _gist_active = bool(GIST_ID and st.session_state.auth)
 
+# 매 렌더마다 session_state → server_store 동기화
+# (앱 재시작 없이도 백그라운드 스캔 스레드가 즉시 kis_token을 인식)
+if st.session_state.kis_token:
+    _ss_rt = get_server_store()
+    _ss_rt['kis_token']      = st.session_state.kis_token
+    _ss_rt['kis_base_url']   = st.session_state.get('kis_base_url', '')
+    _ss_rt['kis_ak']         = st.session_state.get('kis_ak', '')
+    _ss_rt['kis_sec']        = st.session_state.get('kis_sec', '')
+    _ss_rt['scan_refresh_min'] = st.session_state.get('scan_refresh_min', 10)
+
 # Gist 모드: auth만 있으면 동작 (kis_token 없어도 됨)
 # 직접 KIS 모드: kis_token 필요
 
