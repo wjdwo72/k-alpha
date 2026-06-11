@@ -501,6 +501,13 @@ def do_connect(ak, sec, acc, env):
             st.session_state.kis_ak=ak; st.session_state.kis_sec=sec
             st.session_state.kis_acc=acc; st.session_state.kis_env=env
             for fn in [fetch_volume_ranking, fetch_balance]: fn.clear()
+            # 백그라운드 스캔 스레드가 읽을 수 있도록 server_store에도 동기화
+            _ss = get_server_store()
+            _ss['kis_token']      = d["access_token"]
+            _ss['kis_base_url']   = bu
+            _ss['kis_ak']         = ak
+            _ss['kis_sec']        = sec
+            _ss['scan_refresh_min'] = st.session_state.get('scan_refresh_min', 10)
             return True, None
         return False, d.get('msg1','앱키/시크릿 오류')
     except Exception as e: return False, str(e)[:100]
@@ -1532,6 +1539,8 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
             if st.button("해제",key="btn_disc"):
                 st.session_state.kis_token=None
                 for fn in [fetch_volume_ranking, fetch_balance]: fn.clear()
+                _ss = get_server_store()
+                _ss.pop('kis_token', None)
                 st.rerun()
     if st.session_state.kis_token:
         st.success(f"✅ {st.session_state.kis_env} 연결됨")
