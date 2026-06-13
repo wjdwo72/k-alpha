@@ -997,90 +997,114 @@ def fetch_per_stocks(per_max, per_min, pbr_max, roe_min, vol_min, top_n, period_
     - KOSPI + KOSDAQ 전종목 재무지표 조회
     - PER/PBR/ROE 조건 + 최근 period_days 거래일 MA 상향 확인
     - 거래대금 vol_min억 이상 필터
+    pykrx 버전에 따라 컬럼명이 다를 수 있으므로 방어적으로 처리.
     """
     try:
         from pykrx import stock as pykrx_stock
-        import pandas as pd
+        from datetime import timedelta
 
-        today_str = kst_now().strftime('%Y%m%d')
-
-        # 최근 거래일 계산 (장마감 전이면 전날 사용)
         _now = kst_now()
+        # 장 마감 전(16시 이전)이면 전일 기준
         if _now.hour < 16:
-            # 오늘 데이터 아직 미확정 → 최근 확정 거래일 -1영업일 기준
-            from datetime import timedelta
             _check = _now - timedelta(days=1)
-            # 주말 skip
             while _check.weekday() >= 5:
                 _check -= timedelta(days=1)
             date_str = _check.strftime('%Y%m%d')
         else:
-            date_str = today_str
+            date_str = _now.strftime('%Y%m%d')
 
-        # period_days 전 날짜 계산 (캘린더 기준 약 1.5배)
-        from datetime import timedelta
-        start_date = (kst_now() - timedelta(days=int(period_days * 1.8))).strftime('%Y%m%d')
+        start_date = (_now - timedelta(days=int(period_days * 1.8))).strftime('%Y%m%d')
+
+        # ── 컬럼명 정규화 헬퍼 ──────────────────────────────────────
+        def _col(df, *candidates):
+            """후보 컬럼명 중 존재하는 첫 번째 반환. 없으면 None."""
+            for c in candidates:
+                if c in df.columns:
+                    return c
+            return None
+
+        def _val(row, *candidates, default=0):
+            for c in candidates:
+                v = row.get(c)
+                if v is not None:
+                    try: return float(v)
+                    except: pass
+            return float(default)
 
         results = []
         for mkt in ['KOSPI', 'KOSDAQ']:
             try:
-                # 재무지표 (PER/PBR/배당수익률)
+                # ── 재무지표 ──
                 df_fund = pykrx_stock.get_market_fundamental(date_str, market=mkt)
                 if df_fund is None or df_fund.empty:
                     continue
 
-                # 거래량·거래대금
-                df_price = pykrx_stock.get_market_ohlcv(date_str, market=mkt)
-                if df_price is None or df_price.empty:
+                # ── OHLCV (거래대금, 종가, 등락률) ──
+                df_ohlcv = pykrx_stock.get_market_ohlcv(date_str, market=mkt)
+                if df_ohlcv is None or df_ohlcv.empty:
                     continue
 
-                # 종목명
-                tickers = pykrx_stock.get_market_ticker_list(market=mkt)
+                # pykrx 컬럼명 후보 (버전별 차이 대응)
+                col_close  = _col(df_ohlcv, '종가', 'Close', 'close')
+                col_tamt   = _col(df_ohlcv, '거래대금', 'Tamt', 'TradingValue', 'trading_value')
+                col_change = _col(df_ohlcv, '등락률', 'Change', 'ChangeRate', 'change_rate')
 
-                df_merged = df_fund.join(df_price[['거래대금','종가','등락률']], how='inner')
+                if not col_close:
+                    continue  # 종가 컬럼 없으면 스킵
+
+                # 필요한 컬럼만 선택 (없는 건 제외)
+                price_cols = [c for c in [col_close, col_tamt, col_change] if c]
+                df_price_sel = df_ohlcv[price_cols]
+
+                # ── fund + ohlcv 합치기 (inner join) ──
+                df_merged = df_fund.join(df_price_sel, how='inner')
+
+                # fund 컬럼명 후보
+                col_per = _col(df_fund, 'PER', 'per')
+                col_pbr = _col(df_fund, 'PBR', 'pbr')
+                col_eps = _col(df_fund, 'EPS', 'eps')
+                col_bps = _col(df_fund, 'BPS', 'bps')
 
                 for ticker in df_merged.index:
                     try:
                         row = df_merged.loc[ticker]
-                        per = float(row.get('PER', 0) or 0)
-                        pbr = float(row.get('PBR', 0) or 0)
-                        # ROE = EPS / BPS * 100 근사 (pykrx에서 직접 ROE 없을 경우)
-                        eps = float(row.get('EPS', 0) or 0)
-                        bps = float(row.get('BPS', 1) or 1)
-                        roe = (eps / bps * 100) if bps > 0 else 0
 
-                        price = float(row.get('종가', 0) or 0)
-                        tr_amt = float(row.get('거래대금', 0) or 0) / 1e8  # 억원
-                        chg_pct = float(row.get('등락률', 0) or 0)
+                        per     = _val(row, col_per or 'PER')
+                        pbr     = _val(row, col_pbr or 'PBR')
+                        eps     = _val(row, col_eps or 'EPS')
+                        bps     = _val(row, col_bps or 'BPS', default=1)
+                        roe     = (eps / bps * 100) if bps > 0 else 0
 
-                        # 조건 필터
+                        price   = _val(row, col_close  or '종가')
+                        tr_raw  = _val(row, col_tamt   or '거래대금')
+                        chg_pct = _val(row, col_change or '등락률')
+                        tr_amt  = tr_raw / 1e8  # 원 → 억원
+
+                        # ── 조건 필터 ──
                         if not (per_min < per < per_max): continue
-                        if pbr > pbr_max or pbr <= 0: continue
-                        if roe < roe_min: continue
-                        if tr_amt < vol_min: continue
-                        if price <= 0: continue
+                        if pbr > pbr_max or pbr <= 0:     continue
+                        if roe < roe_min:                  continue
+                        if tr_amt < vol_min:               continue
+                        if price <= 0:                     continue
 
                         # ETF 제외
-                        name_val = ''
-                        try:
-                            name_val = pykrx_stock.get_market_ticker_name(ticker)
-                        except:
-                            name_val = ticker
+                        try:    name_val = pykrx_stock.get_market_ticker_name(ticker)
+                        except: name_val = ticker
                         if is_etf(name_val): continue
 
-                        # MA20 상향 확인 (최근 period_days 거래일)
+                        # ── MA20 상향 확인 ──
+                        above_ma = True
                         try:
                             df_hist = pykrx_stock.get_market_ohlcv(start_date, date_str, ticker)
                             if df_hist is not None and len(df_hist) >= 20:
-                                close_arr = df_hist['종가'].values
-                                ma20 = close_arr[-20:].mean()
-                                above_ma = price > ma20
-                            else:
-                                above_ma = True  # 데이터 부족 시 통과
+                                _hcol = _col(df_hist, '종가', 'Close', 'close')
+                                if _hcol:
+                                    close_arr = df_hist[_hcol].values
+                                    above_ma  = float(price) > close_arr[-20:].mean()
                         except:
-                            above_ma = True
+                            pass
 
-                        # K점수 계산 (PER 낮을수록, ROE 높을수록 높음)
+                        # ── K점수 ──
                         per_score = max(0, min(30, int((per_max - per) / per_max * 30)))
                         roe_score = min(25, int((roe - roe_min) / 5))
                         pbr_score = max(0, min(20, int((pbr_max - pbr) / pbr_max * 20)))
@@ -1101,7 +1125,7 @@ def fetch_per_stocks(per_max, per_min, pbr_max, roe_min, vol_min, top_n, period_
                             'price': f"{int(price):,}",
                             'change': f"{sign}{chg_pct:.2f}%",
                             'up': chg_pct >= 0,
-                            'buy': f"{buy_p:,}",
+                            'buy':    f"{buy_p:,}",
                             'target': f"{tgt_p:,}",
                             'stop':   f"{stop_p:,}",
                             'rr': str(rr),
@@ -1123,12 +1147,12 @@ def fetch_per_stocks(per_max, per_min, pbr_max, roe_min, vol_min, top_n, period_
                                 {'icon': '📈', 'cat': 'orange',
                                  'text': f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원 (RR {rr})"},
                                 {'icon': '🔍', 'cat': 'blue',
-                                 'text': f"[저평가 분석] PER 저평가 · ROE {roe:.1f}% 수익성 확인 · {'MA 상향' if above_ma else 'MA 하향'}"},
+                                 'text': f"[저평가 분석] PER 저평가 · ROE {roe:.1f}% 수익성 · {'MA 상향✅' if above_ma else 'MA 하향⚠'}"},
                             ],
                             'inds': [
-                                {'label': mkt, 'cat': 'green'},
+                                {'label': mkt,             'cat': 'green'},
                                 {'label': f"PER {per:.1f}", 'cat': 'orange'},
-                                {'label': f"ROE {roe:.1f}%", 'cat': ''},
+                                {'label': f"ROE {roe:.1f}%",'cat': ''},
                             ],
                             'chart3m': [], 'chartD': [],
                         })
@@ -1138,12 +1162,12 @@ def fetch_per_stocks(per_max, per_min, pbr_max, roe_min, vol_min, top_n, period_
                 st.caption(f"⚠ PER 스캔 오류({mkt}): {e}")
                 continue
 
-        # 점수순 정렬 + 상위 top_n
         results.sort(key=lambda x: x['score'], reverse=True)
         return results[:top_n]
     except ImportError:
+        st.caption("⚠ pykrx 미설치 — `pip install pykrx` 필요")
         return []
-    except Exception as e:
+    except Exception:
         return []
 
 def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s, rr_s):
@@ -3645,6 +3669,7 @@ if _gist_active or st.session_state.kis_token:
         scan_result['per'] = []
 
     # 상태 표시
+    _dm = is_market_open()
     _dm_lbl = '🟢 장중' if _dm else ('🔴 주말' if kst_now().weekday()>=5 else ('🔴 공휴일' if is_kr_holiday() else '🔴 장마감'))
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
 📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl}<br>
