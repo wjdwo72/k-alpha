@@ -3138,15 +3138,15 @@ function buildCard(stock, rank) {
         </div>
       </div>
       <div class="chart-block">
-        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
-          data-c="${stock.code}" data-n="${stock.name}"
-          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'kr',this.dataset.n,e)}).call(this,event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 3분봉 차트"
+          data-c="${stock.code}" data-n="${stock.name}" data-period="minute"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'kr',this.dataset.n,e,this.dataset.period)}).call(this,event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
-        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
-          data-c="${stock.code}" data-n="${stock.name}"
-          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'kr',this.dataset.n,e)}).call(this,event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 일봉 차트"
+          data-c="${stock.code}" data-n="${stock.name}" data-period="day"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'kr',this.dataset.n,e,this.dataset.period)}).call(this,event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -3388,15 +3388,15 @@ function buildUsCard(stock, rank) {
         </div>
       </div>
       <div class="chart-block">
-        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
-          data-c="${stock.code}" data-n="${stock.name}"
-          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'us',this.dataset.n,e)}).call(this,event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 3분봉 차트"
+          data-c="${stock.code}" data-n="${stock.name}" data-period="minute"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'us',this.dataset.n,e,this.dataset.period)}).call(this,event)">
           <div class="chart-label">3분봉 ↗</div>
           ${makeSvgChart(stock.chart3m, catColor, true)}
         </div>
-        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 차트"
-          data-c="${stock.code}" data-n="${stock.name}"
-          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'us',this.dataset.n,e)}).call(this,event)">
+        <div class="chart-wrap" style="cursor:pointer" title="${stock.name} 일봉 차트"
+          data-c="${stock.code}" data-n="${stock.name}" data-period="day"
+          onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'us',this.dataset.n,e,this.dataset.period)}).call(this,event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
         </div>
@@ -4503,25 +4503,31 @@ function clearApiKeys() {
 // ──────────────────────────────────────────────
 // 차트 링크 팝업
 // ──────────────────────────────────────────────
-function openKisChart(code, market, name, event) {
+function openKisChart(code, market, name, event, period) {
   if (event) event.stopPropagation();
   const popup   = document.getElementById('chart-popup');
   const overlay = document.getElementById('chart-popup-overlay');
   const nameEl  = document.getElementById('chart-popup-stock-name');
   const codeEl  = document.getElementById('chart-popup-code');
   const linksEl = document.getElementById('chart-popup-links');
-  var displayName = name || getStockName(code) || code;
+  var displayName = name || (typeof getStockName === 'function' ? getStockName(code) : '') || code;
   if (nameEl) nameEl.textContent = displayName;
   if (codeEl) codeEl.textContent = code;
 
-  // 링크 목록 구성
+  // period 분기: 'minute'=3분봉, 'day'=일봉(기본)
+  var isMinute   = (period === 'minute');
+  var periodLabel = isMinute ? '분봉(당일)' : '일봉(3개월)';
+
+  // 링크 목록
   let links = [];
   if (market === 'kr') {
     links = [
       {
         icon: '🟢', name: '네이버 금융 차트', desc: '공개 · 로그인 불필요 · 바로 열림',
         cls: 'naver',
-        url: `https://finance.naver.com/item/fchart.nhn?code=${code}`
+        url: isMinute
+          ? `https://finance.naver.com/item/fchart.nhn?code=${code}`
+          : `https://finance.naver.com/item/main.naver?code=${code}#chart`
       },
       {
         icon: '🔵', name: '다음 금융', desc: '공개 · 로그인 불필요 · 바로 열림',
@@ -4559,21 +4565,35 @@ function openKisChart(code, market, name, event) {
     ];
   }
 
-  // 네이버 차트 미리보기 이미지 (KR만)
+  // 네이버 차트 미리보기 (KR only) — 3분봉/일봉 다른 이미지
   var previewHtml = '';
   if (market === 'kr') {
+    // 분봉: candle/minute (당일 분봉 캔들)
+    // 일봉: area/day (당일 영역차트) → 실패시 3month로 fallback
+    var imgUrl = isMinute
+      ? `https://ssl.pstatic.net/imgfinance/chart/item/candle/minute/${code}.png`
+      : `https://ssl.pstatic.net/imgfinance/chart/item/area/day/${code}.png`;
+    var fallbackUrl = isMinute
+      ? `https://ssl.pstatic.net/imgfinance/chart/item/area/day/${code}.png`
+      : `https://ssl.pstatic.net/imgfinance/chart/item/area/3month/${code}.png`;
+    var naverLink = isMinute
+      ? `https://finance.naver.com/item/fchart.nhn?code=${code}`
+      : `https://finance.naver.com/item/main.naver?code=${code}#chart`;
+
     previewHtml = `
-      <div style="margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:#0d1220;position:relative;">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);padding:5px 8px;display:flex;justify-content:space-between;align-items:center;">
-          <span>📈 네이버 차트 미리보기</span>
-          <a href="https://finance.naver.com/item/fchart.nhn?code=${code}" target="_blank"
-             style="color:var(--accent);text-decoration:none;font-size:9px;" onclick="closeChartPopup()">전체보기 ↗</a>
+      <div style="margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:#0d1220;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);
+                    padding:5px 8px;display:flex;justify-content:space-between;align-items:center;">
+          <span>📈 ${periodLabel} 미리보기</span>
+          <a href="${naverLink}" target="_blank"
+             style="color:var(--accent);text-decoration:none;font-size:9px;"
+             onclick="closeChartPopup()">네이버에서 보기 ↗</a>
         </div>
         <img
-          src="https://ssl.pstatic.net/imgfinance/chart/item/area/day/${code}.png"
-          onerror="this.parentElement.style.display='none'"
-          style="width:100%;display:block;min-height:60px;"
-          alt="${displayName} 차트"
+          src="${imgUrl}"
+          onerror="this.src='${fallbackUrl}';this.onerror=function(){this.parentElement.style.display='none'}"
+          style="width:100%;display:block;min-height:70px;max-height:180px;object-fit:contain;"
+          alt="${displayName} ${periodLabel}"
           loading="lazy"
         />
       </div>`;
@@ -4590,30 +4610,26 @@ function openKisChart(code, market, name, event) {
     </a>
   `).join('');
 
-  // 팝업 표시
   popup.style.display = 'block';
   overlay.classList.add('show');
-
-  // 팝업 크기 측정 후 위치 결정
   popup.style.width = Math.min(320, window.innerWidth - 24) + 'px';
+
   setTimeout(function() {
     var pw = popup.offsetWidth  || 320;
-    var ph = popup.offsetHeight || 340;
+    var ph = popup.offsetHeight || 380;
     var vw = window.innerWidth  || 360;
     var vh = window.innerHeight || 640;
     var cx = event ? event.clientX : vw / 2;
     var cy = event ? event.clientY : vh / 2;
-
     var left = cx + 10;
     var top  = cy + 10;
-    if (left + pw > vw - 8)  left = cx - pw - 10;
-    if (left < 8)            left = 8;
-    if (top  + ph > vh - 8) top  = Math.max(8, vh - ph - 8);
-    if (top  < 8)            top  = 8;
-
+    if (left + pw > vw - 8) left = cx - pw - 10;
+    if (left < 8)           left = 8;
+    if (top  + ph > vh - 8) top = Math.max(8, vh - ph - 8);
+    if (top  < 8)           top = 8;
     popup.style.position = 'fixed';
-    popup.style.left     = left + 'px';
-    popup.style.top      = top  + 'px';
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
   }, 50);
 }
 
