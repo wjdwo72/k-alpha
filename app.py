@@ -2236,6 +2236,8 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_menu_g1'] = _menu_g1
             _active_g1 = [k for k,v in _menu_g1.items() if v]
             st.caption(f"전송 항목: {', '.join(_active_g1) if _active_g1 else '없음'}")
+
+            cgs_g1a, cgs_g1b = st.columns([2,1])
             with cgs_g1a:
                 if st.button("💾 그룹방 Chat ID 저장", key="btn_grp1_save",
                              use_container_width=True,
@@ -2476,6 +2478,8 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_menu_g2'] = _menu_g2
             _active_g2 = [k for k,v in _menu_g2.items() if v]
             st.caption(f"전송 항목: {', '.join(_active_g2) if _active_g2 else '없음'}")
+
+            cgs_g2a, cgs_g2b = st.columns([2,1])
             with cgs_g2a:
                 if st.button("💾 그룹방 2 Chat ID 저장", key="btn_grp2_save",
                              use_container_width=True,
@@ -2703,6 +2707,8 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
             st.session_state['tg_menu_g3'] = _menu_g3
             _active_g3 = [k for k,v in _menu_g3.items() if v]
             st.caption(f"전송 항목: {', '.join(_active_g3) if _active_g3 else '없음'}")
+
+            cgs_g3a, cgs_g3b = st.columns([2,1])
             with cgs_g3a:
                 if st.button("💾 그룹방 3 Chat ID 저장", key="btn_grp3_save",
                              use_container_width=True,
