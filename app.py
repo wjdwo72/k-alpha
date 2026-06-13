@@ -350,6 +350,23 @@ DEFAULTS = {
     "tg_send_start_g1": 9, "tg_send_end_g1": 15,
     "tg_send_start_g2": 9, "tg_send_end_g2": 15,
     "tg_send_start_g3": 9, "tg_send_end_g3": 15,
+    # ── PER 저평가주 스캔 설정 ──────────────────────────────────────
+    "per_scan_enabled": True,
+    "per_max": 15.0,          # PER 상한
+    "per_min": 0.1,           # PER 하한 (음수 제외)
+    "pbr_max": 1.0,           # PBR 상한
+    "roe_min": 10.0,          # ROE 하한 (%)
+    "per_vol_min": 30,        # 최소 거래대금 (억)
+    "per_top_n": 20,          # UI 표시 개수
+    # 거래 기간 설정 (pykrx DataReader 기간, 영업일 기준)
+    "trade_period_days": 20,  # 기본 20 거래일(약 1개월)
+    # ── 채팅방별 메뉴(카테고리) 설정 ────────────────────────────────
+    # 각 방에서 전송할 카테고리 ON/OFF
+    # swing=실시간스윙, surge=급등전야, tomorrow=내일관심, smallmid=중소형주, per=PER저평가
+    "tg_menu_p":  {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False},
+    "tg_menu_g1": {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False},
+    "tg_menu_g2": {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False},
+    "tg_menu_g3": {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False},
 }
 for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
@@ -375,7 +392,10 @@ _SYNC_KEYS = ['scan_refresh_min','scan_vol_min','scan_rsi_min','scan_rsi_max',
               'tg_send_start_p','tg_send_end_p',
               'tg_send_start_g1','tg_send_end_g1',
               'tg_send_start_g2','tg_send_end_g2',
-              'tg_send_start_g3','tg_send_end_g3']
+              'tg_send_start_g3','tg_send_end_g3',
+              'per_scan_enabled','per_max','per_min','pbr_max','roe_min',
+              'per_vol_min','per_top_n','trade_period_days',
+              'tg_menu_p','tg_menu_g1','tg_menu_g2','tg_menu_g3']
 if not st.session_state.get('_synced'):
     for _sk, _sv in (server_store.get('ss') or {}).items():
         if _sk in _SYNC_KEYS:
@@ -970,6 +990,162 @@ def build_card(s, cat):
         'chart3m': [], 'chartD': [], 'cat': cat,
     }
 
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_per_stocks(per_max, per_min, pbr_max, roe_min, vol_min, top_n, period_days):
+    """
+    pykrx로 PER 저평가주 스캔.
+    - KOSPI + KOSDAQ 전종목 재무지표 조회
+    - PER/PBR/ROE 조건 + 최근 period_days 거래일 MA 상향 확인
+    - 거래대금 vol_min억 이상 필터
+    """
+    try:
+        from pykrx import stock as pykrx_stock
+        import pandas as pd
+
+        today_str = kst_now().strftime('%Y%m%d')
+
+        # 최근 거래일 계산 (장마감 전이면 전날 사용)
+        _now = kst_now()
+        if _now.hour < 16:
+            # 오늘 데이터 아직 미확정 → 최근 확정 거래일 -1영업일 기준
+            from datetime import timedelta
+            _check = _now - timedelta(days=1)
+            # 주말 skip
+            while _check.weekday() >= 5:
+                _check -= timedelta(days=1)
+            date_str = _check.strftime('%Y%m%d')
+        else:
+            date_str = today_str
+
+        # period_days 전 날짜 계산 (캘린더 기준 약 1.5배)
+        from datetime import timedelta
+        start_date = (kst_now() - timedelta(days=int(period_days * 1.8))).strftime('%Y%m%d')
+
+        results = []
+        for mkt in ['KOSPI', 'KOSDAQ']:
+            try:
+                # 재무지표 (PER/PBR/배당수익률)
+                df_fund = pykrx_stock.get_market_fundamental(date_str, market=mkt)
+                if df_fund is None or df_fund.empty:
+                    continue
+
+                # 거래량·거래대금
+                df_price = pykrx_stock.get_market_ohlcv(date_str, market=mkt)
+                if df_price is None or df_price.empty:
+                    continue
+
+                # 종목명
+                tickers = pykrx_stock.get_market_ticker_list(market=mkt)
+
+                df_merged = df_fund.join(df_price[['거래대금','종가','등락률']], how='inner')
+
+                for ticker in df_merged.index:
+                    try:
+                        row = df_merged.loc[ticker]
+                        per = float(row.get('PER', 0) or 0)
+                        pbr = float(row.get('PBR', 0) or 0)
+                        # ROE = EPS / BPS * 100 근사 (pykrx에서 직접 ROE 없을 경우)
+                        eps = float(row.get('EPS', 0) or 0)
+                        bps = float(row.get('BPS', 1) or 1)
+                        roe = (eps / bps * 100) if bps > 0 else 0
+
+                        price = float(row.get('종가', 0) or 0)
+                        tr_amt = float(row.get('거래대금', 0) or 0) / 1e8  # 억원
+                        chg_pct = float(row.get('등락률', 0) or 0)
+
+                        # 조건 필터
+                        if not (per_min < per < per_max): continue
+                        if pbr > pbr_max or pbr <= 0: continue
+                        if roe < roe_min: continue
+                        if tr_amt < vol_min: continue
+                        if price <= 0: continue
+
+                        # ETF 제외
+                        name_val = ''
+                        try:
+                            name_val = pykrx_stock.get_market_ticker_name(ticker)
+                        except:
+                            name_val = ticker
+                        if is_etf(name_val): continue
+
+                        # MA20 상향 확인 (최근 period_days 거래일)
+                        try:
+                            df_hist = pykrx_stock.get_market_ohlcv(start_date, date_str, ticker)
+                            if df_hist is not None and len(df_hist) >= 20:
+                                close_arr = df_hist['종가'].values
+                                ma20 = close_arr[-20:].mean()
+                                above_ma = price > ma20
+                            else:
+                                above_ma = True  # 데이터 부족 시 통과
+                        except:
+                            above_ma = True
+
+                        # K점수 계산 (PER 낮을수록, ROE 높을수록 높음)
+                        per_score = max(0, min(30, int((per_max - per) / per_max * 30)))
+                        roe_score = min(25, int((roe - roe_min) / 5))
+                        pbr_score = max(0, min(20, int((pbr_max - pbr) / pbr_max * 20)))
+                        vol_score = min(15, int(tr_amt / 30))
+                        ma_bonus  = 5 if above_ma else 0
+                        score = min(95, 50 + per_score + roe_score + pbr_score + vol_score + ma_bonus)
+                        grade = 'S' if score >= 85 else ('A' if score >= 75 else 'B')
+
+                        buy_p  = int(price * 0.995)
+                        stop_p = int(price * 0.97)
+                        tgt_p  = int(price * 1.10)
+                        rr     = round((tgt_p - price) / (price - stop_p + 1), 1)
+                        sign   = '+' if chg_pct >= 0 else ''
+
+                        results.append({
+                            'code': ticker,
+                            'name': name_val,
+                            'price': f"{int(price):,}",
+                            'change': f"{sign}{chg_pct:.2f}%",
+                            'up': chg_pct >= 0,
+                            'buy': f"{buy_p:,}",
+                            'target': f"{tgt_p:,}",
+                            'stop':   f"{stop_p:,}",
+                            'rr': str(rr),
+                            'vol': int(tr_amt),
+                            'mkt': mkt.lower(),
+                            'rsiApprox': round(50 + chg_pct * 2.8, 1),
+                            'score': score,
+                            'grade': grade,
+                            'per': round(per, 1),
+                            'pbr': round(pbr, 2),
+                            'roe': round(roe, 1),
+                            'above_ma': above_ma,
+                            'cat': 'per',
+                            'reasons': [
+                                {'icon': '💎', 'cat': 'green',
+                                 'text': f"PER {per:.1f}배 (기준:{per_max}배 이하) · PBR {pbr:.2f} · ROE {roe:.1f}%"},
+                                {'icon': '📊', 'cat': '',
+                                 'text': f"거래대금 {int(tr_amt):,}억 · 등락률 {sign}{chg_pct:.2f}%"},
+                                {'icon': '📈', 'cat': 'orange',
+                                 'text': f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원 (RR {rr})"},
+                                {'icon': '🔍', 'cat': 'blue',
+                                 'text': f"[저평가 분석] PER 저평가 · ROE {roe:.1f}% 수익성 확인 · {'MA 상향' if above_ma else 'MA 하향'}"},
+                            ],
+                            'inds': [
+                                {'label': mkt, 'cat': 'green'},
+                                {'label': f"PER {per:.1f}", 'cat': 'orange'},
+                                {'label': f"ROE {roe:.1f}%", 'cat': ''},
+                            ],
+                            'chart3m': [], 'chartD': [],
+                        })
+                    except Exception:
+                        continue
+            except Exception as e:
+                st.caption(f"⚠ PER 스캔 오류({mkt}): {e}")
+                continue
+
+        # 점수순 정렬 + 상위 top_n
+        results.sort(key=lambda x: x['score'], reverse=True)
+        return results[:top_n]
+    except ImportError:
+        return []
+    except Exception as e:
+        return []
+
 def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s, rr_s):
     """Gemini AI 간략 분석 (시간당 세션 캐시). None 반환 시 생략."""
     gkey = st.session_state.get('google_api_key', '')
@@ -1342,6 +1518,57 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
             st.session_state.scan_rsi_max=rsi_max
 
         st.divider()
+        st.markdown("**📅 거래 기간 설정 (pykrx 조회 기준)**")
+        _td_cur = st.session_state.get('trade_period_days', 20)
+        _td_new = st.slider(
+            "거래 기간 (영업일)",
+            min_value=5, max_value=60,
+            value=_td_cur, step=5,
+            key="td_slider",
+            help="PER 저평가주 MA 확인 및 수급 분석에 사용되는 거래일 기준 (5~60일)")
+        st.session_state['trade_period_days'] = _td_new
+        st.caption(f"현재 설정: 최근 {_td_new}거래일 기준 (약 {_td_new // 5}주 = {_td_new // 20}개월)")
+
+        st.divider()
+        st.markdown("**💎 PER 저평가주 스캔 설정**")
+        _per_en = st.toggle(
+            "💎 PER 저평가주 스캔 활성화",
+            value=st.session_state.get('per_scan_enabled', True),
+            key="tog_per_en",
+            help="pykrx로 KOSPI+KOSDAQ 전종목 PER/PBR/ROE 필터링")
+        st.session_state['per_scan_enabled'] = _per_en
+        if _per_en:
+            _pc1, _pc2 = st.columns(2)
+            with _pc1:
+                _per_max = st.number_input("PER 상한", min_value=1.0, max_value=50.0,
+                    value=float(st.session_state.get('per_max', 15.0)), step=1.0,
+                    format="%.1f", key="inp_per_max")
+                st.session_state['per_max'] = _per_max
+                _pbr_max = st.number_input("PBR 상한", min_value=0.1, max_value=5.0,
+                    value=float(st.session_state.get('pbr_max', 1.0)), step=0.1,
+                    format="%.1f", key="inp_pbr_max")
+                st.session_state['pbr_max'] = _pbr_max
+            with _pc2:
+                _per_min = st.number_input("PER 하한", min_value=0.1, max_value=10.0,
+                    value=float(st.session_state.get('per_min', 0.1)), step=0.1,
+                    format="%.1f", key="inp_per_min")
+                st.session_state['per_min'] = _per_min
+                _roe_min = st.number_input("ROE 최소 (%)", min_value=0.0, max_value=50.0,
+                    value=float(st.session_state.get('roe_min', 10.0)), step=1.0,
+                    format="%.1f", key="inp_roe_min")
+                st.session_state['roe_min'] = _roe_min
+            _pv_min = st.number_input("최소 거래대금 (억)", min_value=5, max_value=5000,
+                value=st.session_state.get('per_vol_min', 30), step=5, key="inp_per_vol")
+            st.session_state['per_vol_min'] = _pv_min
+            _per_topn = st.slider("표시 종목 수", min_value=5, max_value=50,
+                value=st.session_state.get('per_top_n', 20), step=5, key="sl_per_topn")
+            st.session_state['per_top_n'] = _per_topn
+            st.caption(f"📋 PER {_per_min}~{_per_max} | PBR ≤{_pbr_max} | ROE ≥{_roe_min}% | 거래대금 ≥{_pv_min}억 | 상위 {_per_topn}종목")
+            if st.button("🔄 PER 스캔 캐시 초기화", key="btn_per_clear", use_container_width=True):
+                fetch_per_stocks.clear()
+                st.success("✅ PER 스캔 캐시 초기화됨")
+
+        st.divider()
         st.markdown("**🚫 제외 종목 설정**")
         bl_input = st.text_input("제외할 종목코드 (쉼표 구분)", placeholder="005930,000660,...",
                                    key="bl_inp")
@@ -1638,6 +1865,20 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
                 'tg_ai_count_g1':        st.session_state.get('tg_ai_count_g1', 10),
                 'tg_ai_count_g2':        st.session_state.get('tg_ai_count_g2', 10),
                 'tg_ai_count_g3':        st.session_state.get('tg_ai_count_g3', 10),
+                # PER 저평가주 설정
+                'per_scan_enabled':      st.session_state.get('per_scan_enabled', True),
+                'per_max':               st.session_state.get('per_max', 15.0),
+                'per_min':               st.session_state.get('per_min', 0.1),
+                'pbr_max':               st.session_state.get('pbr_max', 1.0),
+                'roe_min':               st.session_state.get('roe_min', 10.0),
+                'per_vol_min':           st.session_state.get('per_vol_min', 30),
+                'per_top_n':             st.session_state.get('per_top_n', 20),
+                'trade_period_days':     st.session_state.get('trade_period_days', 20),
+                # 채팅방별 메뉴
+                'tg_menu_p':             st.session_state.get('tg_menu_p', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False}),
+                'tg_menu_g1':            st.session_state.get('tg_menu_g1', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False}),
+                'tg_menu_g2':            st.session_state.get('tg_menu_g2', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False}),
+                'tg_menu_g3':            st.session_state.get('tg_menu_g3', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False}),
                 'saved_at': kst_strftime('%Y-%m-%d %H:%M:%S'),
             }
             try:
@@ -1774,6 +2015,19 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                     key="inp_p_eh", help="이 시각 이전까지만 전송 (예: 15 = ~15:59)")
                 st.session_state['tg_send_end_p'] = _p_eh
             st.caption(f"📡 개인방 송출 시간: {_p_sh:02d}:00 ~ {_p_eh:02d}:59 KST")
+
+            # ── 개인방 메뉴(카테고리) 설정 ──
+            st.markdown("**📋 개인방 전송 메뉴 (카테고리) 선택**")
+            _menu_p = st.session_state.get('tg_menu_p', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False})
+            _mp_c1, _mp_c2, _mp_c3, _mp_c4, _mp_c5 = st.columns(5)
+            with _mp_c1: _menu_p['swing']    = st.checkbox("🔥스윙",    value=_menu_p.get('swing',True),    key="mp_swing_p")
+            with _mp_c2: _menu_p['surge']    = st.checkbox("⚡급등",    value=_menu_p.get('surge',True),    key="mp_surge_p")
+            with _mp_c3: _menu_p['tomorrow'] = st.checkbox("🌙내일",    value=_menu_p.get('tomorrow',True), key="mp_tmrw_p")
+            with _mp_c4: _menu_p['smallmid'] = st.checkbox("📦중소형",  value=_menu_p.get('smallmid',True), key="mp_sm_p")
+            with _mp_c5: _menu_p['per']      = st.checkbox("💎PER",     value=_menu_p.get('per',False),     key="mp_per_p")
+            st.session_state['tg_menu_p'] = _menu_p
+            _active_p = [k for k,v in _menu_p.items() if v]
+            st.caption(f"전송 항목: {', '.join(_active_p) if _active_p else '없음 (전송 안함)'}")
 
             cs1, cs2 = st.columns([2,1])
             with cs1:
@@ -1970,7 +2224,18 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 st.session_state['tg_send_end_g1'] = _g1_eh
             st.caption(f"📡 그룹방 1 송출 시간: {_g1_sh:02d}:00 ~ {_g1_eh:02d}:59 KST")
 
-            cgs_g1a, cgs_g1b = st.columns([2,1])
+            # ── 그룹방 1 메뉴 설정 ──
+            st.markdown("**📋 그룹방 1 전송 메뉴 (카테고리) 선택**")
+            _menu_g1 = st.session_state.get('tg_menu_g1', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False})
+            _mg1_c1, _mg1_c2, _mg1_c3, _mg1_c4, _mg1_c5 = st.columns(5)
+            with _mg1_c1: _menu_g1['swing']    = st.checkbox("🔥스윙",   value=_menu_g1.get('swing',True),    disabled=not grp_enabled, key="mg1_swing")
+            with _mg1_c2: _menu_g1['surge']    = st.checkbox("⚡급등",   value=_menu_g1.get('surge',True),    disabled=not grp_enabled, key="mg1_surge")
+            with _mg1_c3: _menu_g1['tomorrow'] = st.checkbox("🌙내일",   value=_menu_g1.get('tomorrow',True), disabled=not grp_enabled, key="mg1_tmrw")
+            with _mg1_c4: _menu_g1['smallmid'] = st.checkbox("📦중소형", value=_menu_g1.get('smallmid',True), disabled=not grp_enabled, key="mg1_sm")
+            with _mg1_c5: _menu_g1['per']      = st.checkbox("💎PER",    value=_menu_g1.get('per',False),     disabled=not grp_enabled, key="mg1_per")
+            st.session_state['tg_menu_g1'] = _menu_g1
+            _active_g1 = [k for k,v in _menu_g1.items() if v]
+            st.caption(f"전송 항목: {', '.join(_active_g1) if _active_g1 else '없음'}")
             with cgs_g1a:
                 if st.button("💾 그룹방 Chat ID 저장", key="btn_grp1_save",
                              use_container_width=True,
@@ -2199,7 +2464,18 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 st.session_state['tg_send_end_g2'] = _g2_eh
             st.caption(f"📡 그룹방 2 송출 시간: {_g2_sh:02d}:00 ~ {_g2_eh:02d}:59 KST")
 
-            cgs_g2a, cgs_g2b = st.columns([2,1])
+            # ── 그룹방 2 메뉴 설정 ──
+            st.markdown("**📋 그룹방 2 전송 메뉴 (카테고리) 선택**")
+            _menu_g2 = st.session_state.get('tg_menu_g2', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False})
+            _mg2_c1, _mg2_c2, _mg2_c3, _mg2_c4, _mg2_c5 = st.columns(5)
+            with _mg2_c1: _menu_g2['swing']    = st.checkbox("🔥스윙",   value=_menu_g2.get('swing',True),    disabled=not grp2_enabled, key="mg2_swing")
+            with _mg2_c2: _menu_g2['surge']    = st.checkbox("⚡급등",   value=_menu_g2.get('surge',True),    disabled=not grp2_enabled, key="mg2_surge")
+            with _mg2_c3: _menu_g2['tomorrow'] = st.checkbox("🌙내일",   value=_menu_g2.get('tomorrow',True), disabled=not grp2_enabled, key="mg2_tmrw")
+            with _mg2_c4: _menu_g2['smallmid'] = st.checkbox("📦중소형", value=_menu_g2.get('smallmid',True), disabled=not grp2_enabled, key="mg2_sm")
+            with _mg2_c5: _menu_g2['per']      = st.checkbox("💎PER",    value=_menu_g2.get('per',False),     disabled=not grp2_enabled, key="mg2_per")
+            st.session_state['tg_menu_g2'] = _menu_g2
+            _active_g2 = [k for k,v in _menu_g2.items() if v]
+            st.caption(f"전송 항목: {', '.join(_active_g2) if _active_g2 else '없음'}")
             with cgs_g2a:
                 if st.button("💾 그룹방 2 Chat ID 저장", key="btn_grp2_save",
                              use_container_width=True,
@@ -2415,7 +2691,18 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 st.session_state['tg_send_end_g3'] = _g3_eh
             st.caption(f"📡 그룹방 3 송출 시간: {_g3_sh:02d}:00 ~ {_g3_eh:02d}:59 KST")
 
-            cgs_g3a, cgs_g3b = st.columns([2,1])
+            # ── 그룹방 3 메뉴 설정 ──
+            st.markdown("**📋 그룹방 3 전송 메뉴 (카테고리) 선택**")
+            _menu_g3 = st.session_state.get('tg_menu_g3', {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False})
+            _mg3_c1, _mg3_c2, _mg3_c3, _mg3_c4, _mg3_c5 = st.columns(5)
+            with _mg3_c1: _menu_g3['swing']    = st.checkbox("🔥스윙",   value=_menu_g3.get('swing',True),    disabled=not grp3_enabled, key="mg3_swing")
+            with _mg3_c2: _menu_g3['surge']    = st.checkbox("⚡급등",   value=_menu_g3.get('surge',True),    disabled=not grp3_enabled, key="mg3_surge")
+            with _mg3_c3: _menu_g3['tomorrow'] = st.checkbox("🌙내일",   value=_menu_g3.get('tomorrow',True), disabled=not grp3_enabled, key="mg3_tmrw")
+            with _mg3_c4: _menu_g3['smallmid'] = st.checkbox("📦중소형", value=_menu_g3.get('smallmid',True), disabled=not grp3_enabled, key="mg3_sm")
+            with _mg3_c5: _menu_g3['per']      = st.checkbox("💎PER",    value=_menu_g3.get('per',False),     disabled=not grp3_enabled, key="mg3_per")
+            st.session_state['tg_menu_g3'] = _menu_g3
+            _active_g3 = [k for k,v in _menu_g3.items() if v]
+            st.caption(f"전송 항목: {', '.join(_active_g3) if _active_g3 else '없음'}")
             with cgs_g3a:
                 if st.button("💾 그룹방 3 Chat ID 저장", key="btn_grp3_save",
                              use_container_width=True,
@@ -2675,16 +2962,19 @@ if st.session_state.kis_token:
 # Gist 모드: auth만 있으면 동작 (kis_token 없어도 됨)
 # 직접 KIS 모드: kis_token 필요
 
-def _send_tg_by_cat(token, chat_id, cats_d, iv_lbl, k_n, kd_n, ts_str, total_n, n=10):
-    """카테고리별 분할 전송 — 5종목씩 메시지 나눔"""
+def _send_tg_by_cat(token, chat_id, cats_d, iv_lbl, k_n, kd_n, ts_str, total_n, n=10, menu=None):
+    """카테고리별 분할 전송 — menu dict로 전송할 카테고리 선택 가능"""
     is_mkt  = 9 <= int(kst_strftime('%H')) <= 15
     mkt_lbl = '🟢장중' if is_mkt else '🔴장마감'
     _n = max(1, int(n))
+    if menu is None:
+        menu = {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False}
 
-    sw  = cats_d.get('swing',[])[:_n]
-    su  = cats_d.get('surge',[])[:_n]
-    tm  = cats_d.get('tomorrow',[])[:_n]
-    sml = cats_d.get('smallmid',[])[:_n]
+    sw  = cats_d.get('swing',[])[:_n]   if menu.get('swing',True)    else []
+    su  = cats_d.get('surge',[])[:_n]   if menu.get('surge',True)    else []
+    tm  = cats_d.get('tomorrow',[])[:_n] if menu.get('tomorrow',True) else []
+    sml = cats_d.get('smallmid',[])[:_n] if menu.get('smallmid',True) else []
+    per = cats_d.get('per',[])[:_n]      if menu.get('per',False)     else []
 
     def _do_send(text):
         try:
@@ -2697,10 +2987,11 @@ def _send_tg_by_cat(token, chat_id, cats_d, iv_lbl, k_n, kd_n, ts_str, total_n, 
         f"📡 <b>K-ALPHA {iv_lbl} 스캔</b> [{ts_str}] {mkt_lbl}\n"
         f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n"
         f"🔥스윙:{len(sw)} ⚡급등:{len(su)} 🌙내일:{len(tm)} 📦중소형:{len(sml)}"
+        + (f" 💎PER:{len(per)}" if per else "")
     )
     time.sleep(0.3)
 
-    if not any([sw, su, tm, sml]):
+    if not any([sw, su, tm, sml, per]):
         _do_send("📊 스캔 결과 없음 — 필터 조건 미달")
         return
 
@@ -2797,6 +3088,7 @@ def _send_tg_by_cat(token, chat_id, cats_d, iv_lbl, k_n, kd_n, ts_str, total_n, 
     _send_cat(su,  '⚡', '급등전야')
     _send_cat(tm,  '🌙', '내일관심')
     _send_cat(sml, '📦', '중소형주')
+    _send_cat(per, '💎', 'PER저평가')
     _do_send(f"{'━'*16}\n📊 총 {total_n}종목 스캔완료\n⏱ 다음 전송 {iv_lbl} 후")
 
 if _gist_active or st.session_state.kis_token:
@@ -3195,7 +3487,8 @@ if _gist_active or st.session_state.kis_token:
                 st.session_state['_tg_bkt_p'] = _bkt_p
                 _n_p = st.session_state.get('tg_send_count_p', 10)
                 _send_tg_by_cat(_tg_tok, _tg_chat, scan_result, _iv_p_lbl,
-                                _k_n, _kd_n, _now_ts, scan_count, n=_n_p)
+                                _k_n, _kd_n, _now_ts, scan_count, n=_n_p,
+                                menu=st.session_state.get('tg_menu_p'))
                 st.toast(f"📱 개인방 전송 완료 ({_now_ts})", icon="✅")
                 if st.session_state.get('tg_ai_send_p', True):
                     _send_tg_ai(_tg_tok, _tg_chat, _gist_ai_stocks(_n_p), _iv_p_lbl, _now_ts)
@@ -3207,7 +3500,8 @@ if _gist_active or st.session_state.kis_token:
             st.session_state['_tg_bkt_g'] = _bkt_g
             _n_g1 = st.session_state.get('tg_send_count_g1', 10)
             _send_tg_by_cat(_tg_tok, _grp_chat, scan_result, _iv_g_lbl,
-                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g1)
+                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g1,
+                            menu=st.session_state.get('tg_menu_g1'))
             st.toast(f"👥 그룹방 전송 완료 ({_now_ts})", icon="✅")
             if st.session_state.get('tg_ai_send_g1', False):
                 _send_tg_ai(_tg_tok, _grp_chat, _gist_ai_stocks(_n_g1), _iv_g_lbl, _now_ts)
@@ -3223,7 +3517,8 @@ if _gist_active or st.session_state.kis_token:
             st.session_state['_tg_bkt_g2g'] = _bkt_g2g
             _n_g2 = st.session_state.get('tg_send_count_g2', 10)
             _send_tg_by_cat(_tg_tok, _grp2_chat_g, scan_result, _iv_g2_g_lbl,
-                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g2)
+                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g2,
+                            menu=st.session_state.get('tg_menu_g2'))
             st.toast(f"👥 그룹방 2 전송 완료 ({_now_ts})", icon="✅")
             if st.session_state.get('tg_ai_send_g2', False):
                 _send_tg_ai(_tg_tok, _grp2_chat_g, _gist_ai_stocks(_n_g2), _iv_g2_g_lbl, _now_ts)
@@ -3239,7 +3534,8 @@ if _gist_active or st.session_state.kis_token:
             st.session_state['_tg_bkt_g3g'] = _bkt_g3g
             _n_g3 = st.session_state.get('tg_send_count_g3', 10)
             _send_tg_by_cat(_tg_tok, _grp3_chat_g, scan_result, _iv_g3_g_lbl,
-                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g3)
+                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g3,
+                            menu=st.session_state.get('tg_menu_g3'))
             st.toast(f"👥 그룹방 3 전송 완료 ({_now_ts})", icon="✅")
             if st.session_state.get('tg_ai_send_g3', False):
                 _send_tg_ai(_tg_tok, _grp3_chat_g, _gist_ai_stocks(_n_g3), _iv_g3_g_lbl, _now_ts)
@@ -3317,12 +3613,36 @@ if _gist_active or st.session_state.kis_token:
             server_store['scan_data']['balance_json'] = balance_json
         _scan_json_ready = True
 
+    # ── PER 저평가주 스캔 (pykrx) ──────────────────────────────────
+    _per_en_main = st.session_state.get('per_scan_enabled', True)
+    if _per_en_main:
+        _per_stocks_cache = server_store.get('per_stocks', [])
+        _per_cache_ts     = server_store.get('per_ts', 0)
+        _per_stale        = (time.time() - _per_cache_ts) > 600  # 10분 캐시
+        if not _per_stocks_cache or _per_stale:
+            with st.spinner("💎 PER 저평가주 스캔 중 (pykrx)..."):
+                _per_list = fetch_per_stocks(
+                    per_max=st.session_state.get('per_max', 15.0),
+                    per_min=st.session_state.get('per_min', 0.1),
+                    pbr_max=st.session_state.get('pbr_max', 1.0),
+                    roe_min=st.session_state.get('roe_min', 10.0),
+                    vol_min=st.session_state.get('per_vol_min', 30),
+                    top_n=st.session_state.get('per_top_n', 20),
+                    period_days=st.session_state.get('trade_period_days', 20),
+                )
+            server_store['per_stocks'] = _per_list
+            server_store['per_ts']     = time.time()
+        else:
+            _per_list = _per_stocks_cache
+        scan_result['per'] = _per_list
+    else:
+        scan_result['per'] = []
+
     # 상태 표시
-    _dm = is_market_open()
     _dm_lbl = '🟢 장중' if _dm else ('🔴 주말' if kst_now().weekday()>=5 else ('🔴 공휴일' if is_kr_holiday() else '🔴 장마감'))
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
 📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl}<br>
-🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
+🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
 </div>""", unsafe_allow_html=True)
 
     # ── 텔레그램 자동 알림 (개인방 + 그룹방 각자 간격 독립) ──
@@ -3489,7 +3809,8 @@ if _gist_active or st.session_state.kis_token:
                         _n_kp = st.session_state.get('tg_send_count_p', 10)
                         _send_tg_by_cat(_tg_tok2, _tg_chat2, scan_result,
                                         _iv_p2_lbl, _kn2, _kdn2, _now2,
-                                        scan_result.get('total', len(all_stocks)), n=_n_kp)
+                                        scan_result.get('total', len(all_stocks)), n=_n_kp,
+                                        menu=st.session_state.get('tg_menu_p'))
                         st.toast(f"📱 개인방 전송 완료 ({_now2})", icon="✅")
                         if st.session_state.get('tg_ai_send_p', True):
                             _send_tg_ai(_tg_tok2, _tg_chat2, _kis_ai_stocks(_n_kp), _iv_p2_lbl, _now2)

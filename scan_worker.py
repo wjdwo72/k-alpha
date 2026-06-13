@@ -665,25 +665,29 @@ def main():
 
     TG_LIMIT = 3800  # 텔레그램 4096자 제한 — 안전 마진
 
-    def send_by_category(chat_id, iv_min, n=10):
+    def send_by_category(chat_id, iv_min, n=10, menu=None):
         """카테고리별 분리 + 4096자 초과 시 자동 분할 전송"""
+        if menu is None:
+            menu = {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False}
         iv_lbl  = _lbl(iv_min)
         mkt_lbl = '🟢장중' if market_open else '🔴장마감'
         _n = max(1, int(n))
 
-        sw  = scan_result.get('swing',[])[:_n]
-        su  = scan_result.get('surge',[])[:_n]
-        tm  = scan_result.get('tomorrow',[])[:_n]
-        sml = scan_result.get('smallmid',[])[:_n]
+        sw  = scan_result.get('swing',[])[:_n]    if menu.get('swing',True)    else []
+        su  = scan_result.get('surge',[])[:_n]    if menu.get('surge',True)    else []
+        tm  = scan_result.get('tomorrow',[])[:_n]  if menu.get('tomorrow',True) else []
+        sml = scan_result.get('smallmid',[])[:_n]  if menu.get('smallmid',True) else []
+        per = scan_result.get('per',[])[:_n]        if menu.get('per',False)     else []
 
         # 헤더
         header = (f"📡 <b>K-ALPHA {iv_lbl} 자동 스캔</b> [{ts_display}] {mkt_lbl}\n"
                   f"KOSPI {kospi_n}+KOSDAQ {kosdaq_n}종목\n"
-                  f"🔥스윙:{len(sw)} ⚡급등:{len(su)} 🌙내일:{len(tm)} 📦중소형:{len(sml)}")
+                  f"🔥스윙:{len(sw)} ⚡급등:{len(su)} 🌙내일:{len(tm)} 📦중소형:{len(sml)}"
+                  + (f" 💎PER:{len(per)}" if per else ""))
         send_telegram(header, chat_id)
         time.sleep(0.3)
 
-        if not any([sw, su, tm, sml]):
+        if not any([sw, su, tm, sml, per]):
             send_telegram("📊 스캔 결과 없음 — 필터 조건 미달", chat_id)
             return True
 
@@ -713,6 +717,7 @@ def main():
         send_cat(su,  '⚡', '급등전야')
         send_cat(tm,  '🌙', '내일관심')
         send_cat(sml, '📦', '중소형주')
+        send_cat(per, '💎', 'PER저평가')
         send_telegram('━'*16 + f"\n📊 총 {total_n}종목 스캔완료\n⏱ 다음 전송 {iv_lbl} 후", chat_id)
         return True
 
@@ -722,29 +727,142 @@ def main():
     _n_g2 = int(cfg.get('tg_ai_count_g2', 10))
     _n_g3 = int(cfg.get('tg_ai_count_g3', 10))
 
+    # 채팅방별 메뉴
+    _default_menu = {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False}
+    _menu_p  = cfg.get('tg_menu_p',  _default_menu)
+    _menu_g1 = cfg.get('tg_menu_g1', _default_menu)
+    _menu_g2 = cfg.get('tg_menu_g2', _default_menu)
+    _menu_g3 = cfg.get('tg_menu_g3', _default_menu)
+
+    # PER 저평가주 스캔 (cfg에서 활성화된 경우)
+    per_stocks = []
+    if cfg.get('per_scan_enabled', False) and any([
+        _menu_p.get('per'), _menu_g1.get('per'),
+        _menu_g2.get('per'), _menu_g3.get('per')
+    ]):
+        # Gist에서 기존 per 데이터 있으면 재사용
+        _existing_per = scan_result.get('per', []) if scan_result else []
+        if _existing_per:
+            per_stocks = _existing_per
+            print(f"  💎 PER 저평가주: Gist 기존 데이터 {len(per_stocks)}종목")
+        else:
+            print("  💎 PER 저평가주 스캔 중 (pykrx)...")
+            try:
+                from pykrx import stock as pykrx_stock
+                import pandas as pd
+                from datetime import timedelta
+                _per_max      = float(cfg.get('per_max', 15.0))
+                _per_min      = float(cfg.get('per_min', 0.1))
+                _pbr_max      = float(cfg.get('pbr_max', 1.0))
+                _roe_min      = float(cfg.get('roe_min', 10.0))
+                _per_vol_min  = int(cfg.get('per_vol_min', 30))
+                _per_top_n    = int(cfg.get('per_top_n', 20))
+                _period_days  = int(cfg.get('trade_period_days', 20))
+
+                _today    = kst_now()
+                _date_str = _today.strftime('%Y%m%d')
+                _start    = (_today - timedelta(days=int(_period_days * 1.8))).strftime('%Y%m%d')
+
+                _per_results = []
+                for _mkt in ['KOSPI', 'KOSDAQ']:
+                    try:
+                        _df_fund  = pykrx_stock.get_market_fundamental(_date_str, market=_mkt)
+                        _df_price = pykrx_stock.get_market_ohlcv(_date_str, market=_mkt)
+                        if _df_fund is None or _df_fund.empty: continue
+                        if _df_price is None or _df_price.empty: continue
+                        _df_m = _df_fund.join(_df_price[['거래대금','종가','등락률']], how='inner')
+                        for _tk in _df_m.index:
+                            try:
+                                _r = _df_m.loc[_tk]
+                                _per = float(_r.get('PER',0) or 0)
+                                _pbr = float(_r.get('PBR',0) or 0)
+                                _eps = float(_r.get('EPS',0) or 0)
+                                _bps = float(_r.get('BPS',1) or 1)
+                                _roe = (_eps/_bps*100) if _bps>0 else 0
+                                _price = float(_r.get('종가',0) or 0)
+                                _tr_amt = float(_r.get('거래대금',0) or 0) / 1e8
+                                _chg_pct = float(_r.get('등락률',0) or 0)
+                                if not (_per_min < _per < _per_max): continue
+                                if _pbr > _pbr_max or _pbr <= 0: continue
+                                if _roe < _roe_min: continue
+                                if _tr_amt < _per_vol_min: continue
+                                if _price <= 0: continue
+                                _name = ''
+                                try: _name = pykrx_stock.get_market_ticker_name(_tk)
+                                except: _name = _tk
+                                if is_etf(_name): continue
+                                _buy  = int(_price*0.995); _stop=int(_price*0.97); _tgt=int(_price*1.10)
+                                _rr   = round((_tgt-_price)/(_price-_stop+1),1)
+                                _sign = '+' if _chg_pct>=0 else ''
+                                _per_sc = max(0,min(30,int((_per_max-_per)/_per_max*30)))
+                                _roe_sc = min(25,int((_roe-_roe_min)/5))
+                                _pbr_sc = max(0,min(20,int((_pbr_max-_pbr)/_pbr_max*20)))
+                                _vol_sc = min(15,int(_tr_amt/30))
+                                _score  = min(95, 50+_per_sc+_roe_sc+_pbr_sc+_vol_sc)
+                                _grade  = 'S' if _score>=85 else ('A' if _score>=75 else 'B')
+                                _per_results.append({
+                                    'code':_tk,'name':_name,
+                                    'price':f"{int(_price):,}",'change':f"{_sign}{_chg_pct:.2f}%",
+                                    'up':_chg_pct>=0,'buy':f"{_buy:,}",'target':f"{_tgt:,}",
+                                    'stop':f"{_stop:,}",'rr':str(_rr),'vol':int(_tr_amt),
+                                    'mkt':_mkt.lower(),'rsiApprox':round(50+_chg_pct*2.8,1),
+                                    'score':_score,'grade':_grade,
+                                    'per':round(_per,1),'pbr':round(_pbr,2),'roe':round(_roe,1),
+                                    'cat':'per',
+                                    'reasons':[
+                                        {'icon':'💎','cat':'green','text':f"PER {_per:.1f}배 · PBR {_pbr:.2f} · ROE {_roe:.1f}%"},
+                                        {'icon':'📊','cat':'','text':f"거래대금 {int(_tr_amt):,}억 · {_sign}{_chg_pct:.2f}%"},
+                                        {'icon':'📈','cat':'orange','text':f"매입가 {_buy:,}원 → 목표 {_tgt:,}원 · 손절 {_stop:,}원"},
+                                        {'icon':'🔍','cat':'blue','text':f"[저평가 분석] PER 저평가 · ROE {_roe:.1f}% 수익성 확인"},
+                                    ],
+                                    'inds':[{'label':_mkt,'cat':'green'},{'label':f"PER {_per:.1f}",'cat':'orange'},{'label':f"ROE {_roe:.1f}%",'cat':''}],
+                                    'chart3m':[],'chartD':[]
+                                })
+                            except: continue
+                    except Exception as _e:
+                        print(f"  ⚠ PER 스캔 오류({_mkt}): {_e}")
+                _per_results.sort(key=lambda x:x['score'],reverse=True)
+                per_stocks = _per_results[:_per_top_n]
+                scan_result['per'] = per_stocks
+                print(f"  💎 PER 저평가주 {len(per_stocks)}종목 스캔 완료")
+            except ImportError:
+                print("  ⚠ pykrx 미설치 — PER 스캔 건너뜀")
+            except Exception as _e:
+                print(f"  ⚠ PER 스캔 실패: {_e}")
+    else:
+        per_stocks = scan_result.get('per', []) if scan_result else []
+
+    def _filter_by_menu(sr, menu):
+        """메뉴 dict에 따라 카테고리 필터링한 dict 반환"""
+        filtered = {}
+        for cat in ['swing','surge','tomorrow','smallmid','per']:
+            filtered[cat] = sr.get(cat, []) if menu.get(cat, cat != 'per') else []
+        return filtered
+
     if send_personal:
-        ok_p = send_by_category(TG_CHAT, TG_INTERVAL, n=_n_p)
+        _sr_p = _filter_by_menu(scan_result, _menu_p)
+        ok_p = send_by_category(TG_CHAT, TG_INTERVAL, n=_n_p, menu=_menu_p)
         print(f"{'✅ 개인방 전송 완료' if ok_p else '❌ 개인방 전송 실패'}")
     else:
         print(f"⏭ 개인방 TG 스킵 — 간격:{TG_INTERVAL}분 | 나머지:{total_min % TG_INTERVAL}분")
 
     if TG_GROUP_INTERVAL > 0:
         if send_group:
-            ok_g = send_by_category(TG_GROUP_CHAT, TG_GROUP_INTERVAL, n=_n_g1)
+            ok_g = send_by_category(TG_GROUP_CHAT, TG_GROUP_INTERVAL, n=_n_g1, menu=_menu_g1)
             print(f"{'✅ 그룹방 1 전송 완료' if ok_g else '❌ 그룹방 1 전송 실패'}")
         else:
             print(f"⏭ 그룹방 1 TG 스킵 — 나머지:{total_min % TG_GROUP_INTERVAL}분")
 
     if TG_GROUP2_INTERVAL > 0:
         if send_group2:
-            ok_g2 = send_by_category(TG_GROUP2_CHAT, TG_GROUP2_INTERVAL, n=_n_g2)
+            ok_g2 = send_by_category(TG_GROUP2_CHAT, TG_GROUP2_INTERVAL, n=_n_g2, menu=_menu_g2)
             print(f"{'✅ 그룹방 2 전송 완료' if ok_g2 else '❌ 그룹방 2 전송 실패'}")
         else:
             print(f"⏭ 그룹방 2 TG 스킵 — 나머지:{total_min % TG_GROUP2_INTERVAL}분")
 
     if TG_GROUP3_INTERVAL > 0:
         if send_group3:
-            ok_g3 = send_by_category(TG_GROUP3_CHAT, TG_GROUP3_INTERVAL, n=_n_g3)
+            ok_g3 = send_by_category(TG_GROUP3_CHAT, TG_GROUP3_INTERVAL, n=_n_g3, menu=_menu_g3)
             print(f"{'✅ 그룹방 3 전송 완료' if ok_g3 else '❌ 그룹방 3 전송 실패'}")
         else:
             print(f"⏭ 그룹방 3 TG 스킵 — 나머지:{total_min % TG_GROUP3_INTERVAL}분")
