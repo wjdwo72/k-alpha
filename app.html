@@ -1650,69 +1650,7 @@
   <!-- SIDEBAR -->
   <div class="sidebar">
 
-    <!-- 🔑 API KEY — 맨 위 고정 -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">🔑 KIS API 연결</div>
-
-      <!-- 프록시 서버 상태 배너 -->
-      <div id="proxy-status-banner" style="margin-bottom:10px;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,165,0,0.4);background:rgba(255,165,0,0.08);font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.8">
-        <div style="color:var(--accent4);font-weight:700;margin-bottom:2px" id="proxy-banner-title">⏳ 프록시 서버 확인 중...</div>
-        <div style="color:var(--text-dim)" id="proxy-banner-body">잠시만 기다려주세요</div>
-        <button onclick="checkProxyAndUpdate()" style="margin-top:5px;width:100%;padding:5px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer" id="proxy-recheck-btn">↻ 재확인</button>
-      </div>
-
-      <div class="api-key-form">
-        <div class="api-field">
-          <label class="api-label">앱키 (App Key)</label>
-          <div class="api-input-wrap">
-            <input type="password" id="inp-appkey" class="api-input" placeholder="PS•••••••••••••••••••••••" maxlength="36" oninput="onApiInput()">
-            <button class="eye-btn" onclick="toggleVis('inp-appkey',this)">👁</button>
-          </div>
-        </div>
-        <div class="api-field">
-          <label class="api-label">앱시크릿 (App Secret)</label>
-          <div class="api-input-wrap">
-            <input type="password" id="inp-secret" class="api-input" placeholder="••••••••••••••••••••••••••••" maxlength="180" oninput="onApiInput()">
-            <button class="eye-btn" onclick="toggleVis('inp-secret',this)">👁</button>
-          </div>
-        </div>
-        <div class="api-field">
-          <label class="api-label">계좌번호</label>
-          <div class="api-input-wrap">
-            <input type="text" id="inp-account" class="api-input" placeholder="12345678-01" maxlength="12" oninput="onApiInput()">
-          </div>
-        </div>
-        <div class="api-env-row">
-          <label class="api-label">서버 환경</label>
-          <div class="env-toggle">
-            <button class="env-btn active" id="env-paper" onclick="setEnv('paper',this)">모의투자</button>
-            <button class="env-btn" id="env-real" onclick="setEnv('real',this)">실전투자</button>
-          </div>
-        </div>
-        <div id="api-status-msg" class="api-status-msg info">앱키 · 시크릿 · 계좌번호를 입력하세요</div>
-        <button class="api-connect-btn" id="api-connect-btn" onclick="connectApi()" disabled>API 연결 테스트</button>
-
-        <!-- 간편비번 저장/불러오기 -->
-        <div style="height:1px;background:var(--border);margin:8px 0"></div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:0.5px;margin-bottom:6px">🔒 간편비번 저장</div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <input type="password" id="inp-pin" class="api-input" placeholder="4자리 숫자" maxlength="4"
-            style="width:100px;letter-spacing:6px;text-align:center;flex:none"
-            oninput="this.value=this.value.replace(/\D/g,'')">
-          <button class="api-connect-btn" style="flex:1;padding:6px 4px;font-size:10px" onclick="saveApiKeys()">💾 저장</button>
-          <button class="api-connect-btn" style="flex:1;padding:6px 4px;font-size:10px;border-color:var(--accent2);color:var(--accent2);background:rgba(0,255,136,0.06)" onclick="loadApiKeys()">📂 불러오기</button>
-          <button class="ctrl-btn danger" style="padding:6px 8px;font-size:10px" onclick="clearApiKeys()" title="저장 삭제">🗑</button>
-        </div>
-        <div id="pin-status" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent4);min-height:14px"></div>
-
-        <div class="api-help">
-          <span style="font-size:10px;color:var(--text-dim)">❓ KIS Developers</span>
-          <a href="https://apiportal.koreainvestment.com" target="_blank" class="api-link">apiportal.koreainvestment.com ↗</a>
-        </div>
-      </div>
-    </div>
-
-    <!-- 📡 글로벌 시장 -->
+    <!-- 📡 글로벌 시장 — K·ALPHA 로고 바로 아래 -->
     <div class="sidebar-section">
       <div class="sidebar-title">📡 글로벌 시장</div>
       <div class="market-row">
