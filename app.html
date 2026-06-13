@@ -1042,6 +1042,14 @@
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
+  /* Ghost container — 절대 보이지 않음 */
+  #ghost-container,
+  #ghost-container * {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -1479,6 +1487,15 @@
   ⚠ RISK GUARD 발동 — 나스닥 급락 감지. 모든 신규 진입 중단. 기존 보유 종목 손절가 모니터링 중.
 </div>
 
+<!-- 글로벌 시장 바 — K·ALPHA 로고 바로 아래 -->
+<div id="global-market-bar" style="display:flex;align-items:center;gap:0;background:var(--surface);border-bottom:1px solid var(--border);padding:6px 16px;font-family:'Share Tech Mono',monospace;font-size:11px;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch;">
+  <span style="color:var(--text-dim);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;margin-right:14px;flex-shrink:0">📡 글로벌</span>
+  <span style="margin-right:14px;flex-shrink:0">S&P500 <span style="color:var(--accent3);font-weight:700">5,712.4</span> <span style="color:var(--accent3);font-size:10px">+0.41%</span></span>
+  <span style="margin-right:14px;flex-shrink:0">VIX <span style="color:#4fa3e0;font-weight:700">18.2</span> <span style="color:#4fa3e0;font-size:10px">-2.1%</span></span>
+  <span style="margin-right:14px;flex-shrink:0">NAS선물 <span id="gmb-nf" style="color:var(--text-bright);font-weight:700">18,924</span> <span id="gmb-nfc" style="color:var(--accent3);font-size:10px">+0.62%</span></span>
+  <span style="flex-shrink:0">WTI <span style="color:var(--text-bright);font-weight:700">$71.4</span> <span style="color:#4fa3e0;font-size:10px">-0.3%</span></span>
+</div>
+
 <div class="main">
   <!-- CONTENT -->
   <div class="content">
@@ -1657,93 +1674,31 @@
       <div id="tab-tomorrow-us" class="tab-panel"><div class="cards-grid" id="cards-tomorrow-us"></div></div>
     </div>
   </div>
-
-  <!-- SIDEBAR -->
-  <div class="sidebar">
-
-    <!-- 📡 글로벌 시장 — K·ALPHA 로고 바로 아래 -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">📡 글로벌 시장</div>
-      <div class="market-row">
-        <span class="mkt-name">S&P 500</span>
-        <span class="mkt-val">5,712.4</span>
-        <span class="mkt-chg pos">+0.41%</span>
-      </div>
-      <div class="market-row">
-        <span class="mkt-name">VIX</span>
-        <span class="mkt-val">18.2</span>
-        <span class="mkt-chg neg">-2.1%</span>
-      </div>
-      <div class="market-row">
-        <span class="mkt-name">나스닥 선물</span>
-        <span class="mkt-val" id="nf">18,924</span>
-        <span class="mkt-chg pos" id="nfc">+0.62%</span>
-      </div>
-      <div class="market-row">
-        <span class="mkt-name">WTI 원유</span>
-        <span class="mkt-val">$71.4</span>
-        <span class="mkt-chg neg">-0.3%</span>
-      </div>
-    </div>
-
-    <!-- ✈ 텔레그램 피드 -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">✈ 텔레그램 알림 피드</div>
-      <div class="tg-feed" id="tg-feed">
-        <div class="tg-msg s-grade">
-          <span class="tg-tag signal">S급·91점</span>
-          <strong>삼성전기</strong> — RSI 반등 + 외인 순매수 강화. 손익비 2.4
-          <div class="tg-time">14:22:07 · 매수승인 대기</div>
-        </div>
-        <div class="tg-msg">
-          <span class="tg-tag watch">WATCH</span>
-          <strong>LG이노텍</strong> — 볼밴 수축 완료. 돌파 임박 포착
-          <div class="tg-time">14:18:33</div>
-        </div>
-        <div class="tg-msg risk">
-          <span class="tg-tag risk">RISK</span>
-          나스닥 선물 -0.8% 주시 중. 임계치 -1.5% 미도달
-          <div class="tg-time">13:55:01</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 📋 실행 로그 -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">📋 실행 로그</div>
-      <div class="log-box" id="log-box">
-        <div class="log-line"><span class="log-t">14:22:07</span><span class="log-info">[SCAN] 삼성전기 → S등급 포착</span></div>
-        <div class="log-line"><span class="log-t">14:20:01</span><span class="log-ok">[SYS] 전 종목 스캔 완료 (892종목)</span></div>
-        <div class="log-line"><span class="log-t">14:18:33</span><span class="log-warn">[BB] LG이노텍 볼밴 수축 감지</span></div>
-        <div class="log-line"><span class="log-t">14:15:00</span><span class="log-ok">[SYS] 리스크 가드 정상</span></div>
-        <div class="log-line"><span class="log-t">14:00:00</span><span class="log-info">[K] 시스템 기동 완료</span></div>
-      </div>
-    </div>
-
-    <!-- ⚙ 시스템 제어 -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">⚙ 시스템 제어</div>
-      <div class="ctrl-grid">
-        <button class="ctrl-btn" onclick="toggleMode()">테스트모드</button>
-        <button class="ctrl-btn" onclick="rescan()">즉시 재스캔</button>
-        <button class="ctrl-btn danger" onclick="triggerRisk()">리스크 시뮬</button>
-        <button class="ctrl-btn" onclick="clearRisk()">리스크 해제</button>
-      </div>
-      <button onclick="fullRefresh()" id="sidebar-refresh-btn" style="width:100%;margin-top:8px;padding:9px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
-        <span id="sidebar-refresh-icon" style="font-size:14px">↻</span> 전체 새로고침
-      </button>
-      <button onclick="openSettings(event)" style="width:100%;margin-top:6px;padding:8px;background:rgba(0,212,255,0.08);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px">⚙ 스캔 필터 설정</button>
-    </div>
-
-    <div class="data-footer">
-      데이터 수집 시점: <span id="data-ts">--</span><br>
-      모드: <span id="mode-display" style="color:var(--accent4)">DEMO / TEST</span><br>
-      K v2.1 · KIS API 연동 대기
-    </div>
-  </div>
 </div>
 
 <!-- ⚙ 스캔 설정 모달 -->
+<!-- 🔧 Ghost elements: 사이드바 제거 후 JS 참조 오류 방지용 완전 숨김 요소 -->
+<div id="ghost-container" style="display:none!important;visibility:hidden!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important;opacity:0!important;top:-9999px!important;left:-9999px!important;" aria-hidden="true">
+  <span id="data-ts"></span>
+  <span id="mode-display"></span>
+  <span id="scan-ts"></span>
+  <div id="log-box"></div>
+  <div id="tg-feed"></div>
+  <button id="sidebar-refresh-btn"><span id="sidebar-refresh-icon">↻</span></button>
+  <input id="inp-appkey" type="password">
+  <input id="inp-secret" type="password">
+  <input id="inp-account" type="text">
+  <input id="inp-pin" type="password">
+  <div id="api-status-msg"></div>
+  <div id="api-notice"></div>
+  <button id="api-connect-btn"></button>
+  <div id="pin-status"></div>
+  <div id="proxy-status-banner">
+    <div id="proxy-banner-title"></div>
+    <div id="proxy-banner-body"></div>
+    <button id="proxy-recheck-btn"></button>
+  </div>
+</div>
 <div class="modal-overlay" id="settings-modal" onclick="if(event.target===this)closeSettings()">
   <div class="modal" style="min-width:340px;max-width:420px">
     <div class="modal-title">⚙ 스캔 필터 설정</div>
@@ -2865,6 +2820,14 @@ function loadMarket() {
   document.getElementById('sox-chg').className = m.sox.pos ? 'pos' : 'neg';
   document.getElementById('scan-count').textContent = '스캔대상: 892 종목';
   document.getElementById('filter-count').textContent = '조건 충족: 73 종목';
+  // 글로벌 시장 바 나스닥 선물 업데이트
+  var gmbNf = document.getElementById('gmb-nf');
+  var gmbNfc = document.getElementById('gmb-nfc');
+  if (gmbNf && m.nasdaq) { gmbNf.textContent = m.nasdaq.val; }
+  if (gmbNfc && m.nasdaq) {
+    gmbNfc.textContent = m.nasdaq.chg;
+    gmbNfc.style.color = m.nasdaq.pos ? 'var(--accent3)' : '#4fa3e0';
+  }
 }
 
 // ──────────────────────────────────────────────
