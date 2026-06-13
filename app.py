@@ -410,7 +410,7 @@ if not qp.get("ck") and server_store.get("ck"):
     if server_store.get("cp"): qp["cp"] = server_store["cp"]
     if server_store.get("tg"): qp["tg"] = server_store["tg"]
     qp["agreed"] = "1"
-    st.rerun()
+    st.session_state.pop('_cached_html', None); st.rerun()
 
 # Gist에서 설정 복원 (재시작·절전 후 server_store와 URL이 비어있을 때)
 if not st.session_state.get("tg_token") and not qp.get("tg") and not server_store.get("_cfg_loaded"):
@@ -509,14 +509,14 @@ if (qp.get("ck") and st.session_state.auth
         st.session_state.kis_acc = d.get("acc","")
         st.session_state.kis_env = d.get("env","실전투자")
         st.session_state["_do_auto_connect"] = True
-        st.rerun()
+        st.session_state.pop('_cached_html', None); st.rerun()
     except: pass
 
 if qp.get("auth")=="1" and not st.session_state.auth:
     st.session_state.auth = True
     try: del qp["auth"]
     except: pass
-    st.rerun()
+    st.session_state.pop('_cached_html', None); st.rerun()
 
 # HTML 컴포넌트 PIN via URL
 if qp.get('_lpin') and qp.get('ck'):
@@ -530,7 +530,7 @@ if qp.get('_lpin') and qp.get('ck'):
             st.session_state.kis_acc=d.get('acc',''); st.session_state.kis_env=d.get('env','실전투자')
             st.session_state['_load_ok']=True
             st.session_state['_do_auto_connect']=True
-            st.rerun()
+            st.session_state.pop('_cached_html', None); st.rerun()
         except: pass
 
 # ── KIS API 연결 함수 ──
@@ -565,7 +565,7 @@ if st.session_state.get('_do_auto_connect') and st.session_state.kis_ak:
         st.toast("🔗 저장된 키로 자동 연결 중...", icon="⚡")
     do_connect(st.session_state.kis_ak, st.session_state.kis_sec,
                st.session_state.kis_acc, st.session_state.kis_env)
-    st.rerun()
+    st.session_state.pop('_cached_html', None); st.rerun()
 
 # ── 실시간 거래량 순위 스캔 (KOSPI + KOSDAQ) ──
 # ── KOSPI/KOSDAQ 주요 종목 코드 (ETF 제외, 시총 상위) ──
@@ -1349,7 +1349,7 @@ if not st.session_state.agreed:
         if st.button("✗ 동의하지 않음", use_container_width=True): st.warning("동의가 필요합니다.")
     with c2:
         if st.button("✓ 동의하고 시작", use_container_width=True, type="primary", disabled=not _agree_cb):
-            st.session_state.agreed=True; qp['agreed']='1'; st.rerun()
+            st.session_state.agreed=True; qp['agreed']='1'; st.session_state.pop('_cached_html', None); st.rerun()
     st.stop()
 
 # ════ 2. PIN 화면 ════
@@ -1463,7 +1463,7 @@ border-radius:10px;padding:12px 14px;margin-bottom:6px;font-family:'Share Tech M
                     else:
                         st.success("✅ 이번만 해제됐습니다. 다음 접속 시 PIN이 필요합니다.")
                     st.session_state.auth = True
-                    st.rerun()
+                    st.session_state.pop('_cached_html', None); st.rerun()
                 else:
                     st.error("❌ PIN이 틀렸습니다")
 
@@ -1493,7 +1493,7 @@ border-radius:10px;padding:12px 14px;margin-bottom:6px;font-family:'Share Tech M
                         qp['cp'] = _new_cp; server_store['cp'] = _new_cp
                     except: pass
                 st.success(f"✅ PIN이 {_new_pin}으로 변경됐습니다.")
-                st.rerun()
+                st.session_state.pop('_cached_html', None); st.rerun()
 
     st.stop()
 
@@ -1650,10 +1650,10 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
                 for c in new_codes:
                     if c not in cur: cur.append(c)
                 st.session_state.scan_blacklist=cur
-                st.rerun()
+                st.session_state.pop('_cached_html', None); st.rerun()
         with c6:
             if st.button("초기화", key="btn_bl_clr", use_container_width=True):
-                st.session_state.scan_blacklist=[]; st.rerun()
+                st.session_state.scan_blacklist=[]; st.session_state.pop('_cached_html', None); st.rerun()
         if st.session_state.scan_blacklist:
             st.caption("제외 중: " + ", ".join(st.session_state.scan_blacklist))
 
@@ -1726,7 +1726,7 @@ with st.expander(label, expanded=not bool(st.session_state.kis_token)):
                 st.session_state.scan_smallmid_vol_max = 700
                 st.session_state.scan_smallmid_pct_min = -2.0
                 st.session_state.scan_smallmid_pct_max = 4.0
-                st.rerun()
+                st.session_state.pop('_cached_html', None); st.rerun()
 
     st.divider()
 
@@ -1855,7 +1855,7 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
      localStorage.setItem('ka_cp_v9',{json.dumps(cp_v)});}}catch(e){{}}
 </script>""", height=0, scrolling=False)
                         st.success("✅ 연결 성공! 자동 저장됨")
-                        st.rerun()
+                        st.session_state.pop('_cached_html', None); st.rerun()
                     else: st.error(f"❌ {err}")
     with cb:
         if st.session_state.kis_token:
@@ -1864,7 +1864,7 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
                 for fn in [fetch_volume_ranking, fetch_balance]: fn.clear()
                 _ss = get_server_store()
                 _ss.pop('kis_token', None)
-                st.rerun()
+                st.session_state.pop('_cached_html', None); st.rerun()
     if st.session_state.kis_token:
         st.success(f"✅ {st.session_state.kis_env} 연결됨")
 
@@ -2123,7 +2123,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                     server_store['tg'] = None
                     try: del qp['tg']
                     except: pass
-                    st.rerun()
+                    st.session_state.pop('_cached_html', None); st.rerun()
 
             cp1, cp2 = st.columns([2,1])
             with cp1:
@@ -2330,7 +2330,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                     server_store['tg_grp'] = None
                     try: del qp['tg_grp']
                     except: pass
-                    st.rerun()
+                    st.session_state.pop('_cached_html', None); st.rerun()
 
 
             # ── 포맷 미리보기 전송 ──
@@ -2572,7 +2572,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                     server_store['tg_grp2'] = None
                     try: del qp['tg_grp2']
                     except: pass
-                    st.rerun()
+                    st.session_state.pop('_cached_html', None); st.rerun()
 
 
             # ── 포맷 미리보기 전송 ──
@@ -2801,7 +2801,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                     server_store['tg_grp3'] = None
                     try: del qp['tg_grp3']
                     except: pass
-                    st.rerun()
+                    st.session_state.pop('_cached_html', None); st.rerun()
 
 
             cg3a, cg3b = st.columns([2,1])
@@ -2992,7 +2992,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                 try:
                     if 'gkey' in qp: del qp['gkey']
                 except: pass
-                st.rerun()
+                st.session_state.pop('_cached_html', None); st.rerun()
         ok_google = bool(st.session_state.get('google_api_key'))
         st.markdown(
             f'<div style="padding:6px 10px;font-family:monospace;font-size:11px;'
@@ -3013,7 +3013,7 @@ color:#4a5568;padding:4px 0;line-height:1.8">
             try:
                 if 'agreed' in qp: del qp['agreed']
             except: pass
-            st.rerun()
+            st.session_state.pop('_cached_html', None); st.rerun()
 
 # ════ 5. 실시간 스캔 & 데이터 준비 ════
 prices_json="{}"; balance_json="{}"; price_ts=""
@@ -3212,7 +3212,7 @@ if _gist_active or st.session_state.kis_token:
             fetch_gist_scan.clear()
             try: fetch_volume_ranking.clear()
             except: pass
-            st.rerun()
+            st.session_state.pop('_cached_html', None); st.rerun()
     with ca:
         if GIST_ID:
             st.markdown(
@@ -3970,26 +3970,27 @@ def _load_app_html():
 def _safe_json(s):
     return s.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
 
-# ── 정적 HTML — app.html 수정시간 기반 캐시 (파일 변경 즉시 반영) ──
+# ── 정적 HTML — 세션 내 한 번만 생성 (React DOM 재조정 완전 차단) ──────
+# session_state에 캐시 → autorefresh 시 동일 객체 재사용 → React 충돌 없음
 _STATIC_INJECT = '<script>window.__STREAMLIT_MODE__=true;</script>'
 
-def _get_static_html(mtime: float):
-    """항상 최신 app.html 로드 (캐시 없음 — 프롬프트 변경 즉시 반영)"""
-    with open("app.html", "r", encoding="utf-8") as f:
-        html = f.read()
-    return html.replace('</head>', _STATIC_INJECT + '\n</head>')
+if '_cached_html' not in st.session_state:
+    _os_mod = __import__('os')
+    with open("app.html", "r", encoding="utf-8") as _f:
+        _raw_html = _f.read()
+    st.session_state['_cached_html'] = _raw_html.replace(
+        '</head>', _STATIC_INJECT + '\n</head>'
+    )
 
-import os as _os
-_html_mtime = _os.path.getmtime("app.html") if _os.path.exists("app.html") else 0
-_final_html = _get_static_html(_html_mtime)
+_final_html = st.session_state['_cached_html']
 
 # 설정 서버 저장
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
-# 정적 HTML 렌더 — 매 렌더마다 완전히 동일한 문자열 → React 재조정 없음
+# 정적 HTML 렌더 (세션 내 항상 동일한 문자열 → React 재조정 없음)
 components.html(_final_html, height=15000, scrolling=False)
 
-# ── 동적 데이터는 별도 height=0 컴포넌트로 전달 (React가 관리 안 함) ──
+# ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
 _data_js = f"""<script>
 (function(){{
   var payload = {{
