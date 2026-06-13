@@ -3933,4 +3933,6 @@ _final_html = _static_html.replace("</head>", _inject + "\n</head>")
 # 설정 서버 저장 (PC ↔ Mobile 연동)
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
-st.markdown(_final_html, unsafe_allow_html=True)
+# components.html — key 고정으로 React가 동일 컴포넌트 재사용 (DOM 재조정 최소화)
+# height는 scan_json 길이에 따라 동적으로 조정하지 않고 고정값 사용
+components.html(_final_html, height=15000, scrolling=False)

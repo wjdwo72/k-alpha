@@ -3132,10 +3132,10 @@ function buildCard(stock, rank) {
 function safeEmpty(el) {
   if (!el) return;
   try {
-    while (el.firstChild) {
-      el.removeChild(el.firstChild);
-    }
+    // replaceChildren()은 removeChild를 전혀 사용하지 않아 React DOM 충돌 없음
+    el.replaceChildren();
   } catch(e) {
+    // replaceChildren 미지원 브라우저 fallback
     try { el.innerHTML = ''; } catch(e2) {}
   }
 }
