@@ -4565,26 +4565,27 @@ function openKisChart(code, market, name, event, period) {
     ];
   }
 
-  // 네이버 차트 미리보기 (KR only) — 3분봉/일봉 다른 이미지
+  // 네이버 차트 미리보기 (KR only) — 3분봉=선차트, 일봉=봉차트
   var previewHtml = '';
   if (market === 'kr') {
-    // 분봉: candle/minute (당일 분봉 캔들)
-    // 일봉: area/day (당일 영역차트) → 실패시 3month로 fallback
+    // 3분봉: area/day  → 당일 선차트 (기존 방식 유지)
+    // 일봉:  candle/day → 봉차트 (이미지2처럼 캔들스틱)
     var imgUrl = isMinute
-      ? `https://ssl.pstatic.net/imgfinance/chart/item/candle/minute/${code}.png`
-      : `https://ssl.pstatic.net/imgfinance/chart/item/area/day/${code}.png`;
-    var fallbackUrl = isMinute
       ? `https://ssl.pstatic.net/imgfinance/chart/item/area/day/${code}.png`
-      : `https://ssl.pstatic.net/imgfinance/chart/item/area/3month/${code}.png`;
+      : `https://ssl.pstatic.net/imgfinance/chart/item/candle/day/${code}.png`;
+    var fallbackUrl = isMinute
+      ? `https://ssl.pstatic.net/imgfinance/chart/item/area/3month/${code}.png`
+      : `https://ssl.pstatic.net/imgfinance/chart/item/area/day/${code}.png`;
     var naverLink = isMinute
       ? `https://finance.naver.com/item/fchart.nhn?code=${code}`
       : `https://finance.naver.com/item/main.naver?code=${code}#chart`;
+    var periodLabel2 = isMinute ? '선차트(당일)' : '봉차트(일봉)';
 
     previewHtml = `
       <div style="margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:#0d1220;">
         <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);
                     padding:5px 8px;display:flex;justify-content:space-between;align-items:center;">
-          <span>📈 ${periodLabel} 미리보기</span>
+          <span>📈 ${periodLabel2} 미리보기</span>
           <a href="${naverLink}" target="_blank"
              style="color:var(--accent);text-decoration:none;font-size:9px;"
              onclick="closeChartPopup()">네이버에서 보기 ↗</a>
@@ -4593,7 +4594,7 @@ function openKisChart(code, market, name, event, period) {
           src="${imgUrl}"
           onerror="this.src='${fallbackUrl}';this.onerror=function(){this.parentElement.style.display='none'}"
           style="width:100%;display:block;min-height:70px;max-height:180px;object-fit:contain;"
-          alt="${displayName} ${periodLabel}"
+          alt="${displayName} ${periodLabel2}"
           loading="lazy"
         />
       </div>`;
