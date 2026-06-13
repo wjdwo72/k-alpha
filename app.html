@@ -379,6 +379,8 @@
   .tab-btn.active { color: var(--text-bright); border-bottom-color: var(--accent); }
   .tab-btn[data-tab="surge"].active { border-bottom-color: var(--surge); }
   .tab-btn[data-tab="tomorrow"].active { border-bottom-color: var(--tomorrow); }
+  .tab-btn[data-tab="per"].active { color: #f0c040 !important; border-bottom-color: #f0c040; }
+  .tab-btn[data-tab="per"].active .tab-badge { background: rgba(240,192,64,0.2); color: #f0c040; }
 
   .tab-badge {
     padding: 1px 7px;
@@ -1512,6 +1514,9 @@
         <button class="tab-btn" data-tab="smallmid" onclick="switchTab('smallmid',this,'kr')" style="color:#c084fc;border-bottom-color:transparent">
           ⬟ 내일의 중소형주 <span class="tab-badge" style="background:rgba(192,132,252,.15);color:#c084fc">10</span>
         </button>
+        <button class="tab-btn" data-tab="per" onclick="switchTab('per',this,'kr')" style="color:#f0c040;border-bottom-color:transparent">
+          💎 PER저평가 <span class="tab-badge" id="badge-per" style="background:rgba(240,192,64,.15);color:#f0c040">0</span>
+        </button>
         <button class="tab-btn" data-tab="portfolio" onclick="switchTab('portfolio',this,'kr')" id="tab-btn-portfolio-kr">
           💼 내 포트폴리오
         </button>
@@ -1526,6 +1531,13 @@
           <span style="color:#9ca3af;font-size:10px">나스닥 -1.5% 이상 급락 시 전 종목 비활성화 · 손절선 자동 -3% 적용</span>
         </div>
         <div class="cards-grid" id="cards-smallmid"></div>
+      </div>
+      <div id="tab-per" class="tab-panel">
+        <div style="background:linear-gradient(135deg,rgba(240,192,64,.08),rgba(0,212,255,.05));border:1px solid rgba(240,192,64,.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#f0c040;line-height:1.7">
+          💎 <strong>PER 저평가주</strong> — PER 저평가 × PBR 1.0 이하 × ROE 10%+ × MA 상향 확인 (pykrx)<br>
+          <span style="color:#9ca3af;font-size:10px">조건: PER 0.1~15.0 · PBR ≤ 1.0 · ROE ≥ 10% · 거래대금 30억+ · 앱 설정에서 조건 변경 가능</span>
+        </div>
+        <div class="cards-grid" id="cards-per"></div>
       </div>
       <div id="tab-portfolio" class="tab-panel">
         <!-- 포트폴리오 (KR 필터 기본) -->
@@ -2691,20 +2703,20 @@ function resetScanSettings() {
 function updateFilterCounts() {
   let total = 0;
   const origC = window.__ORIG_COUNTS__ || {};
-  // swing, surge, tomorrow, smallmid 모두 배지 업데이트
-  ['swing','surge','tomorrow','smallmid'].forEach(cat => {
-    const stocks = cat === 'smallmid' ? DEMO.smallmid : DEMO[cat];
-    const filtered = cat === 'smallmid' ? stocks : filterKrStocks(stocks);
-    if (cat !== 'smallmid') total += filtered.length;
+  // swing, surge, tomorrow, smallmid, per 모두 배지 업데이트
+  ['swing','surge','tomorrow','smallmid','per'].forEach(cat => {
+    const stocks = (cat === 'smallmid' || cat === 'per') ? (DEMO[cat] || []) : DEMO[cat];
+    const filtered = (cat === 'smallmid' || cat === 'per') ? stocks : filterKrStocks(stocks);
+    if (cat !== 'smallmid' && cat !== 'per') total += filtered.length;
     const tabBtn = document.querySelector(`#tabs-kr [data-tab="${cat}"]`);
     if (tabBtn) {
       const badge = tabBtn.querySelector('.tab-badge');
-      if (badge) {
-        // 스캔 조건 충족 갯수 그대로 표시
-        badge.textContent = filtered.length;
-      }
+      if (badge) badge.textContent = filtered.length;
     }
   });
+  // PER 배지 id로도 업데이트
+  var _pb = document.getElementById('badge-per');
+  if (_pb) _pb.textContent = (DEMO.per || []).length;
   const fcEl = document.getElementById('filter-count');
   if (fcEl) fcEl.textContent = `조건 충족: ${total} 종목`;
   const ctxEl = document.getElementById('ctx-kr-scan');
@@ -3074,7 +3086,7 @@ function buildCard(stock, rank) {
   _aiStockMap[stock.code] = stock;
   const gradeClass = stock.grade === 'S' ? 'grade-s' : stock.grade === 'A' ? 'grade-a' : 'grade-b';
   const scoreColor = stock.grade === 'S' ? '#ff4d6d' : stock.grade === 'A' ? 'var(--accent)' : 'var(--accent2)';
-  const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : '#00ff88';
+  const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : stock.cat === 'per' ? '#f0c040' : '#00ff88';
 
   const meta = DEMO_META[stock.code] || {};
   // 실시간 종목은 mkt/vol 정보를 stock 자체에서 가져옴
@@ -3177,14 +3189,15 @@ function buildCard(stock, rank) {
 // RENDER ALL CARDS (필터 적용)
 // ──────────────────────────────────────────────
 function renderCards() {
-  ['swing','surge','tomorrow','smallmid'].forEach(cat => {
+  ['swing','surge','tomorrow','smallmid','per'].forEach(cat => {
     const container = document.getElementById(`cards-${cat}`);
     if (!container) return;
     container.innerHTML = '';
 
-    const stocks = cat === 'smallmid' ? DEMO.smallmid : DEMO[cat];
-    const filtered = cat === 'smallmid' ? stocks : filterKrStocks(stocks);
-    const catColor = cat === 'smallmid' ? '#c084fc' : cat === 'swing' ? '#00d4ff' : cat === 'surge' ? '#ffa500' : '#00ff88';
+    // PER과 smallmid는 필터 미적용 (전종목 표시)
+    const stocks = (cat === 'smallmid' || cat === 'per') ? (DEMO[cat] || []) : DEMO[cat];
+    const filtered = (cat === 'smallmid' || cat === 'per') ? stocks : filterKrStocks(stocks);
+    const catColor = cat === 'smallmid' ? '#c084fc' : cat === 'per' ? '#f0c040' : cat === 'swing' ? '#00d4ff' : cat === 'surge' ? '#ffa500' : '#00ff88';
 
     if (filtered.length === 0) {
       const diagLines = [];
@@ -3197,14 +3210,15 @@ function renderCards() {
       if (mktFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ 시장 ${scanSettings.mkt.toUpperCase()} → ${mktFail}종목 제외</span>`);
       if (capFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ 시총 ${scanSettings.cap} → ${capFail}종목 제외</span>`);
       if (rsiFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ RSI ${scanSettings.rsiMin}~${scanSettings.rsiMax} → ${rsiFail}종목 제외</span>`);
-      container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><div style="text-align:center">
-        <div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 종목이 없습니다</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;line-height:2;margin-bottom:10px">${diagLines.length ? diagLines.join('<br>') : '모든 조건 검토 필요'}</div>
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button onclick="openSettings(event)" style="padding:6px 14px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">⚙ 필터 조정</button>
-          <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
-        </div>
-      </div></div>`;
+      const emptyMsg = cat === 'per'
+        ? '💎 PER 저평가주 없음<br><span style="font-size:10px;color:#9ca3af">앱 설정 → PER 저평가주 스캔 활성화 후 대기</span>'
+        : `<div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 종목이 없습니다</div>
+           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;line-height:2;margin-bottom:10px">${diagLines.length ? diagLines.join('<br>') : '모든 조건 검토 필요'}</div>
+           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+             <button onclick="openSettings(event)" style="padding:6px 14px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">⚙ 필터 조정</button>
+             <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
+           </div>`;
+      container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><div style="text-align:center">${emptyMsg}</div></div>`;
     } else {
       filtered.forEach((stock, i) => {
         const card = buildCard(stock, i+1);
@@ -3217,7 +3231,7 @@ function renderCards() {
 
   setTimeout(() => {
     function drawCat(cat, color) {
-      var stocks = cat === 'smallmid' ? DEMO.smallmid : filterKrStocks(DEMO[cat]);
+      var stocks = (cat === 'smallmid' || cat === 'per') ? (DEMO[cat] || []) : filterKrStocks(DEMO[cat]);
       stocks.forEach(stock => {
         const c3 = document.getElementById(`c3-${stock.code}`);
         const cd = document.getElementById(`cd-${stock.code}`);
@@ -3229,6 +3243,7 @@ function renderCards() {
     drawCat('surge',    '#ffa500');
     drawCat('tomorrow', '#00ff88');
     drawCat('smallmid', '#c084fc');
+    drawCat('per',      '#f0c040');
   }, 100);
 
   // 300ms 후 한번 더 (DOM 완전 렌더 후 보장)
@@ -3325,7 +3340,7 @@ function switchTab(tab, btn, market) {
 
   // 탭 전환 시 차트 재드로우
   setTimeout(() => {
-    var colorMap = {swing:'#00d4ff',surge:'#ffa500',tomorrow:'#00ff88',smallmid:'#c084fc'};
+    var colorMap = {swing:'#00d4ff',surge:'#ffa500',tomorrow:'#00ff88',smallmid:'#c084fc',per:'#f0c040'};
     var target = tab === 'portfolio' ? null : tab;
     if (target && DEMO[target]) {
       var stocks = target === 'smallmid' ? DEMO.smallmid : filterKrStocks(DEMO[target]);
@@ -3508,7 +3523,7 @@ function generateSwingReport(stock) {
   var fundR     = reasons.filter(function(r){ return r.indexOf('[기본적') >= 0; });
   var macroR    = reasons.filter(function(r){ return r.indexOf('[외부요인') >= 0; });
 
-  var catLabel  = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주'}[cat] || cat;
+  var catLabel  = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주', per:'PER저평가'}[cat] || cat;
 
   /* ── 1. 매력도 평점 ── */
   var scoreMsg;
@@ -3707,7 +3722,7 @@ function openAiAnalysis(event, code) {
   var overlay = document.getElementById('ai-modal-overlay');
   var subEl   = document.getElementById('ai-modal-sub');
   var content = document.getElementById('ai-modal-content');
-  var catLabel = {swing:'실시간스윙',surge:'급등전야',tomorrow:'내일관심',smallmid:'중소형주'}[stock.cat] || stock.cat || '';
+  var catLabel = {swing:'실시간스윙',surge:'급등전야',tomorrow:'내일관심',smallmid:'중소형주',per:'PER저평가'}[stock.cat] || stock.cat || '';
   subEl.textContent = stock.name + ' (' + stock.code + ')  ·  ' + catLabel + '  ·  ' + (stock.price || '') + '원  ' + (stock.change || '');
 
   var googleKey = window.__GOOGLE_API_KEY__ || '';
@@ -5165,14 +5180,20 @@ function applyRealScanData() {
   var su = convertScanCards(scan.surge,    'surge');
   var tm = convertScanCards(scan.tomorrow, 'tomorrow');
   var sm = convertScanCards(scan.smallmid, 'smallmid');
+  var pr = convertScanCards(scan.per,      'per');
   if (sw.length > 0) DEMO.swing    = sw;
   if (su.length > 0) DEMO.surge    = su;
   if (tm.length > 0) DEMO.tomorrow = tm;
   if (sm.length > 0) DEMO.smallmid = sm;
+  if (pr.length > 0) DEMO.per      = pr;
+  else if (!DEMO.per) DEMO.per     = [];
 
   // smallmid 배지 직접 업데이트 (updateFilterCounts가 smallmid를 놓치는 경우 대비)
   var _smBadge = document.querySelector('#tabs-kr [data-tab="smallmid"] .tab-badge');
   if (_smBadge) _smBadge.textContent = DEMO.smallmid.length;
+  // PER 배지 업데이트
+  var _perBadge = document.getElementById('badge-per');
+  if (_perBadge) _perBadge.textContent = DEMO.per.length;
 
   renderCards();
 
