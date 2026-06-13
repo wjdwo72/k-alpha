@@ -5328,6 +5328,65 @@ document.addEventListener('DOMContentLoaded', function() {
     if (volLabel) volLabel.textContent = fmtNum(scanSettings.volMin) + '억+';
   }, 300);
 });
+
+// ── Streamlit postMessage 수신 (동적 데이터 업데이트) ──
+window.addEventListener('message', function(e) {
+  var d = e.data;
+  if (!d || d.type !== 'kalpha_data') return;
+  try {
+    // window.__ 변수 업데이트
+    if (d.KIS_TOKEN    !== undefined) window.__KIS_TOKEN__     = d.KIS_TOKEN;
+    if (d.KIS_BASE_URL !== undefined) window.__KIS_BASE_URL__  = d.KIS_BASE_URL;
+    if (d.KIS_AK       !== undefined) window.__KIS_AK__        = d.KIS_AK;
+    if (d.KIS_SEC      !== undefined) window.__KIS_SEC__       = d.KIS_SEC;
+    if (d.KIS_ACC      !== undefined) window.__KIS_ACC__       = d.KIS_ACC;
+    if (d.KIS_PRICES   !== undefined) window.__KIS_PRICES__    = d.KIS_PRICES;
+    if (d.KIS_BALANCE  !== undefined) window.__KIS_BALANCE__   = d.KIS_BALANCE;
+    if (d.KIS_PRICE_TS !== undefined) window.__KIS_PRICE_TS__  = d.KIS_PRICE_TS;
+    if (d.SCAN_RESULT  !== undefined) window.__SCAN_RESULT__   = d.SCAN_RESULT;
+    if (d.UI_N_CAT     !== undefined) window.__UI_N_CAT__      = d.UI_N_CAT;
+    if (d.SCAN_COUNT   !== undefined) window.__SCAN_COUNT__    = d.SCAN_COUNT;
+    if (d.TG_TOKEN     !== undefined) window.__TG_TOKEN__      = d.TG_TOKEN;
+    if (d.TG_CHAT      !== undefined) window.__TG_CHAT__       = d.TG_CHAT;
+    if (d.TG_INTERVAL  !== undefined) window.__TG_INTERVAL__   = d.TG_INTERVAL;
+    if (d.GOOGLE_API_KEY !== undefined) window.__GOOGLE_API_KEY__ = d.GOOGLE_API_KEY;
+    if (d.TG_AI_COUNT  !== undefined) window.__TG_AI_COUNT__   = d.TG_AI_COUNT;
+    if (d.SCAN_VOL_MIN !== undefined) {
+      window.__SCAN_VOL_MIN__ = d.SCAN_VOL_MIN;
+      scanSettings.volMin = d.SCAN_VOL_MIN;
+    }
+    if (d.SCAN_RSI_MIN !== undefined) {
+      window.__SCAN_RSI_MIN__ = d.SCAN_RSI_MIN;
+      scanSettings.rsiMin = d.SCAN_RSI_MIN;
+    }
+    if (d.SCAN_RSI_MAX !== undefined) {
+      window.__SCAN_RSI_MAX__ = d.SCAN_RSI_MAX;
+      scanSettings.rsiMax = d.SCAN_RSI_MAX;
+    }
+    // KIS 토큰 업데이트
+    if (d.KIS_TOKEN) {
+      kisToken     = d.KIS_TOKEN;
+      kisBaseUrl   = d.KIS_BASE_URL || kisBaseUrl;
+      kisAppKey    = d.KIS_AK      || kisAppKey;
+      kisAppSecret = d.KIS_SEC     || kisAppSecret;
+      kisAccount   = d.KIS_ACC     || kisAccount;
+    }
+    // 스캔 결과 적용
+    if (d.SCAN_RESULT && d.SCAN_RESULT.ts) {
+      applyRealScanData();
+    }
+    // 잔고 업데이트
+    if (d.KIS_BALANCE && d.KIS_BALANCE.output1) {
+      try { renderPortfolio(d.KIS_BALANCE); } catch(ex) {}
+    }
+    // 현재가 업데이트
+    if (d.KIS_PRICES && Object.keys(d.KIS_PRICES).length > 0) {
+      try { applyLivePrices(d.KIS_PRICES); } catch(ex) {}
+    }
+  } catch(err) {
+    // 무시
+  }
+});
 if (localStorage.getItem('k_api_keys')) {
   const pinSt = document.getElementById('pin-status');
   if (pinSt) { pinSt.textContent = '💾 저장된 키 있음 — 비번 입력 후 불러오기'; pinSt.style.color = 'var(--accent4)'; }
