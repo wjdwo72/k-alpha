@@ -3189,13 +3189,27 @@ function buildCard(stock, rank) {
 }
 
 // ──────────────────────────────────────────────
+// DOM 안전 초기화 (innerHTML='' 대신 사용 — Streamlit React DOM 충돌 방지)
+// ──────────────────────────────────────────────
+function safeEmpty(el) {
+  if (!el) return;
+  try {
+    while (el.firstChild) {
+      el.removeChild(el.firstChild);
+    }
+  } catch(e) {
+    try { el.innerHTML = ''; } catch(e2) {}
+  }
+}
+
+// ──────────────────────────────────────────────
 // RENDER ALL CARDS (필터 적용)
 // ──────────────────────────────────────────────
 function renderCards() {
   ['swing','surge','tomorrow','smallmid','per'].forEach(cat => {
     const container = document.getElementById(`cards-${cat}`);
     if (!container) return;
-    container.innerHTML = '';
+    safeEmpty(container);
     const stocks = (cat === 'smallmid' || cat === 'per') ? (DEMO[cat] || []) : (DEMO[cat] || []);
     const filtered = (cat === 'smallmid' || cat === 'per') ? stocks : filterKrStocks(stocks);
     const catColor = cat === 'per' ? '#f0c040' : cat === 'smallmid' ? '#c084fc' : cat === 'swing' ? '#00d4ff' : cat === 'surge' ? '#ffa500' : '#00ff88';
@@ -3211,14 +3225,14 @@ function renderCards() {
       if (mktFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ 시장 ${scanSettings.mkt.toUpperCase()} → ${mktFail}종목 제외</span>`);
       if (capFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ 시총 ${scanSettings.cap} → ${capFail}종목 제외</span>`);
       if (rsiFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ RSI ${scanSettings.rsiMin}~${scanSettings.rsiMax} → ${rsiFail}종목 제외</span>`);
-      container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><div style="text-align:center">
+      container.insertAdjacentHTML('beforeend', `<div class="empty-state"><div class="icon">🔍</div><div style="text-align:center">
         <div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 종목이 없습니다</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;line-height:2;margin-bottom:10px">${diagLines.length ? diagLines.join('<br>') : '모든 조건 검토 필요'}</div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
           <button onclick="openSettings(event)" style="padding:6px 14px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">⚙ 필터 조정</button>
           <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
         </div>
-      </div></div>`;
+      </div></div>`);
     } else {
       filtered.forEach((stock, i) => {
         const card = buildCard(stock, i+1);
@@ -3444,16 +3458,16 @@ function renderUsCards() {
   ['swing', 'surge', 'tomorrow'].forEach(cat => {
     const container = document.getElementById(`cards-${cat}-us`);
     if (!container) return;
-    container.innerHTML = '';
+    safeEmpty(container);
     const filtered = filterUsStocks(DEMO_US[cat]);
     if (filtered.length === 0) {
-      container.innerHTML = `<div class="empty-state">
+      container.insertAdjacentHTML('beforeend', `<div class="empty-state">
         <div class="icon">🔍</div>
         <div style="text-align:center">
           <div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 미국주식이 없습니다</div>
           <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
         </div>
-      </div>`;
+      </div>`);
     } else {
       filtered.forEach((stock, i) => {
         const card = buildUsCard(stock, i+1);
@@ -4615,7 +4629,8 @@ function openKisChart(code, market, name, event, period) {
       </div>`;
   }
 
-  linksEl.innerHTML = previewHtml + links.map(l => `
+  safeEmpty(linksEl);
+  linksEl.insertAdjacentHTML('beforeend', previewHtml + links.map(l => `
     <a class="chart-link-btn ${l.cls}" href="${l.url}" target="_blank" onclick="closeChartPopup()">
       <span class="chart-link-icon">${l.icon}</span>
       <span class="chart-link-info">
