@@ -3893,51 +3893,44 @@ def _load_app_html():
     with open("app.html","r",encoding="utf-8") as f: return f.read()
 
 # ── HTML은 항상 동일하게 유지 (React DOM 재조정 충돌 방지) ──
-# 동적 데이터는 별도 components.html(height=0)으로 postMessage 전송
+# ── HTML + 동적 데이터를 st.markdown으로 직접 주입 ──────────────────
+# components.html은 Streamlit React가 iframe을 관리하면서 DOM 재조정 충돌 발생
+# st.markdown(unsafe_allow_html=True)은 React DOM에 직접 삽입되어 충돌 없음
 _static_html = _load_app_html()
 
-# scan_json 안전 이스케이프 (</script> 태그 삽입 방지)
 def _safe_json(s):
+    """</script> 태그가 스크립트 블록을 조기 종료하지 않도록 이스케이프"""
     return s.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
 
-# 정적 HTML 렌더 (데이터 없음 — 항상 동일한 문자열 → React 충돌 없음)
-components.html(_static_html, height=15000, scrolling=False)
-
-# 동적 데이터를 postMessage로 iframe에 전달 (별도 height=0 컴포넌트)
-_data_script = f"""<script>
-(function() {{
-  var payload = {{
-    type: 'kalpha_data',
-    KIS_TOKEN:    {json.dumps(st.session_state.kis_token or '')},
-    KIS_BASE_URL: {json.dumps(st.session_state.kis_base_url or '')},
-    KIS_AK:       {json.dumps(st.session_state.kis_ak)},
-    KIS_SEC:      {json.dumps(st.session_state.kis_sec)},
-    KIS_ACC:      {json.dumps(st.session_state.kis_acc)},
-    KIS_PRICES:   {_safe_json(prices_json)},
-    KIS_BALANCE:  {_safe_json(balance_json)},
-    KIS_PRICE_TS: {json.dumps(price_ts)},
-    SCAN_RESULT:  {_safe_json(scan_json)},
-    UI_N_CAT:     {st.session_state.get('ui_n_per_cat', 10)},
-    SCAN_COUNT:   {scan_count},
-    TG_TOKEN:     {json.dumps(st.session_state.get('tg_token',''))},
-    TG_CHAT:      {json.dumps(st.session_state.get('tg_chat',''))},
-    TG_INTERVAL:  {st.session_state.get('tg_interval_min',10)*60*1000},
-    GOOGLE_API_KEY: {json.dumps(st.session_state.get('google_api_key',''))},
-    TG_AI_COUNT:  {st.session_state.get('tg_ai_count', 5)},
-    SCAN_VOL_MIN: {st.session_state.get('scan_vol_min',50)},
-    SCAN_RSI_MIN: {st.session_state.get('scan_rsi_min',20)},
-    SCAN_RSI_MAX: {st.session_state.get('scan_rsi_max',75)},
-  }};
-  // 모든 iframe에 postMessage 전송
-  var frames = document.querySelectorAll('iframe');
-  frames.forEach(function(f) {{
-    try {{ f.contentWindow.postMessage(payload, '*'); }} catch(e) {{}}
-  }});
-  // 부모 창에도 전송 (iframe 안에서 실행 시)
-  try {{ window.parent.postMessage(payload, '*'); }} catch(e) {{}}
-  try {{ window.postMessage(payload, '*'); }} catch(e) {{}}
-}})();
+# 동적 데이터 주입 스크립트
+_inject = f"""<script>
+window.__STREAMLIT_MODE__ = true;
+window.__KIS_TOKEN__    = {json.dumps(st.session_state.kis_token or '')};
+window.__KIS_BASE_URL__ = {json.dumps(st.session_state.kis_base_url or '')};
+window.__KIS_AK__       = {json.dumps(st.session_state.kis_ak)};
+window.__KIS_SEC__      = {json.dumps(st.session_state.kis_sec)};
+window.__KIS_ACC__      = {json.dumps(st.session_state.kis_acc)};
+window.__KIS_PRICES__   = {_safe_json(prices_json)};
+window.__KIS_BALANCE__  = {_safe_json(balance_json)};
+window.__KIS_PRICE_TS__ = {json.dumps(price_ts)};
+window.__SCAN_RESULT__  = {_safe_json(scan_json)};
+window.__UI_N_CAT__     = {st.session_state.get('ui_n_per_cat', 10)};
+window.__ORIG_COUNTS__  = null;
+window.__SCAN_COUNT__   = {scan_count};
+window.__TG_TOKEN__     = {json.dumps(st.session_state.get('tg_token',''))};
+window.__TG_CHAT__      = {json.dumps(st.session_state.get('tg_chat',''))};
+window.__TG_INTERVAL__  = {st.session_state.get('tg_interval_min',10)*60*1000};
+window.__GOOGLE_API_KEY__ = {json.dumps(st.session_state.get('google_api_key',''))};
+window.__TG_AI_COUNT__  = {st.session_state.get('tg_ai_count', 5)};
+window.__SCAN_VOL_MIN__ = {st.session_state.get('scan_vol_min',50)};
+window.__SCAN_RSI_MIN__ = {st.session_state.get('scan_rsi_min',20)};
+window.__SCAN_RSI_MAX__ = {st.session_state.get('scan_rsi_max',75)};
 </script>"""
+
+# HTML에 데이터 주입 후 st.markdown으로 렌더
+_final_html = _static_html.replace("</head>", _inject + "\n</head>")
+
 # 설정 서버 저장 (PC ↔ Mobile 연동)
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
-components.html(_data_script, height=0, scrolling=False)
+
+st.markdown(_final_html, unsafe_allow_html=True)
