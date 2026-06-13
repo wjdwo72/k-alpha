@@ -1036,9 +1036,19 @@ def fetch_per_stocks(token, base_url, ak, secret, per_max, per_min, pbr_max, roe
                 chg_raw = float(o.get('prdy_ctrt', 0) or 0)
                 chg_pct = -chg_raw if sign_cd in ['4', '5'] else chg_raw
 
-                # 이름
-                name_raw = (o.get('hts_kor_isnm') or o.get('prdt_abrv_name') or '').strip()
-                name_val = get_stock_name(code, name_raw) if name_raw else code
+                # 이름 — 여러 필드 시도 후 없으면 종목정보 API 추가 조회
+                name_raw = (o.get('hts_kor_isnm') or o.get('prdt_abrv_name') or
+                            o.get('prdt_name') or o.get('stck_kor_isnm') or '').strip()
+                name_val = get_stock_name(code, name_raw)
+                # 이름이 코드 그대로(조회 실패)면 CTPF1002R로 재시도
+                if name_val == code:
+                    try:
+                        name_val = fetch_stock_name(token, base_url, ak, secret, code)
+                    except Exception:
+                        pass
+                # 그래도 없으면 STOCK_NAMES 테이블 fallback
+                if name_val == code and code in STOCK_NAMES:
+                    name_val = STOCK_NAMES[code]
                 if is_etf(name_val):
                     break
 
