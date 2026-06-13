@@ -978,17 +978,17 @@ def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
     ]
 
 def _rebuild_reasons(c):
-    """카드 reasons 정규화 — 기존 형식이 올바르면 유지, 없거나 구버전이면 재생성"""
+    """기존 reasons는 절대 변경하지 않고, [기본적 분석]+[외부요인]이 없을 때만 추가"""
     existing = c.get('reasons', [])
-
-    # 기존 reasons에 [기본적 분석]과 [외부요인]이 모두 있으면 그대로 사용
     texts = [r.get('text','') if isinstance(r,dict) else str(r) for r in existing]
     has_fund  = any('[기본적 분석]' in t for t in texts)
     has_macro = any('[외부요인]' in t for t in texts)
-    if has_fund and has_macro:
-        return existing  # 이미 올바른 형식 — 변경 없음
 
-    # 없거나 구버전 → 재생성
+    # 둘 다 있으면 완전히 그대로 반환
+    if has_fund and has_macro:
+        return existing
+
+    # 없는 섹션만 생성해서 뒤에 추가
     try:
         price = 0
         try: price = int(str(c.get('price','0')).replace(',',''))
@@ -1005,40 +1005,23 @@ def _rebuild_reasons(c):
         mkt = c.get('mkt', 'kospi')
         rsi = c.get('rsiApprox', round(50 + chg * 2.8, 1)) or 50
 
-        # PER 종목 — 기존 상단 3개 유지 + 기본적분석·외부요인 추가
-        if c.get('cat') == 'per':
-            per = c.get('per', 0); pbr = c.get('pbr', 0); roe = c.get('roe', 0)
-            sign = '+' if chg >= 0 else ''
-            per_max = 15.0
-            # 기존 상단 3개가 있으면 유지, 없으면 새로 생성
-            top3 = [r for r in existing if isinstance(r,dict) and
-                    not any(tag in r.get('text','') for tag in ['[기본적','[외부요인','[저평가'])]
-            if not top3:
-                top3 = [
-                    {'icon':'💎','cat':'green',
-                     'text':f"PER {per:.1f}배 (기준:{per_max}배 이하) · PBR {pbr:.2f} · ROE {roe:.1f}%"},
-                    {'icon':'📊','cat':'',
-                     'text':f"거래대금 {tr:,}억 · 등락률 {sign}{chg:.2f}%"},
-                    {'icon':'📈','cat':'orange',
-                     'text':f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원"},
-                ]
-            extra = _build_analysis_reasons(
-                {'price':price,'trAmt':tr,'mkt':mkt,'rsiApprox':rsi},
-                chg, buy_p, stop_p, tgt_p
-            )[3:]
-            return top3 + extra
-
-        # 일반 종목 — 기존 기술적 3개 유지 + 기본적분석·외부요인 재생성
-        tech3 = [r for r in existing if isinstance(r,dict) and
-                 not any(tag in r.get('text','') for tag in ['[기본적','[외부요인'])]
         new_all = _build_analysis_reasons(
             {'price':price,'trAmt':tr,'mkt':mkt,'rsiApprox':rsi},
             chg, buy_p, stop_p, tgt_p
         )
-        # 기존 기술적 3개가 있으면 유지, 없으면 새로 생성된 것 사용
-        result_tech = tech3 if tech3 else new_all[:3]
-        result_extra = new_all[3:]  # [기본적 분석] + [외부요인]
-        return result_tech + result_extra
+        # [기본적 분석], [외부요인] 항목만 추출
+        to_add = []
+        if not has_fund:
+            for r in new_all:
+                if '[기본적 분석]' in r.get('text',''):
+                    to_add.append(r)
+                    break
+        if not has_macro:
+            for r in new_all:
+                if '[외부요인]' in r.get('text',''):
+                    to_add.append(r)
+                    break
+        return existing + to_add
     except Exception:
         return existing
 

@@ -3022,8 +3022,12 @@ function buildCard(stock, rank) {
     ? `<span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:${displayRsi < 40 ? 'var(--accent2)' : displayRsi > 55 ? 'var(--accent4)' : 'var(--text-dim)'}">RSI ${typeof displayRsi === 'number' ? displayRsi.toFixed(0) : displayRsi}</span>`
     : '';
 
-  const indsHtml = stock.inds.map(i => `<span class="ind-pill ${i.cat}">${i.label}</span>`).join('');
-  const reasonHtml = stock.reasons.map(r =>
+  const indsHtml = stock.inds.map(i => `<span class="ind-pill ${i.cat}">${i.label}</span>`).join('')
+    + `<span class="ind-pill orange" title="매입가">매 ${stock.buy}</span>`
+    + `<span class="ind-pill green"  title="목표가">목 ${stock.target}</span>`
+    + `<span class="ind-pill red"    title="손절가">절 ${stock.stop}</span>`;
+  const _kr_reasons = _ensureBasicReasons(stock.reasons || [], stock);
+  const reasonHtml = _kr_reasons.map(r =>
     `<div class="reason-line"><span class="reason-icon ${r.cat}">▸</span><span>${r.text}</span></div>`
   ).join('');
 
@@ -3076,6 +3080,16 @@ function buildCard(stock, rank) {
           onclick="(function(e){e.stopPropagation();openKisChart(this.dataset.c,'kr',this.dataset.n,e,this.dataset.period)}).call(this,event)">
           <div class="chart-label">일봉 ↗</div>
           ${makeSvgChart(stock.chartD, catColor, false)}
+        </div>
+        <div style="margin-top:4px;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);cursor:pointer"
+          onclick="(function(e){e.stopPropagation();openKisChart('${stock.code}','kr','${stock.name}',e,'day')}).call(this,event)"
+          title="${stock.name} 네이버 차트">
+          <img
+            src="https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png"
+            onerror="this.parentElement.style.display='none'"
+            style="width:100%;display:block;height:46px;object-fit:cover;object-position:center bottom;"
+            loading="lazy" alt="${stock.name} 차트"
+          />
         </div>
       </div>
     </div>
@@ -3447,116 +3461,153 @@ function generateSwingReport(stock) {
   var buyP      = _num(stock.buy);
   var tgtP      = _num(stock.target);
   var stopP     = _num(stock.stop);
-
-  var reasons   = (stock.reasons || []).map(function(r){ return r.text || ''; });
-  var techR     = reasons.filter(function(r){ return r.indexOf('[기술적') >= 0; });
-  var fundR     = reasons.filter(function(r){ return r.indexOf('[기본적') >= 0; });
-  var macroR    = reasons.filter(function(r){ return r.indexOf('[외부요인') >= 0; });
-
   var catLabel  = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주', per:'PER저평가'}[cat] || cat;
 
-  /* ── 1. 매력도 평점 ── */
-  var scoreMsg;
-  if (score >= 90)      scoreMsg = '최상위 진입 적합 — 즉시 매수 검토 가능';
-  else if (score >= 80) scoreMsg = '스윙 진입 적합 — 눌림목 확인 후 분할 매수 유효';
-  else if (score >= 70) scoreMsg = '조건 충족 — 추가 확인 후 소량 선진입 고려';
-  else                  scoreMsg = '기준 미달 — 관망 후 조건 강화 시 재검토';
+  var reasons   = (stock.reasons || []).map(function(r){ return r.text || ''; });
+  var fundR     = reasons.filter(function(r){ return r.indexOf('[기본적') >= 0; });
+  var macroR    = reasons.filter(function(r){ return r.indexOf('[외부요인') >= 0; });
+  var macroText = macroR.length ? macroR[0].replace('[외부요인] ','') : '';
+  var fundText  = fundR.length  ? fundR[0].replace('[기본적 분석] ','') : '';
 
-  /* ── 2. 기술적/수급 ── */
-  var trendMsg = techR.length
-    ? techR[0].replace('[기술적 분석] ','').split(' · ').slice(0,2).join(' · ')
-    : (score >= 80 ? '주요 이평선 위 위치 · 우상향 추세 유지 중' : '이평선 근접 구간 · 지지 여부 확인 필요');
-
-  var techDetail = techR.length
-    ? techR[0].replace('[기술적 분석] ','').split(' · ').slice(2).join(' · ')
-    : '';
-
-  var volMsg;
-  if (vol >= 2000)      volMsg = vol + '억 — 기관·외국인 대규모 매수세 추정 (초대형 수급)';
-  else if (vol >= 800)  volMsg = vol + '억 — 기관 매수세 유입 추정. 수급 양호';
-  else if (vol >= 300)  volMsg = vol + '억 — 업종·테마 수급 집중 구간';
-  else                  volMsg = vol + '억 — 개별 재료 중심. 수급 관찰 필요';
-
-  var materialMsg = fundR.length
-    ? fundR[0].replace('[기본적 분석] ','')
-    : (macroR.length ? macroR[0].replace('[외부요인] ','') : catLabel + ' 분류 — 현재 스캔 상위 종목');
-
-  /* ── 3. 위험 요소 ── */
-  var risks = [];
-  if (rsi > 72)
-    risks.push('RSI ' + rsi.toFixed(0) + ' 과매수 — 단기 조정 가능성. 상승 지속 시 분할 대응');
-  else if (rsi < 28)
-    risks.push('RSI ' + rsi.toFixed(0) + ' 과매도 — 반등 기대 가능하나 추가 하락 리스크 잔존');
-  if (changePct >= 7)
-    risks.push('당일 +' + changePct.toFixed(1) + '% 급등 — 고점 추격 위험. 갭상승 매물 출회 주의');
-  else if (changePct >= 4)
-    risks.push('당일 +' + changePct.toFixed(1) + '% 상승 — 눌림목 대기 후 진입 권장');
-  if (changePct <= -6)
-    risks.push('당일 ' + changePct.toFixed(1) + '% 하락 — 하락 추세 가능성. 지지 확인 전 매수 자제');
-  if (rr < 1.5)
-    risks.push('손익비 ' + rr + ' — 1.5 미만. 목표가 상향 또는 손절 조정 검토');
-  if (score < 75)
-    risks.push('K스코어 ' + score + '점 — 복수 조건 미달. 추가 확인 필요');
-  if (cat === 'surge')
-    risks.push('급등전야 분류 — 단기 모멘텀 종목. 장대양봉 당일 추격은 자제, 다음날 갭 확인 후 진입');
-  if (!risks.length)
-    risks.push('현재 스캔 기준 주요 리스크 없음 — 단, 실시간 공시·뉴스 별도 확인 필수');
-
-  /* ── 4. 매매 시나리오 ── */
-  var buyStrategy;
-  if (changePct >= 4)
-    buyStrategy = '현재 단기 상승 중 — 즉시 추격 자제. '
-      + buyP.toLocaleString() + '원 이하 눌림목 확인 후\n    1차 '
-      + Math.round(buyP * 0.998).toLocaleString() + '원 / 2차 '
-      + buyP.toLocaleString() + '원 분할 진입';
-  else
-    buyStrategy = buyP.toLocaleString() + '원 근처 양봉 캔들 확인 후 진입\n    (종가 기준 ' + buyP.toLocaleString() + '원 위에서 매수)';
-
-  var holdPeriod = {swing:'3~7일 단기 스윙', surge:'1~3일 단기 급등', tomorrow:'이튿날 반등 노림 (1~3일)', smallmid:'5~14일 중기 스윙'}[cat] || '3~7일';
+  // 종합 평점
+  var scoreMsg = score >= 90 ? '최상위 진입 적합 — 즉시 매수 검토 가능'
+               : score >= 80 ? '스윙 진입 적합 — 눌림목 확인 후 분할 매수 유효'
+               : score >= 70 ? '조건 충족 — 추가 확인 후 소량 선진입 고려'
+               :               '기준 미달 — 관망 후 조건 강화 시 재검토';
 
   var tgtPct  = price > 0 ? ((tgtP / price - 1) * 100).toFixed(1) : '?';
   var stopPct = price > 0 ? Math.abs((stopP / price - 1) * 100).toFixed(1) : '?';
+  var mkt     = (stock.mkt || 'kospi').toUpperCase();
 
-  /* ── 조합 ── */
+  // PER 종목 특이 정보
+  var perInfo = '';
+  if (cat === 'per' && stock.per) {
+    perInfo = 'PER ' + stock.per + '배 · PBR ' + (stock.pbr||'?') + ' · ROE ' + (stock.roe||'?') + '%';
+  }
+
+  // 매크로 분석 파싱
+  var macroLines = macroText ? macroText.split(' · ') : [];
+  var timeZone   = macroLines[0] || '장중 구간';
+  var mktEnv     = macroLines[1] || '시장 환경 모니터링';
+  var rateFx     = macroLines[2] || '금리·환율 방향 주시';
+  var sectorEnv  = macroLines[3] || mkt + ' 섹터 환경';
+  var riskCheck  = macroLines[4] || '';
+
+  // 리스크
+  var risks = [];
+  if (rsi > 72)       risks.push('RSI ' + rsi.toFixed(0) + ' 과매수 — 단기 조정 가능성');
+  else if (rsi < 28)  risks.push('RSI ' + rsi.toFixed(0) + ' 과매도 — 반등 기대, 추가 하락 주의');
+  if (changePct >= 7) risks.push('당일 +' + changePct.toFixed(1) + '% 급등 — 고점 추격 위험, 갭 매물 주의');
+  else if (changePct >= 4) risks.push('당일 +' + changePct.toFixed(1) + '% — 눌림목 대기 후 진입 권장');
+  if (changePct <= -6) risks.push('당일 ' + changePct.toFixed(1) + '% — 하락 추세 가능성, 지지 확인 전 매수 자제');
+  if (rr < 1.5)        risks.push('손익비 ' + rr + ' — 1.5 미만, 목표가 상향 검토');
+  if (riskCheck)       risks.push(riskCheck);
+  if (!risks.length)   risks.push('현재 스캔 기준 주요 리스크 없음 — 실시간 공시·뉴스 별도 확인 필수');
+
   var L = [];
-  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  L.push('📊 1. 종합 매수 매력도 평점');
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('📊 종합 매수 매력도 평점');
   L.push('');
   L.push('  ' + score + '점 / 100점  [' + grade + '등급 · ' + catLabel + ']');
   L.push('  → ' + scoreMsg);
+  if (perInfo) L.push('  💎 ' + perInfo);
+  L.push('  근거: K스코어 ' + score + '점 · RR ' + rr + ' · 거래대금 ' + vol + '억 · RSI ' + rsi.toFixed(0));
   L.push('');
-  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  L.push('📈 2. 기술적/수급 분석 요약');
+
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('🌐 1. 매크로 및 산업 환경 분석');
   L.push('');
-  L.push('  ▸ 추세/위치:');
-  L.push('    ' + trendMsg);
-  if (techDetail) L.push('    + ' + techDetail);
+  // 금리/환율
+  var rateMsg = changePct >= 3 ? '금리 인하 기대 + 환율 안정 시 외국인 수급 유입 가능성 높음'
+              : changePct <= -3 ? '금리·환율 불안정 구간 — 외국인 이탈 리스크 점검 필요'
+              : '금리·환율 중립 구간 — 미국 FOMC 결정 및 원/달러 1,300~1,400원 범위 주시';
+  L.push('  - 금리/환율: ' + rateMsg);
+  // 원자재
+  var rawMsg = vol >= 2000 ? '대형 거래대금 → 기관·외국인 공급망 이슈 선반영 가능성'
+             : '원자재·공급망 이슈는 섹터별 별도 확인 필요 (DART 공시 참조)';
+  L.push('  - 원자재/공급망: ' + rawMsg);
+  // 정책
+  var mktType = (stock.mkt || 'kospi').toLowerCase();
+  var policyMsg = mktType === 'kospi'
+    ? 'KOSPI 대형주 — 정부 밸류업 정책·배당 확대 기조 수혜 가능 · 외국인 지분율 동향 확인'
+    : 'KOSDAQ 중소형 — 정부 중소·벤처 육성 정책 또는 규제 리스크 확인 필요';
+  L.push('  - 정부 정책/규제: ' + policyMsg);
+  // 글로벌 구조
+  var structMsg = vol >= 5000 ? '초대형 거래대금 → 해당 섹터 글로벌 구조적 수요 폭발 국면 진입 가능성'
+                : vol >= 1000 ? '섹터 테마 모멘텀 — AI·반도체·배터리 등 글로벌 구조 변화 수혜 여부 확인'
+                : '개별 종목 내러티브 — 산업 구조 변화 포지션 확인 필요';
+  L.push('  - 글로벌 구조 변화: ' + structMsg);
   L.push('');
-  L.push('  ▸ 거래량/수급:');
-  L.push('    ' + volMsg);
+
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('🔍 2. 뉴스·공시 리스크 검증');
   L.push('');
-  L.push('  ▸ 주도주/재료:');
-  L.push('    ' + materialMsg);
+  // 공시 리스크
+  L.push('  - 공시 리스크: ' + (changePct >= 8 || changePct <= -8
+    ? '급등락 → 유상증자·CB 발행·실적쇼크 등 공시 즉시 확인 (DART 필수)'
+    : '현재 스캔 기준 주요 공시 리스크 없음 — DART 실시간 확인 권고'));
+  // 경영/지배구조
+  L.push('  - 경영/지배구조: ' + (vol >= 3000
+    ? '초대형 수급 유입 → 경영진 변화·대주주 매도 동향 확인 필요'
+    : '정기 보고서·사업보고서 기준 경영 안정성 확인 권고'));
+  // 지정학
+  var geoMsg = mktType === 'kospi' && vol >= 2000
+    ? '수출 비중 높은 대형주 — 미·중 무역 분쟁·반도체 수출 규제 영향 직접 점검 필요'
+    : '지정학적 리스크는 간접 영향 — 환율·수출 지표 추이 모니터링';
+  L.push('  - 지정학적 리스크: ' + geoMsg);
+  // 뉴스 모멘텀
+  var momentumMsg = changePct >= 5 ? '강한 상승 → 호재 선반영 가능성 높음 · 추가 상승 동력(신규 계약·실적) 확인 필요'
+                 : changePct >= 2 ? '상승 초기 → 뉴스 모멘텀 신선도 양호 · 미반영 재료 존재 가능성'
+                 : '횡보·하락 → 뉴스 모멘텀 소진 또는 악재 선반영 여부 확인';
+  L.push('  - 뉴스 모멘텀 신선도: ' + momentumMsg);
   L.push('');
-  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  L.push('🚨 3. 위험 요소 및 함정 체크');
+
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('⚖️ 3. 기술적 전략 보완 (비판적 검토)');
   L.push('');
-  risks.forEach(function(r){ L.push('  ⚠ ' + r); });
+  var tapMsg = rr >= 3 ? '손익비 ' + rr + ' — 외부 변수 감안해도 타점 합리적. 분할 진입 적합'
+             : rr >= 2 ? '손익비 ' + rr + ' — 외부 리스크 발생 시 손절 엄수 필수'
+             : '손익비 ' + rr + ' — 외부 변수 고려 시 타점 재검토 권고. 목표가 상향 또는 손절 조정';
+  L.push('  - 타점 합리성: ' + tapMsg);
+  L.push('  - 매입가: ' + buyP.toLocaleString() + '원 / 손절가: ' + stopP.toLocaleString() + '원 / 목표가: ' + tgtP.toLocaleString() + '원');
+  L.push('  - 반드시 확인할 체크포인트:');
+  L.push('    ☐ 매수 진입 전 양봉 캔들 + 거래량 동반 확인');
+  L.push('    ☐ 외국인/기관 순매수 방향 (당일 수급 확인)');
+  L.push('    ☐ 코스피/나스닥 지수 방향성 (역행 시 진입 자제)');
+  L.push('    ☐ DART 최근 공시 이상 없음 확인');
   L.push('');
-  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  L.push('🎯 4. 실전 매매 시나리오');
+
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('🎯 4. 결론 — 가장 큰 외부 변수');
   L.push('');
-  L.push('  ▸ 매수 전략:');
-  L.push('    ' + buyStrategy);
+  var bigRisk, bigDetail;
+  if (changePct >= 8 || (vol >= 3000 && changePct >= 5)) {
+    bigRisk = '고점 추격 + 차익 매물';
+    bigDetail = '급등 후 기관 차익 실현 매물 출회 가능. 갭상승 유지 실패 시 단기 급락 진입 → 손절가 이탈 즉시 청산';
+  } else if (changePct <= -5) {
+    bigRisk = '추가 하락 리스크';
+    bigDetail = '현재 하락 추세 지속 여부 불명확. 지지선 확인 전 매수 자제 — 반등 캔들 출현 후 재진입 전략 권고';
+  } else if (mktType === 'kospi' && vol >= 2000) {
+    bigRisk = '미·중 무역/환율 변동성';
+    bigDetail = '외국인 대형 수급 유입 종목은 환율 급등(원화 약세) 또는 미·중 갈등 재점화 시 외국인 이탈 직격. 원/달러 1,400원 돌파 여부 핵심 모니터링 지표';
+  } else {
+    bigRisk = '미국 FOMC·금리 불확실성';
+    bigDetail = 'FOMC 금리 결정 및 CPI 발표에 따라 전체 시장 방향성이 결정됨. 발표 전후 변동성 확대 구간에서는 포지션 축소 또는 관망 권고';
+  }
+  L.push('  ⚠️ ' + bigRisk + ': ' + bigDetail);
   L.push('');
-  L.push('  ▸ 목표가 및 보유 기간:');
-  L.push('    ' + tgtP.toLocaleString() + '원  (+' + tgtPct + '%)  ·  ' + holdPeriod);
+
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('💡 최종 투자 의견');
   L.push('');
-  L.push('  ▸ 손절선 (이탈 시 즉시 칼손절):');
-  L.push('    ' + stopP.toLocaleString() + '원  (-' + stopPct + '%)  ·  손익비 ' + rr);
-  L.push('');
-  L.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  L.push('⚡ K-ALPHA 스캔 데이터 기반 분석 · 참고 목적 전용');
+  var opinion = score >= 85 ? '매수 적극 검토' : score >= 75 ? '조건부 매수' : score >= 65 ? '관망' : '매수 자제';
+  L.push('  - 의견: ' + opinion);
+  L.push('  - 목표가: ' + tgtP.toLocaleString() + '원 (+' + tgtPct + '%) · 기간: ' + ({swing:'3~7일',surge:'1~3일',tomorrow:'1~3일',smallmid:'5~14일',per:'5~10일'}[cat]||'3~7일'));
+  L.push('  - 손절선: ' + stopP.toLocaleString() + '원 (-' + stopPct + '%) · 손익비 ' + rr);
+  L.push('  - 핵심 전제: 손절가 엄수 · 분할 진입(30%→30%→40%) · 지수 역행 시 진입 자제');
+  L.push('  - 무효화 조건: 손절가 이탈 / 부정적 공시 / 코스피 -1.5% 이상 급락');
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
+  L.push('⚡ K-ALPHA 로컬 분석 · AI(Gemini) 연결 시 더 정확한 분석 제공');
   return L.join('\n');
 }
 
@@ -3675,7 +3726,7 @@ function openAiAnalysis(event, code) {
     if (_aiAbortCtrl) { try { _aiAbortCtrl.abort(); } catch(e){} }
     _aiAbortCtrl = new AbortController();
 
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + googleKey;
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=' + googleKey;
     fetch(url, {
       method: 'POST',
       signal: _aiAbortCtrl.signal,
@@ -3683,7 +3734,7 @@ function openAiAnalysis(event, code) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SWING_SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: _buildUserMsg(stock) }] }],
-        generationConfig: { maxOutputTokens: 2048, temperature: 0.7 }
+        generationConfig: { maxOutputTokens: 4096, temperature: 0.8 }
       })
     })
     .then(function(res) {
@@ -3724,55 +3775,54 @@ function _updateCardExtFactor(code, fullText) {
   if (!contentEl) return;
 
   var lines = fullText.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
-  var picked = [];
+  var sections = { score:'', macro:'', risk:'', warn:'', opinion:'' };
+  var currentSection = '';
 
-  // 1) 종합 평점 한 줄
-  for (var i = 0; i < lines.length; i++) {
-    if (lines[i].match(/점\s*\/\s*100|평점\s*[:：]/)) {
-      picked.push('📊 ' + lines[i].replace(/^#+\s*/, '').replace(/📊\s*/, ''));
-      break;
+  lines.forEach(function(l) {
+    var clean = l.replace(/^[#>\-•*\s]+/, '').replace(/\*\*/g, '').trim();
+    if (!clean) return;
+
+    // 섹션 헤더 감지
+    if (l.match(/📊.*평점|종합.*평점/))        { currentSection = 'score'; return; }
+    if (l.match(/🌐.*매크로|매크로.*산업/))      { currentSection = 'macro'; return; }
+    if (l.match(/🔍.*뉴스|공시.*리스크/))        { currentSection = 'risk';  return; }
+    if (l.match(/🎯.*결론|가장 큰.*외부/))        { currentSection = 'warn';  return; }
+    if (l.match(/💡.*최종|최종.*의견/))           { currentSection = 'opinion'; return; }
+    if (l.match(/⚖️.*기술적|기술적.*전략/))       { currentSection = ''; return; }
+
+    // 각 섹션 첫 번째 의미있는 내용만 수집
+    if (currentSection === 'score' && !sections.score && clean.match(/\d+점|점수/)) {
+      sections.score = '📊 ' + clean.substring(0, 80);
+    }
+    if (currentSection === 'macro' && !sections.macro && clean.length > 15) {
+      sections.macro = '🌐 ' + clean.substring(0, 90) + (clean.length > 90 ? '…' : '');
+    }
+    if (currentSection === 'risk' && !sections.risk && clean.length > 10) {
+      sections.risk = '🔍 ' + clean.substring(0, 90) + (clean.length > 90 ? '…' : '');
+    }
+    if (currentSection === 'warn' && !sections.warn) {
+      sections.warn = '⚠️ ' + clean.substring(0, 100) + (clean.length > 100 ? '…' : '');
+    }
+    if (currentSection === 'opinion' && !sections.opinion && clean.match(/의견|매수|관망/)) {
+      sections.opinion = '💡 ' + clean.substring(0, 80) + (clean.length > 80 ? '…' : '');
+    }
+  });
+
+  // ⚠️ 직접 줄 fallback
+  if (!sections.warn) {
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].match(/⚠️/) && lines[i].length > 5) {
+        sections.warn = lines[i].replace(/\*\*/g, '').substring(0, 100);
+        break;
+      }
     }
   }
 
-  // 2) 매크로 핵심 (금리·환율·정책 언급 첫 줄)
-  for (var i = 0; i < lines.length; i++) {
-    if (lines[i].match(/금리|환율|원자재|정책|구조/) && lines[i].length > 10) {
-      var clean = lines[i].replace(/^[-•*\-]+\s*/, '').replace(/\*\*/g, '');
-      picked.push('🌐 ' + clean.substring(0, 60) + (clean.length > 60 ? '…' : ''));
-      break;
-    }
-  }
+  var result = [sections.score, sections.macro, sections.risk, sections.warn, sections.opinion]
+    .filter(function(s){ return s && s.length > 4; });
 
-  // 3) 뉴스·공시 리스크 핵심 (첫 언급)
-  for (var i = 0; i < lines.length; i++) {
-    if (lines[i].match(/리스크|공시|소송|증자|지정학/) && lines[i].length > 10) {
-      var clean = lines[i].replace(/^[-•*\-]+\s*/, '').replace(/\*\*/g, '');
-      picked.push('🔍 ' + clean.substring(0, 60) + (clean.length > 60 ? '…' : ''));
-      break;
-    }
-  }
-
-  // 4) 가장 큰 외부변수 (⚠️ 라인)
-  for (var i = 0; i < lines.length; i++) {
-    if (lines[i].match(/⚠️|가장 큰|핵심 리스크명/)) {
-      var clean = lines[i].replace(/^[>\-*#\s]+/, '').replace(/\*\*/g, '');
-      picked.push('⚠️ ' + clean.substring(0, 70) + (clean.length > 70 ? '…' : ''));
-      break;
-    }
-  }
-
-  // 5) 최종 의견
-  for (var i = 0; i < lines.length; i++) {
-    if (lines[i].match(/의견\s*[:：]|매수 적극|조건부 매수|관망|매수 자제/)) {
-      var clean = lines[i].replace(/^[-•*\-💡]+\s*/, '').replace(/\*\*/g, '');
-      picked.push('💡 ' + clean.substring(0, 60) + (clean.length > 60 ? '…' : ''));
-      break;
-    }
-  }
-
-  var valid = picked.filter(function(l){ return l.length > 4; });
-  if (valid.length > 0) {
-    contentEl.textContent = valid.join('\n');
+  if (result.length > 0) {
+    contentEl.textContent = result.join('\n');
     el.style.display = 'block';
   }
 }
@@ -5314,17 +5364,61 @@ function krStockName(code, apiName) {
   return KR_STOCK_NAMES[code] || apiName || code;
 }
 
+// 기존 reasons에 [기본적 분석]과 [외부요인]이 없으면 추가
+function _ensureBasicReasons(reasons, c) {
+  var texts = (reasons || []).map(function(r){ return r && (r.text || String(r)); });
+  var hasFund  = texts.some(function(t){ return t.indexOf('[기본적 분석]') >= 0; });
+  var hasMacro = texts.some(function(t){ return t.indexOf('[외부요인]') >= 0; });
+  if (hasFund && hasMacro) return reasons;
+
+  var tr  = parseInt(c.vol) || 0;
+  var chg = parseFloat(String(c.change||'0').replace('%','').replace('+','')) || 0;
+  var mkt = (c.mkt || 'kospi').toLowerCase();
+  var toAdd = [];
+
+  if (!hasFund) {
+    var fund = [];
+    if (tr >= 2000)      fund.push('기관·외국인 대규모 순매수 추정 (거래대금 2,000억+)');
+    else if (tr >= 800)  fund.push('기관 매수세 유입 추정 (거래대금 800억+)');
+    else if (tr >= 300)  fund.push('외국인·기관 중형 수급 진입 추정');
+    else                 fund.push('개인 중심 수급 · 단기 모멘텀 주도');
+    if (chg >= 4)        fund.push('단기 실적 개선·사업 확장 뉴스 반응');
+    else if (chg >= 1)   fund.push('점진적 실적 개선 기대 · MA 상향 돌파 시도');
+    else if (chg >= -1)  fund.push('횡보 구간 · 저점 매집 가능성');
+    fund.push(mkt === 'kospi' ? 'KOSPI 대형주 · 안정적 실적 기반 · 배당 가능성' : 'KOSDAQ 중소형주 · 고성장 섹터 · 변동성 주의');
+    toAdd.push({icon:'🏢', cat:'blue', text:'[기본적 분석] ' + fund.join(' · ')});
+  }
+
+  if (!hasMacro) {
+    var macro = [];
+    if (tr >= 5000)      macro.push('초대형 거래대금 · 외국인·기관 집중 매매 구간');
+    else if (tr >= 2000) macro.push('시장 전체 활성화 · 외국인 관심 업종 추정');
+    else if (tr >= 500)  macro.push('업종 테마 수급 집중 · 정책·뉴스 모멘텀');
+    else                 macro.push('개별 재료 중심 · 유동성 주의');
+    if (chg >= 5)        macro.push('강한 섹터 호재 반응 · 금리·환율 우호 또는 정책 수혜');
+    else if (chg >= 2)   macro.push('금리·환율 우호 또는 섹터 호재 반응');
+    else if (chg <= -5)  macro.push('글로벌 리스크오프 · 공시 리스크 점검 필요');
+    else                 macro.push('관망세 · 미국 FOMC·환율·CPI 방향성 주시');
+    macro.push(mkt === 'kospi' ? 'KOSPI 대형주 · 배당·밸류업 정책 수혜 가능성' : 'KOSDAQ 중소형 · 실적 가시성 확인 필요');
+    if (chg >= 8 || chg <= -8) macro.push('급등락 → 공시(유상증자·CB·실적쇼크) 반드시 확인');
+    toAdd.push({icon:'🌐', cat:'purple', text:'[외부요인] ' + macro.join(' · ')});
+  }
+
+  return (reasons || []).concat(toAdd);
+}
+
 function convertScanCards(cards, cat) {
   if (!cards || !Array.isArray(cards)) return [];
   return cards.filter(function(c) { return c != null && c.code; }).map(function(c) {
     var resolvedName = krStockName(c.code, c.name);
+    var reasons = _ensureBasicReasons(c.reasons || [], c);
     return {
       name: resolvedName,
       code: c.code, score: c.score || 70, grade: c.grade || 'B',
       price: c.price, change: c.change || '0%', up: c.up != null ? c.up : true,
       buy: c.buy || c.price, target: c.target || c.price, stop: c.stop || c.price,
       rr: c.rr || '1.0', vol: c.vol || 0,
-      reasons: c.reasons || [], inds: c.inds || [],
+      reasons: reasons, inds: c.inds || [],
       chart3m: generateMiniChart(c.price, c.up, false, codeToSeed(c.code)),
       chartD:  generateMiniChart(c.price, c.up, true,  codeToSeed(c.code) + 999),
       cat: cat, mkt: c.mkt || 'kospi', _isLive: true,
