@@ -939,40 +939,32 @@ def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
     if mkt == 'kospi': fund.append("KOSPI 대형주 · 안정적 실적 기반 · 배당 가능성")
     else:              fund.append("KOSDAQ 중소형주 · 고성장 섹터 · 변동성 주의")
 
-    # ── 외부요인 분석 — 거시경제·산업·펀더멘털 환경 ──
+    # ── 외부요인 분석 — 거시경제·산업·펀더멘털 환경 (정적 요인 중심) ──
     macro = []
-    h = kst_now().hour
 
-    # 1) 장중 시간대
-    if 8 <= h < 9:     macro.append("프리마켓 · 미국 선물·뉴스 반영 초기")
-    elif 9 <= h < 11:  macro.append("오전 장 · 외국인·기관 방향성 확인 구간")
-    elif 11 <= h < 13: macro.append("점심 전후 · 유동성 감소 · 단기 변동성 주의")
-    elif 13 <= h < 15: macro.append("오후 장 · 프로그램 매매·수급 정리 구간")
-    else:              macro.append("장 마감 후 · 미국 야간선물·환율 방향성 주시")
-
-    # 2) 거래대금 기반 수급 환경
+    # 1) 거래대금 기반 수급 환경 (정적 — 시간 무관)
     if tr >= 5000:     macro.append("초대형 거래대금 · 외국인·기관 집중 매매 구간")
     elif tr >= 2000:   macro.append("시장 전체 활성화 · 외국인 관심 업종 추정")
     elif tr >= 500:    macro.append("업종 테마 수급 집중 · 정책·뉴스 모멘텀")
     elif tr >= 100:    macro.append("개별 재료 중심 · 소규모 기관 관심 가능")
     else:              macro.append("거래 부진 · 개인 위주 수급 · 유동성 주의")
 
-    # 3) 등락률 기반 금리·환율·매크로 환경
+    # 2) 등락률 기반 금리·환율·매크로 환경 (정적)
     if chg >= 5:       macro.append("강한 섹터 호재 반응 · 금리·환율 우호 또는 정책 수혜")
     elif chg >= 2:     macro.append("금리·환율 우호 또는 섹터 호재 반응")
     elif chg <= -5:    macro.append("글로벌 리스크오프 · 금리·환율 악재 또는 공시 리스크 점검 필요")
     elif chg <= -2:    macro.append("섹터 악재 또는 글로벌 매도세 유입 가능성")
     else:              macro.append("관망세 · 미국 FOMC·환율·CPI 방향성 주시")
 
-    # 4) 시장 구분별 산업·구조적 환경
+    # 3) 시장 구분별 산업·구조적 환경 (정적)
     if mkt == 'kospi':
-        if tr >= 3000:   macro.append("KOSPI 대형주 · 외국인 순매수 지속 시 중장기 상승 가능")
-        else:            macro.append("KOSPI 대형주 · 배당·밸류업 정책 수혜 가능성")
+        if tr >= 3000: macro.append("KOSPI 대형주 · 외국인 순매수 지속 시 중장기 상승 가능")
+        else:          macro.append("KOSPI 대형주 · 배당·밸류업 정책 수혜 가능성")
     else:
-        if chg >= 3:     macro.append("KOSDAQ 중소형 · 고성장 테마 모멘텀 · 변동성 확대 주의")
-        else:            macro.append("KOSDAQ 중소형 · 실적 가시성 확인 필요 · 손절 엄수")
+        if chg >= 3:   macro.append("KOSDAQ 중소형 · 고성장 테마 모멘텀 · 변동성 확대 주의")
+        else:          macro.append("KOSDAQ 중소형 · 실적 가시성 확인 필요 · 손절 엄수")
 
-    # 5) 리스크 체크포인트 (등락률 극단 또는 거래량 급증 시)
+    # 4) 리스크 체크포인트 (정적)
     if chg >= 8 or chg <= -8:
         macro.append("급등락 → 공시(유상증자·CB·실적쇼크) 반드시 확인")
     elif tr >= 3000 and chg >= 3:
@@ -986,7 +978,17 @@ def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
     ]
 
 def _rebuild_reasons(c):
-    """카드 dict에서 항상 최신 _build_analysis_reasons로 재생성 (Gist 구버전 덮어쓰기)"""
+    """카드 reasons 정규화 — 기존 형식이 올바르면 유지, 없거나 구버전이면 재생성"""
+    existing = c.get('reasons', [])
+
+    # 기존 reasons에 [기본적 분석]과 [외부요인]이 모두 있으면 그대로 사용
+    texts = [r.get('text','') if isinstance(r,dict) else str(r) for r in existing]
+    has_fund  = any('[기본적 분석]' in t for t in texts)
+    has_macro = any('[외부요인]' in t for t in texts)
+    if has_fund and has_macro:
+        return existing  # 이미 올바른 형식 — 변경 없음
+
+    # 없거나 구버전 → 재생성
     try:
         price = 0
         try: price = int(str(c.get('price','0')).replace(',',''))
@@ -1003,30 +1005,42 @@ def _rebuild_reasons(c):
         mkt = c.get('mkt', 'kospi')
         rsi = c.get('rsiApprox', round(50 + chg * 2.8, 1)) or 50
 
-        # PER 종목은 앞 3개 항목(PER/PBR/ROE, 거래대금, 매입가) 유지 + 기본적+외부요인 추가
+        # PER 종목 — 기존 상단 3개 유지 + 기본적분석·외부요인 추가
         if c.get('cat') == 'per':
             per = c.get('per', 0); pbr = c.get('pbr', 0); roe = c.get('roe', 0)
             sign = '+' if chg >= 0 else ''
             per_max = 15.0
-            base = [
-                {'icon':'💎','cat':'green',
-                 'text':f"PER {per:.1f}배 (기준:{per_max}배 이하) · PBR {pbr:.2f} · ROE {roe:.1f}%"},
-                {'icon':'📊','cat':'',
-                 'text':f"거래대금 {tr:,}억 · 등락률 {sign}{chg:.2f}%"},
-                {'icon':'📈','cat':'orange',
-                 'text':f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원"},
-            ]
+            # 기존 상단 3개가 있으면 유지, 없으면 새로 생성
+            top3 = [r for r in existing if isinstance(r,dict) and
+                    not any(tag in r.get('text','') for tag in ['[기본적','[외부요인','[저평가'])]
+            if not top3:
+                top3 = [
+                    {'icon':'💎','cat':'green',
+                     'text':f"PER {per:.1f}배 (기준:{per_max}배 이하) · PBR {pbr:.2f} · ROE {roe:.1f}%"},
+                    {'icon':'📊','cat':'',
+                     'text':f"거래대금 {tr:,}억 · 등락률 {sign}{chg:.2f}%"},
+                    {'icon':'📈','cat':'orange',
+                     'text':f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원"},
+                ]
             extra = _build_analysis_reasons(
                 {'price':price,'trAmt':tr,'mkt':mkt,'rsiApprox':rsi},
                 chg, buy_p, stop_p, tgt_p
-            )[3:]  # [기본적 분석] + [외부요인] 만 추가
-            return base + extra
+            )[3:]
+            return top3 + extra
 
-        # 일반 종목 — 전체 재생성
-        s_dict = {'price': price, 'trAmt': tr, 'mkt': mkt, 'rsiApprox': rsi}
-        return _build_analysis_reasons(s_dict, chg, buy_p, stop_p, tgt_p)
+        # 일반 종목 — 기존 기술적 3개 유지 + 기본적분석·외부요인 재생성
+        tech3 = [r for r in existing if isinstance(r,dict) and
+                 not any(tag in r.get('text','') for tag in ['[기본적','[외부요인'])]
+        new_all = _build_analysis_reasons(
+            {'price':price,'trAmt':tr,'mkt':mkt,'rsiApprox':rsi},
+            chg, buy_p, stop_p, tgt_p
+        )
+        # 기존 기술적 3개가 있으면 유지, 없으면 새로 생성된 것 사용
+        result_tech = tech3 if tech3 else new_all[:3]
+        result_extra = new_all[3:]  # [기본적 분석] + [외부요인]
+        return result_tech + result_extra
     except Exception:
-        return c.get('reasons', [])
+        return existing
 
 def build_card(s, cat):
     """카드 데이터 포맷팅 (기본적 분석 + 외부요인 포함)"""
@@ -1160,16 +1174,23 @@ def fetch_per_stocks(token, base_url, ak, secret, per_max, per_min, pbr_max, roe
                     'pbr': round(pbr, 2),
                     'roe': round(roe, 1),
                     'cat': 'per',
-                    'reasons': [
-                        {'icon': '💎', 'cat': 'green',
-                         'text': f"PER {per:.1f}배 (기준:{per_max}배 이하) · PBR {pbr:.2f} · ROE {roe:.1f}%"},
-                        {'icon': '📊', 'cat': '',
-                         'text': f"거래대금 {int(tr_amt):,}억 · 등락률 {sign}{chg_pct:.2f}%"},
-                        {'icon': '📈', 'cat': 'orange',
-                         'text': f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원 (RR {rr})"},
-                        {'icon': '🔍', 'cat': 'blue',
-                         'text': f"[저평가 분석] PER 저평가 · ROE {roe:.1f}% 수익성 확인"},
-                    ],
+                    'reasons': (
+                        # PER 전용 상단 3개
+                        [
+                            {'icon': '💎', 'cat': 'green',
+                             'text': f"PER {per:.1f}배 (기준:{per_max}배 이하) · PBR {pbr:.2f} · ROE {roe:.1f}%"},
+                            {'icon': '📊', 'cat': '',
+                             'text': f"거래대금 {int(tr_amt):,}억 · 등락률 {sign}{chg_pct:.2f}%"},
+                            {'icon': '📈', 'cat': 'orange',
+                             'text': f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원 (RR {rr})"},
+                        ]
+                        # + 기본적 분석 + 외부요인 (다른 메뉴와 동일 형식)
+                        + _build_analysis_reasons(
+                            {'price': price, 'trAmt': int(tr_amt), 'mkt': mkt_label,
+                             'rsiApprox': round(50 + chg_pct * 2.8, 1)},
+                            chg_pct, buy_p, stop_p, tgt_p
+                        )[3:]  # 기술적 3개는 위에서 이미 표시 → [기본적 분석]+[외부요인]만 추가
+                    ),
                     'inds': [
                         {'label': mkt_label.upper(), 'cat': 'green'},
                         {'label': f"PER {per:.1f}",  'cat': 'orange'},
@@ -3969,9 +3990,8 @@ def _safe_json(s):
 # ── 정적 HTML — app.html 수정시간 기반 캐시 (파일 변경 즉시 반영) ──
 _STATIC_INJECT = '<script>window.__STREAMLIT_MODE__=true;</script>'
 
-@st.cache_data(show_spinner=False)
 def _get_static_html(mtime: float):
-    """mtime이 변하면 캐시 무효화 → 항상 최신 app.html 사용"""
+    """항상 최신 app.html 로드 (캐시 없음 — 프롬프트 변경 즉시 반영)"""
     with open("app.html", "r", encoding="utf-8") as f:
         html = f.read()
     return html.replace('</head>', _STATIC_INJECT + '\n</head>')
