@@ -246,31 +246,45 @@ def build_fundamental_reasons(s, cat):
     else:
         fund_parts.append("KOSDAQ 중소형주 · 고성장 섹터 · 변동성 주의")
 
-    # ── 외부요인 분석 — 거시경제·산업 환경 ──
+    # ── 외부요인 분석 — 거시경제·산업·펀더멘털 환경 ──
     macro_parts = []
     now_h = kst_now().hour
-    if 8 <= now_h < 9:
-        macro_parts.append("프리마켓 구간 · 미국 선물·뉴스 반영 초기")
-    elif 9 <= now_h < 11:
-        macro_parts.append("오전 장 · 외국인·기관 방향성 확인 구간")
-    elif 11 <= now_h < 13:
-        macro_parts.append("점심 전후 · 유동성 감소 · 단기 변동성 주의")
-    else:
-        macro_parts.append("오후 장 · 프로그램 매매·수급 정리 구간")
 
-    if tr >= 1000:
-        macro_parts.append("시장 전체 활성화 · 외국인 관심 업종")
-    elif tr >= 300:
-        macro_parts.append("업종 테마 수급 집중 · 정책·뉴스 모멘텀")
-    else:
-        macro_parts.append("개별 재료 중심 움직임")
+    # 1) 장중 시간대
+    if 8 <= now_h < 9:     macro_parts.append("프리마켓 · 미국 선물·뉴스 반영 초기")
+    elif 9 <= now_h < 11:  macro_parts.append("오전 장 · 외국인·기관 방향성 확인 구간")
+    elif 11 <= now_h < 13: macro_parts.append("점심 전후 · 유동성 감소 · 단기 변동성 주의")
+    elif 13 <= now_h < 15: macro_parts.append("오후 장 · 프로그램 매매·수급 정리 구간")
+    else:                   macro_parts.append("장 마감 후 · 미국 야간선물·환율 방향성 주시")
 
-    if pct >= 3:
-        macro_parts.append("금리·환율 우호 또는 섹터 호재 반응")
-    elif pct <= -3:
-        macro_parts.append("글로벌 리스크오프 또는 섹터 악재 가능성")
+    # 2) 거래대금 기반 수급 환경
+    if tr >= 5000:     macro_parts.append("초대형 거래대금 · 외국인·기관 집중 매매 구간")
+    elif tr >= 2000:   macro_parts.append("시장 전체 활성화 · 외국인 관심 업종 추정")
+    elif tr >= 500:    macro_parts.append("업종 테마 수급 집중 · 정책·뉴스 모멘텀")
+    elif tr >= 100:    macro_parts.append("개별 재료 중심 · 소규모 기관 관심 가능")
+    else:              macro_parts.append("거래 부진 · 개인 위주 수급 · 유동성 주의")
+
+    # 3) 등락률 기반 금리·환율·매크로 환경
+    if pct >= 5:       macro_parts.append("강한 섹터 호재 반응 · 금리·환율 우호 또는 정책 수혜")
+    elif pct >= 2:     macro_parts.append("금리·환율 우호 또는 섹터 호재 반응")
+    elif pct <= -5:    macro_parts.append("글로벌 리스크오프 · 금리·환율 악재 또는 공시 리스크 점검 필요")
+    elif pct <= -2:    macro_parts.append("섹터 악재 또는 글로벌 매도세 유입 가능성")
+    else:              macro_parts.append("관망세 · 미국 FOMC·환율·CPI 방향성 주시")
+
+    # 4) 시장 구분별 산업·구조적 환경
+    mkt_type = s.get('mkt', 'kospi')
+    if mkt_type == 'kospi':
+        if tr >= 3000: macro_parts.append("KOSPI 대형주 · 외국인 순매수 지속 시 중장기 상승 가능")
+        else:          macro_parts.append("KOSPI 대형주 · 배당·밸류업 정책 수혜 가능성")
     else:
-        macro_parts.append("관망세 · 미국 FOMC·환율 방향성 주시")
+        if pct >= 3:   macro_parts.append("KOSDAQ 중소형 · 고성장 테마 모멘텀 · 변동성 확대 주의")
+        else:          macro_parts.append("KOSDAQ 중소형 · 실적 가시성 확인 필요 · 손절 엄수")
+
+    # 5) 리스크 체크포인트
+    if pct >= 8 or pct <= -8:
+        macro_parts.append("급등락 → 공시(유상증자·CB·실적쇼크) 반드시 확인")
+    elif tr >= 3000 and pct >= 3:
+        macro_parts.append("대량 거래 + 급등 → 고점 추격 위험 · 차익 매물 경계")
 
     return tech_reasons + [
         {'icon':'🏢','cat':'blue',

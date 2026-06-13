@@ -3083,6 +3083,10 @@ function buildCard(stock, rank) {
     <div class="reason-block">
       <div class="reason-title">K 분석 사유</div>
       <div class="reason-lines">${reasonHtml}</div>
+      <div id="ext-factor-${stock.code}" class="ext-factor-block" style="display:none;margin-top:8px;padding:8px 0 0;border-top:1px dashed rgba(0,212,255,0.15)">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:rgba(0,212,255,0.5);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px">🌐 AI 외부환경·펀더멘털 분석</div>
+        <div class="ext-factor-content" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#94a3b8;line-height:1.8;white-space:pre-wrap"></div>
+      </div>
     </div>
     <div class="action-row">
       <div class="vol-bar-wrap">
@@ -3556,72 +3560,79 @@ function generateSwingReport(stock) {
   return L.join('\n');
 }
 
-var SWING_SYSTEM_PROMPT = `# 역할 (Role)
-너는 기술적 분석과 시장 수급(트래픽), 재료 분석에 탁월한 10년 차 전업 주식 투자자이자 '스윙 매매 및 급등 돌파 매매 전문가'이다.
+var SWING_SYSTEM_PROMPT = `당신은 베테랑 주식 시장 분석가입니다. 이미 기술적 분석(차트 및 수급 지표)은 준비되어 있으니, 이를 보완할 수 있는 외부적 환경 요인과 펀더멘털 분석에 집중하여 투자 의견을 제시해 주세요.
 
-# 목적 (Objective)
-내가 제공하는 [종목 정보 데이터]를 바탕으로, 스윙 매매(보유 기간 수일~2주) 관점에서 진입 가능한 유망 종목인지 분석하고, 급등 조짐 및 위험 요소를 종합 평가해 줘.
-
-# 분석 기준 (Technical Strategy)
-반드시 아래 4가지 조건과 체크리스트에 맞춰 엄격하게 검증해 줘.
-
-1. 상승 추세 및 눌림목 확인
-   - 주가가 20일선 및 60일 이평선 위에 위치해 있는가?
-   - 고점과 저점이 조금씩 높아지는 우상향 흐름인가?
-   - (눌림목) 강한 상승 후 전고점, 주요 이평선, 지지선 근처에서 조정을 마치고 반등 신호가 보이는가?
-
-2. 거래대금 및 수급 (중요)
-   - 평소 대비 거래량이 최소 2~3배 이상 급증했는가?
-   - 거래량이 늘었음에도 주가가 무너지지 않고 버티거나 횡보/상승하는가?
-
-3. 돌파 및 주도주 여부
-   - 오래 횡보하던 박스권이나 최근 1~3개월 전고점을 대량 거래량과 함께 돌파 중인가?
-   - 현재 돈이 몰리는 주도 섹터에 속해 있으며 테마 내 대장주인가?
-
-4. 피해야 할 함정 신호 (리스크 체크)
-   - 거래량은 터졌는데 주가가 못 가는 매물대 함정인가?
-   - 호재 뉴스가 너무 늦게 반영되어 고점일 가능성이 높은가?
-   - 시초가/종가에 과도한 갭상승으로 추격매수를 유도하는 차트인가?
+반드시 아래 출력 형식을 준수하고, 각 항목을 구체적이고 근거 있게 서술하세요.
 
 # 출력 형식 (Output Format)
+
 ---
-## 📊 1. 종합 매수 매력도 평점
-- [ ]점 / 100점 (스윙 진입 적합성 점수)
+## 📊 종합 매수 매력도 평점
+[ ]점 / 100점 (기술적 분석 + 외부환경 + 펀더멘털 종합)
 
-## 📈 2. 기술적/수급 분석 요약
-- **추세/위치:** (이평선, 박스권 돌파 상태)
-- **거래량/수급:** (최근 거래량 급증 여부 및 의미)
-- **주도주/재료:** (섹터 내 강점 및 관련 재료 신선도)
+근거: (2~3줄로 핵심 이유 요약)
 
-## 🚨 3. 위험 요소 및 함정 체크 (필수)
-- (재무, 고점 추격, 매물 폭탄 가능성 등)
+---
+## 🌐 1. 매크로 및 산업 환경 분석
+- **금리/환율 영향:** (현재 금리 기조와 환율이 이 종목에 미치는 직접적 영향)
+- **원자재/공급망:** (관련 원자재 가격 또는 공급망 이슈)
+- **정부 정책/규제:** (국내외 정책, 보조금, 규제 변화)
+- **글로벌 구조 변화:** (해당 산업의 중장기 구조적 트렌드)
 
-## 🎯 4. 실전 매매 시나리오 (매수/손절 타점)
-- **매수 전략:** (눌림목/지지선 진입 기준)
-- **목표가 및 보유 기간:** (단기 스윙 관점)
-- **손절선:** (이 가격 이탈 시 즉시 손절 기준)
+---
+## 🔍 2. 뉴스·공시 리스크 검증
+- **공시 리스크:** (유상증자, 대규모 채무, 관계사 이슈 등)
+- **경영/지배구조:** (경영진 변화, 대주주 동향, 소송 등)
+- **지정학적 리스크:** (수출 규제, 무역 분쟁, 지역 갈등 영향)
+- **뉴스 모멘텀 신선도:** (현재 재료가 선반영 vs 미반영)
+
+---
+## ⚖️ 3. 기술적 전략 보완 (비판적 검토)
+- **타점 합리성:** (제시된 매입가·손절가가 외부 변수 고려 시 적절한가)
+- **반드시 확인할 체크포인트:**
+  1. [ ] (확인 항목 1)
+  2. [ ] (확인 항목 2)
+  3. [ ] (확인 항목 3)
+
+---
+## 🎯 4. 결론 — 가장 큰 외부 변수 한 가지
+> ⚠️ **[핵심 리스크명]:** (구체적인 설명 2~3줄. 이 변수가 현실화될 경우의 시나리오 포함)
+
+---
+## 💡 최종 투자 의견
+- **의견:** 매수 적극 검토 / 조건부 매수 / 관망 / 매수 자제 중 선택
+- **핵심 전제:** (이 의견이 유효한 조건)
+- **무효화 조건:** (이 조건 발생 시 의견 철회)
 ---`;
+
 
 var _aiAbortCtrl = null;
 var _aiStockMap = {};
 
 function _buildUserMsg(stock) {
-  var reasons = (stock.reasons || []).map(function(r){ return r.text || ''; }).join('\n');
-  return '[종목 정보 데이터]\n'
+  var reasons = (stock.reasons || []).map(function(r){ return '  · ' + (r.text || ''); }).join('\n');
+  var catKr = {swing:'실시간스윙',surge:'급등전야',tomorrow:'내일관심',smallmid:'중소형주',per:'PER저평가'}[stock.cat] || stock.cat || '';
+  return '=== 분석 대상 종목 정보 ===\n'
     + '종목명: ' + (stock.name || '') + '\n'
     + '종목코드: ' + (stock.code || '') + '\n'
-    + '카테고리: ' + ({swing:'실시간스윙',surge:'급등전야',tomorrow:'내일관심',smallmid:'중소형주'}[stock.cat]||stock.cat||'') + '\n'
+    + '시장구분: ' + ((stock.mkt || 'KOSPI').toUpperCase()) + '\n'
+    + '스캔카테고리: ' + catKr + '\n\n'
+    + '=== 현재 가격 정보 ===\n'
     + '현재가: ' + (stock.price || '') + '원\n'
     + '등락률: ' + (stock.change || '') + '\n'
-    + 'K 스코어: ' + (stock.score || '') + '점 (' + (stock.grade || '') + '등급)\n'
-    + '매입가: ' + (stock.buy || '') + '원\n'
+    + '거래대금: ' + (stock.vol || '') + '억원\n'
+    + 'RSI(추정): ' + (stock.rsiApprox || '') + '\n\n'
+    + '=== K-ALPHA 기술적 분석 결과 ===\n'
+    + 'K스코어: ' + (stock.score || '') + '점 / 100점 (' + (stock.grade || '') + '등급)\n'
+    + '제안 매입가: ' + (stock.buy || '') + '원\n'
     + '목표가: ' + (stock.target || '') + '원\n'
     + '손절가: ' + (stock.stop || '') + '원\n'
-    + '손익비: ' + (stock.rr || '') + '\n'
-    + '거래대금: ' + (stock.vol || '') + '억원\n'
-    + 'RSI(추정): ' + (stock.rsiApprox || '') + '\n'
-    + '시장구분: ' + ((stock.mkt || 'KOSPI').toUpperCase()) + '\n'
-    + 'K 분석사유:\n' + reasons;
+    + '손익비(RR): ' + (stock.rr || '') + '\n\n'
+    + '=== K 분석 사유 (기술적) ===\n' + reasons + '\n\n'
+    + '=== 요청 ===\n'
+    + '위 기술적 분석은 이미 완료된 상태입니다.\n'
+    + '외부적 환경 요인(매크로, 산업, 뉴스·공시 리스크)과 펀더멘털 관점에서\n'
+    + '보완 분석을 제공해주세요. 출력 형식을 반드시 준수하세요.';
 }
 
 function _positionModalForStreamlit(el, clickY) {
@@ -3685,8 +3696,11 @@ function openAiAnalysis(event, code) {
       var text = data.candidates && data.candidates[0] && data.candidates[0].content
         && data.candidates[0].content.parts && data.candidates[0].content.parts[0]
         && data.candidates[0].content.parts[0].text;
-      if (text) content.textContent = text;
-      else content.textContent = generateSwingReport(stock);
+      if (text) {
+        content.textContent = text;
+        // 카드에 외부요인 요약 표시 (📊 평점 + 🌐 매크로 + 🎯 결론 추출)
+        _updateCardExtFactor(code, text);
+      } else content.textContent = generateSwingReport(stock);
     })
     .catch(function(err) {
       if (err.name === 'AbortError') return;
@@ -3698,6 +3712,68 @@ function openAiAnalysis(event, code) {
     content.textContent = generateSwingReport(stock);
     _positionModalForStreamlit(overlay, event.clientY);
     overlay.classList.add('show');
+  }
+}
+
+// AI 분석 결과에서 핵심 요약을 추출해 카드 하단에 추가 표시
+// 기존 K 분석 사유(reasons)는 그대로 유지되고, 이 블록이 그 아래 추가됨
+function _updateCardExtFactor(code, fullText) {
+  var el = document.getElementById('ext-factor-' + code);
+  if (!el) return;
+  var contentEl = el.querySelector('.ext-factor-content');
+  if (!contentEl) return;
+
+  var lines = fullText.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+  var picked = [];
+
+  // 1) 종합 평점 한 줄
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].match(/점\s*\/\s*100|평점\s*[:：]/)) {
+      picked.push('📊 ' + lines[i].replace(/^#+\s*/, '').replace(/📊\s*/, ''));
+      break;
+    }
+  }
+
+  // 2) 매크로 핵심 (금리·환율·정책 언급 첫 줄)
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].match(/금리|환율|원자재|정책|구조/) && lines[i].length > 10) {
+      var clean = lines[i].replace(/^[-•*\-]+\s*/, '').replace(/\*\*/g, '');
+      picked.push('🌐 ' + clean.substring(0, 60) + (clean.length > 60 ? '…' : ''));
+      break;
+    }
+  }
+
+  // 3) 뉴스·공시 리스크 핵심 (첫 언급)
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].match(/리스크|공시|소송|증자|지정학/) && lines[i].length > 10) {
+      var clean = lines[i].replace(/^[-•*\-]+\s*/, '').replace(/\*\*/g, '');
+      picked.push('🔍 ' + clean.substring(0, 60) + (clean.length > 60 ? '…' : ''));
+      break;
+    }
+  }
+
+  // 4) 가장 큰 외부변수 (⚠️ 라인)
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].match(/⚠️|가장 큰|핵심 리스크명/)) {
+      var clean = lines[i].replace(/^[>\-*#\s]+/, '').replace(/\*\*/g, '');
+      picked.push('⚠️ ' + clean.substring(0, 70) + (clean.length > 70 ? '…' : ''));
+      break;
+    }
+  }
+
+  // 5) 최종 의견
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].match(/의견\s*[:：]|매수 적극|조건부 매수|관망|매수 자제/)) {
+      var clean = lines[i].replace(/^[-•*\-💡]+\s*/, '').replace(/\*\*/g, '');
+      picked.push('💡 ' + clean.substring(0, 60) + (clean.length > 60 ? '…' : ''));
+      break;
+    }
+  }
+
+  var valid = picked.filter(function(l){ return l.length > 4; });
+  if (valid.length > 0) {
+    contentEl.textContent = valid.join('\n');
+    el.style.display = 'block';
   }
 }
 
@@ -3727,51 +3803,78 @@ function sendAiToTelegram() {
   }
   var raw  = document.getElementById('ai-modal-content').textContent;
   var sub  = document.getElementById('ai-modal-sub').textContent;
-  if (!raw) return;
+  if (!raw || raw.trim().length < 10) {
+    alert('분석 내용이 없습니다. AI 분석 완료 후 전송해주세요.');
+    return;
+  }
 
-  // HTML escape + 포맷 변환 (텔레그램 HTML 모드)
+  // HTML escape
   var escaped = raw
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 섹션 헤더 굵게 처리
+  // 섹션 헤더 굵게 (새 프롬프트 형식)
   escaped = escaped
-    .replace(/(📊 1\. 종합 매수 매력도 평점)/g, '<b>$1</b>')
-    .replace(/(📈 2\. 기술적\/수급 분석 요약)/g, '<b>$1</b>')
-    .replace(/(🚨 3\. 위험 요소 및 함정 체크)/g, '<b>$1</b>')
-    .replace(/(🎯 4\. 실전 매매 시나리오)/g, '<b>$1</b>');
+    .replace(/(📊\s*종합 매수 매력도 평점)/g,   '<b>$1</b>')
+    .replace(/(🌐\s*1\.\s*매크로 및 산업 환경 분석)/g, '<b>$1</b>')
+    .replace(/(🔍\s*2\.\s*뉴스·공시 리스크 검증)/g,  '<b>$1</b>')
+    .replace(/(⚖️\s*3\.\s*기술적 전략 보완)/g,        '<b>$1</b>')
+    .replace(/(🎯\s*4\.\s*결론)/g,                    '<b>$1</b>')
+    .replace(/(💡\s*최종 투자 의견)/g,                 '<b>$1</b>')
+    // bold (**text**) 변환
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    // 구분선
+    .replace(/---/g, '━━━━━━━━━━━━━━━━━━━━━━━━')
+    // 체크박스
+    .replace(/\[ \]/g, '☐').replace(/\[x\]/gi, '☑');
 
-  var msg = '🤖 <b>K-ALPHA AI 심층 분석</b>\n'
+  // 4096자 제한 대응 — 두 메시지로 분할
+  var header = '🤖 <b>K-ALPHA AI 베테랑 분석</b>\n'
     + '<code>' + sub + '</code>\n'
-    + '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-    + escaped;
+    + '━━━━━━━━━━━━━━━━━━━━━━━━\n';
+
+  var fullMsg = header + escaped;
 
   var btn = document.getElementById('ai-modal-tg');
   btn.textContent = '⏳ 전송 중...';
   btn.disabled = true;
 
-  fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({chat_id: chat, text: msg, parse_mode: 'HTML'})
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(d) {
-    if (d.ok) {
-      btn.textContent = '✅ 전송 완료';
-      setTimeout(function(){ btn.textContent = '📱 텔레그램 전송'; btn.disabled = false; }, 2000);
-    } else {
-      btn.textContent = '❌ 전송 실패';
-      btn.disabled = false;
-      alert('전송 실패: ' + (d.description || '알 수 없는 오류'));
-    }
-  })
-  .catch(function(e) {
-    btn.textContent = '❌ 오류';
-    btn.disabled = false;
-    alert('오류: ' + e.message);
-  });
+  function _tgSend(text, onDone) {
+    fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({chat_id: chat, text: text, parse_mode: 'HTML'})
+    }).then(function(r){ return r.json(); }).then(onDone).catch(function(e){
+      btn.textContent = '❌ 오류'; btn.disabled = false;
+      alert('오류: ' + e.message);
+    });
+  }
+
+  if (fullMsg.length <= 4000) {
+    _tgSend(fullMsg, function(d) {
+      if (d.ok) {
+        btn.textContent = '✅ 전송 완료';
+        setTimeout(function(){ btn.textContent = '📱 텔레그램 전송'; btn.disabled = false; }, 2000);
+      } else {
+        btn.textContent = '❌ 전송 실패'; btn.disabled = false;
+        alert('전송 실패: ' + (d.description || '알 수 없는 오류'));
+      }
+    });
+  } else {
+    // 4000자 초과 시 2개로 분할 전송
+    var part1 = fullMsg.substring(0, 3900) + '\n\n<i>…계속▼</i>';
+    var part2 = '<b>[계속]</b> ' + header + escaped.substring(3900 - header.length);
+    _tgSend(part1, function(d1) {
+      if (!d1.ok) { btn.textContent = '❌ 실패'; btn.disabled = false; return; }
+      setTimeout(function() {
+        _tgSend(part2, function(d2) {
+          btn.textContent = d2.ok ? '✅ 전송 완료 (2건)' : '❌ 2번째 실패';
+          setTimeout(function(){ btn.textContent = '📱 텔레그램 전송'; btn.disabled = false; }, 2500);
+        });
+      }, 500);
+    });
+  }
 }
 
 function confirmOrder() {

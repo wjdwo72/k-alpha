@@ -939,21 +939,44 @@ def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
     if mkt == 'kospi': fund.append("KOSPI 대형주 · 안정적 실적 기반 · 배당 가능성")
     else:              fund.append("KOSDAQ 중소형주 · 고성장 섹터 · 변동성 주의")
 
-    # ── 외부요인 분석 — 거시경제·산업 환경 ──
+    # ── 외부요인 분석 — 거시경제·산업·펀더멘털 환경 ──
     macro = []
     h = kst_now().hour
-    if 8 <= h < 9:    macro.append("프리마켓 구간 · 미국 선물·뉴스 반영 초기")
-    elif 9 <= h < 11: macro.append("오전 장 · 외국인·기관 방향성 확인 구간")
-    elif 11 <= h < 13:macro.append("점심 전후 · 유동성 감소 · 단기 변동성 주의")
-    else:             macro.append("오후 장 · 프로그램 매매·수급 정리 구간")
 
-    if tr >= 1000:   macro.append("시장 전체 활성화 · 외국인 관심 업종 추정")
-    elif tr >= 300:  macro.append("업종 테마 수급 집중 · 정책·뉴스 모멘텀")
-    else:            macro.append("개별 재료 중심 움직임")
+    # 1) 장중 시간대
+    if 8 <= h < 9:     macro.append("프리마켓 · 미국 선물·뉴스 반영 초기")
+    elif 9 <= h < 11:  macro.append("오전 장 · 외국인·기관 방향성 확인 구간")
+    elif 11 <= h < 13: macro.append("점심 전후 · 유동성 감소 · 단기 변동성 주의")
+    elif 13 <= h < 15: macro.append("오후 장 · 프로그램 매매·수급 정리 구간")
+    else:              macro.append("장 마감 후 · 미국 야간선물·환율 방향성 주시")
 
-    if chg >= 3:    macro.append("금리·환율 우호 또는 섹터 호재 반응")
-    elif chg <= -3: macro.append("글로벌 리스크오프 또는 섹터 악재 가능성")
-    else:           macro.append("관망세 · 미국 FOMC·환율 방향성 주시")
+    # 2) 거래대금 기반 수급 환경
+    if tr >= 5000:     macro.append("초대형 거래대금 · 외국인·기관 집중 매매 구간")
+    elif tr >= 2000:   macro.append("시장 전체 활성화 · 외국인 관심 업종 추정")
+    elif tr >= 500:    macro.append("업종 테마 수급 집중 · 정책·뉴스 모멘텀")
+    elif tr >= 100:    macro.append("개별 재료 중심 · 소규모 기관 관심 가능")
+    else:              macro.append("거래 부진 · 개인 위주 수급 · 유동성 주의")
+
+    # 3) 등락률 기반 금리·환율·매크로 환경
+    if chg >= 5:       macro.append("강한 섹터 호재 반응 · 금리·환율 우호 또는 정책 수혜")
+    elif chg >= 2:     macro.append("금리·환율 우호 또는 섹터 호재 반응")
+    elif chg <= -5:    macro.append("글로벌 리스크오프 · 금리·환율 악재 또는 공시 리스크 점검 필요")
+    elif chg <= -2:    macro.append("섹터 악재 또는 글로벌 매도세 유입 가능성")
+    else:              macro.append("관망세 · 미국 FOMC·환율·CPI 방향성 주시")
+
+    # 4) 시장 구분별 산업·구조적 환경
+    if mkt == 'kospi':
+        if tr >= 3000:   macro.append("KOSPI 대형주 · 외국인 순매수 지속 시 중장기 상승 가능")
+        else:            macro.append("KOSPI 대형주 · 배당·밸류업 정책 수혜 가능성")
+    else:
+        if chg >= 3:     macro.append("KOSDAQ 중소형 · 고성장 테마 모멘텀 · 변동성 확대 주의")
+        else:            macro.append("KOSDAQ 중소형 · 실적 가시성 확인 필요 · 손절 엄수")
+
+    # 5) 리스크 체크포인트 (등락률 극단 또는 거래량 급증 시)
+    if chg >= 8 or chg <= -8:
+        macro.append("급등락 → 공시(유상증자·CB·실적쇼크) 반드시 확인")
+    elif tr >= 3000 and chg >= 3:
+        macro.append("대량 거래 + 급등 → 고점 추격 위험 · 차익 매물 경계")
 
     return tech + [
         {'icon':'🏢','cat':'blue',
@@ -1120,50 +1143,77 @@ def fetch_per_stocks(token, base_url, ak, secret, per_max, per_min, pbr_max, roe
     return results[:top_n]
 
 def _gemini_brief(code, name, price_s, chg_s, score, grade, vol_i, buy_s, stop_s, rr_s):
-    """Gemini AI 간략 분석 (시간당 세션 캐시). None 반환 시 생략."""
+    """Gemini AI 베테랑 분석가 상세 분석 (시간당 세션 캐시)."""
     gkey = st.session_state.get('google_api_key', '')
     if not gkey: return None
     cache = st.session_state.setdefault('_ai_brief_cache', {})
     ck = f"{code}_{kst_now().strftime('%Y%m%d%H')}"
     if ck in cache: return cache[ck]
-    # 쿼터 초과 쿨다운 (채널별 공유)
     quota_until = st.session_state.get('_gemini_quota_until', 0)
     if time.time() < quota_until: return None
     try: vol_fmt = f"{int(vol_i):,}억"
     except: vol_fmt = str(vol_i)
-    msg = (f"종목: {name}({code})\n현재가: {price_s}원 등락: {chg_s}\n"
-           f"K점수: {score}점({grade}) 거래대금: {vol_fmt}\n"
-           f"매입가: {buy_s}원 손절: {stop_s}원 RR: {rr_s}\n\n"
-           "스윙 관점 간결 분석(한국어, 항목당 1-2줄):\n"
-           "1) 종합매력도X점/100-이유\n2) 핵심강점\n3) 주요리스크\n4) 매매전략")
+
+    system_prompt = """당신은 베테랑 주식 시장 분석가입니다. 기술적 분석은 이미 준비되어 있으니,
+외부적 환경 요인과 펀더멘털 분석에 집중하여 투자 의견을 제시해 주세요.
+
+출력 형식 (반드시 준수):
+---
+📊 종합 평점: [ ]점/100점
+근거: (핵심 이유 1-2줄)
+
+🌐 매크로·산업 환경
+- 금리/환율: (영향)
+- 정책/구조변화: (관련 내용)
+
+🔍 뉴스·공시 리스크
+- 주요 리스크: (공시, 경영, 지정학)
+- 재료 신선도: (선반영/미반영 판단)
+
+⚖️ 기술적 전략 보완
+- 타점 합리성: (외부변수 반영 시)
+- 체크포인트: (확인 필요 1가지)
+
+🎯 가장 큰 외부 변수 1가지
+⚠️ [리스크명]: (설명 + 현실화 시 시나리오)
+
+💡 최종 의견: 매수적극/조건부매수/관망/매수자제
+전제: (유효 조건)
+---"""
+
+    user_msg = (f"분석 대상: {name}({code}) | 시장: KOSPI/KOSDAQ\n"
+                f"현재가: {price_s}원 | 등락: {chg_s} | 거래대금: {vol_fmt}\n"
+                f"K스코어: {score}점({grade}등급) | 손익비: {rr_s}\n"
+                f"제안가: 매입 {buy_s}원 / 손절 {stop_s}원\n\n"
+                "위 기술적 분석 결과를 바탕으로 외부환경·펀더멘털 보완 분석을 출력 형식에 맞게 제공해주세요.")
+
     for attempt in range(3):
         try:
             r = requests.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gkey}",
-                json={"system_instruction":{"parts":[{"text":"너는 스윙 매매 전문가다. 반드시 한국어, 간결(200자 이내)."}]},
-                      "contents":[{"role":"user","parts":[{"text":msg}]}],
-                      "generationConfig":{"maxOutputTokens":300,"temperature":0.7}},
-                timeout=15
+                json={
+                    "system_instruction": {"parts": [{"text": system_prompt}]},
+                    "contents": [{"role": "user", "parts": [{"text": user_msg}]}],
+                    "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7}
+                },
+                timeout=20
             )
             data = r.json()
-            # 쿼터/레이트 리밋 오류 감지
             err = data.get('error', {})
-            if err.get('code') in (429, 503) or 'quota' in str(err).lower() or 'rate' in str(err).lower():
-                # retry-after 파싱 (메시지에서 숫자 초 추출, 없으면 60초)
+            if err.get('code') in (429, 503) or 'quota' in str(err).lower():
                 import re as _re
                 m = _re.search(r'retry in ([\d.]+)s', str(err))
                 wait = float(m.group(1)) if m else 60.0
                 st.session_state['_gemini_quota_until'] = time.time() + wait + 5
                 return None
-            t = (data.get('candidates',[{}])[0]
-                 .get('content',{}).get('parts',[{}])[0].get('text',''))
+            t = (data.get('candidates', [{}])[0]
+                 .get('content', {}).get('parts', [{}])[0].get('text', ''))
             if t:
-                cache[ck] = t.strip()[:450]
+                cache[ck] = t.strip()
                 return cache[ck]
             break
         except Exception:
-            if attempt < 2:
-                time.sleep(2 ** attempt)
+            if attempt < 2: time.sleep(2 ** attempt)
     return None
 
 
