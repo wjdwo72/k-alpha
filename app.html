@@ -1265,10 +1265,21 @@
   .pf-delete-btn:hover { color: var(--accent3); }
 
   /* ── 필터 설정 버튼 강제 표시 (항상 최상단) ── */
-  /* ══ STREAMLIT 모드: 사이드바 완전 숨김, 메인 풀 너비 ══ */
-  body.streamlit-mode .sidebar { display: none !important; }
+  /* ══ STREAMLIT 모드: 사이드바 유지, 세로 레이아웃 ══ */
+  body.streamlit-mode .sidebar {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    border-left: none !important;
+    border-top: 1px solid var(--border) !important;
+    overflow-y: visible !important;
+  }
   body.streamlit-mode .main {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
   }
   body.streamlit-mode .content {
     width: 100% !important;
@@ -1860,15 +1871,16 @@
 // ══ IS_STREAMLIT: 스크립트 최상단 선언 (var = TDZ 없음) ══
 var IS_STREAMLIT = !!(window.__STREAMLIT_MODE__);
 if (IS_STREAMLIT) {
-  // 사이드바 즉시 숨기기: 인라인 스타일로 직접 지정 (가장 확실)
   document.addEventListener('DOMContentLoaded', function() {
+    // 사이드바 표시 유지 (글로벌시장·텔레그램·로그·시스템제어)
     var sidebar = document.querySelector('.sidebar');
-    if (sidebar) { sidebar.style.cssText = 'display:none!important'; }
-    var proxy = document.getElementById('proxy-status-banner');
-    if (proxy) { proxy.style.display = 'none'; }
-    // main/content: 높이 제한 제거 (iframe 자체가 스크롤)
+    if (sidebar) {
+      sidebar.style.cssText = '';  // 숨김 해제
+    }
+    // proxy-status-banner는 제거됐으므로 무시
+    // main: grid → flex column (사이드바 아래 배치)
     var main = document.querySelector('.main');
-    if (main) { main.style.cssText = 'display:block!important;height:auto!important;min-height:0!important'; }
+    if (main) { main.style.cssText = 'display:flex!important;flex-direction:column!important;height:auto!important;min-height:0!important'; }
     var content = document.querySelector('.content');
     if (content) { content.style.cssText = 'width:100%!important;padding:8px!important;overflow-y:visible!important;height:auto!important'; }
     // 탭 패널 높이 제한 제거
@@ -1876,7 +1888,6 @@ if (IS_STREAMLIT) {
       p.style.overflow = 'visible';
       p.style.height = 'auto';
     });
-    // 포트폴리오 재렌더
     if (typeof pfRenderSummary === 'function') pfRenderSummary();
     if (typeof pfRenderHoldings === 'function') pfRenderHoldings();
   });
@@ -1885,10 +1896,10 @@ if (IS_STREAMLIT) {
   _ss.textContent = [
     '*, *::before, *::after { -webkit-overflow-scrolling: auto !important; }',
     'html, body { height: auto !important; overflow: visible !important; min-height: 0 !important; }',
-    '.sidebar { display:none !important; }',
-    '.main { display:block !important; height:auto !important; grid-template-columns:unset !important; }',
+    /* 사이드바 표시 — 숨기지 않음 */
+    '.sidebar { display:flex !important; flex-direction:column !important; width:100% !important; height:auto !important; max-height:none !important; border-left:none !important; border-top:1px solid var(--border) !important; overflow-y:visible !important; }',
+    '.main { display:flex !important; flex-direction:column !important; height:auto !important; grid-template-columns:unset !important; }',
     '.content { width:100% !important; max-width:100% !important; overflow-y:visible !important; height:auto !important; flex:none !important; }',
-    '#proxy-status-banner { display:none !important; }',
     '.tab-panel { overflow:visible !important; height:auto !important; }',
     '.tab-panel.active { overflow:visible !important; height:auto !important; }',
     '.cards-grid { height:auto !important; overflow:visible !important; }',
