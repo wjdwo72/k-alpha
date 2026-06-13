@@ -379,8 +379,6 @@
   .tab-btn.active { color: var(--text-bright); border-bottom-color: var(--accent); }
   .tab-btn[data-tab="surge"].active { border-bottom-color: var(--surge); }
   .tab-btn[data-tab="tomorrow"].active { border-bottom-color: var(--tomorrow); }
-  .tab-btn[data-tab="per"].active { color: #f0c040 !important; border-bottom-color: #f0c040; }
-  .tab-btn[data-tab="per"].active .tab-badge { background: rgba(240,192,64,0.2); color: #f0c040; }
 
   .tab-badge {
     padding: 1px 7px;
@@ -536,7 +534,7 @@
     border: 1px solid var(--accent);
     border-radius: 10px;
     padding: 16px;
-    width: min(300px, calc(100vw - 24px));
+    width: min(320px, calc(100vw - 24px));
     max-height: calc(100vh - 40px);
     overflow-y: auto;
     box-shadow: var(--glow-blue), 0 8px 32px rgba(0,0,0,0.8);
@@ -1514,9 +1512,6 @@
         <button class="tab-btn" data-tab="smallmid" onclick="switchTab('smallmid',this,'kr')" style="color:#c084fc;border-bottom-color:transparent">
           ⬟ 내일의 중소형주 <span class="tab-badge" style="background:rgba(192,132,252,.15);color:#c084fc">10</span>
         </button>
-        <button class="tab-btn" data-tab="per" onclick="switchTab('per',this,'kr')" style="color:#f0c040;border-bottom-color:transparent">
-          💎 PER저평가 <span class="tab-badge" id="badge-per" style="background:rgba(240,192,64,.15);color:#f0c040">0</span>
-        </button>
         <button class="tab-btn" data-tab="portfolio" onclick="switchTab('portfolio',this,'kr')" id="tab-btn-portfolio-kr">
           💼 내 포트폴리오
         </button>
@@ -1531,13 +1526,6 @@
           <span style="color:#9ca3af;font-size:10px">나스닥 -1.5% 이상 급락 시 전 종목 비활성화 · 손절선 자동 -3% 적용</span>
         </div>
         <div class="cards-grid" id="cards-smallmid"></div>
-      </div>
-      <div id="tab-per" class="tab-panel">
-        <div style="background:linear-gradient(135deg,rgba(240,192,64,.08),rgba(0,212,255,.05));border:1px solid rgba(240,192,64,.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-family:'Share Tech Mono',monospace;font-size:11px;color:#f0c040;line-height:1.7">
-          💎 <strong>PER 저평가주</strong> — PER 저평가 × PBR 1.0 이하 × ROE 10%+ × MA 상향 확인 (pykrx)<br>
-          <span style="color:#9ca3af;font-size:10px">조건: PER 0.1~15.0 · PBR ≤ 1.0 · ROE ≥ 10% · 거래대금 30억+ · 앱 설정에서 조건 변경 가능</span>
-        </div>
-        <div class="cards-grid" id="cards-per"></div>
       </div>
       <div id="tab-portfolio" class="tab-panel">
         <!-- 포트폴리오 (KR 필터 기본) -->
@@ -2703,20 +2691,20 @@ function resetScanSettings() {
 function updateFilterCounts() {
   let total = 0;
   const origC = window.__ORIG_COUNTS__ || {};
-  // swing, surge, tomorrow, smallmid, per 모두 배지 업데이트
-  ['swing','surge','tomorrow','smallmid','per'].forEach(cat => {
-    const stocks = (cat === 'smallmid' || cat === 'per') ? (DEMO[cat] || []) : DEMO[cat];
-    const filtered = (cat === 'smallmid' || cat === 'per') ? stocks : filterKrStocks(stocks);
-    if (cat !== 'smallmid' && cat !== 'per') total += filtered.length;
+  // swing, surge, tomorrow, smallmid 모두 배지 업데이트
+  ['swing','surge','tomorrow','smallmid'].forEach(cat => {
+    const stocks = cat === 'smallmid' ? DEMO.smallmid : DEMO[cat];
+    const filtered = cat === 'smallmid' ? stocks : filterKrStocks(stocks);
+    if (cat !== 'smallmid') total += filtered.length;
     const tabBtn = document.querySelector(`#tabs-kr [data-tab="${cat}"]`);
     if (tabBtn) {
       const badge = tabBtn.querySelector('.tab-badge');
-      if (badge) badge.textContent = filtered.length;
+      if (badge) {
+        // 스캔 조건 충족 갯수 그대로 표시
+        badge.textContent = filtered.length;
+      }
     }
   });
-  // PER 배지 id로도 업데이트
-  var _pb = document.getElementById('badge-per');
-  if (_pb) _pb.textContent = (DEMO.per || []).length;
   const fcEl = document.getElementById('filter-count');
   if (fcEl) fcEl.textContent = `조건 충족: ${total} 종목`;
   const ctxEl = document.getElementById('ctx-kr-scan');
@@ -3086,7 +3074,7 @@ function buildCard(stock, rank) {
   _aiStockMap[stock.code] = stock;
   const gradeClass = stock.grade === 'S' ? 'grade-s' : stock.grade === 'A' ? 'grade-a' : 'grade-b';
   const scoreColor = stock.grade === 'S' ? '#ff4d6d' : stock.grade === 'A' ? 'var(--accent)' : 'var(--accent2)';
-  const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : stock.cat === 'per' ? '#f0c040' : '#00ff88';
+  const catColor = stock.cat === 'swing' ? '#00d4ff' : stock.cat === 'surge' ? '#ffa500' : stock.cat === 'smallmid' ? '#c084fc' : '#00ff88';
 
   const meta = DEMO_META[stock.code] || {};
   // 실시간 종목은 mkt/vol 정보를 stock 자체에서 가져옴
@@ -3189,15 +3177,14 @@ function buildCard(stock, rank) {
 // RENDER ALL CARDS (필터 적용)
 // ──────────────────────────────────────────────
 function renderCards() {
-  ['swing','surge','tomorrow','smallmid','per'].forEach(cat => {
+  ['swing','surge','tomorrow','smallmid'].forEach(cat => {
     const container = document.getElementById(`cards-${cat}`);
     if (!container) return;
     container.innerHTML = '';
 
-    // PER과 smallmid는 필터 미적용 (전종목 표시)
-    const stocks = (cat === 'smallmid' || cat === 'per') ? (DEMO[cat] || []) : DEMO[cat];
-    const filtered = (cat === 'smallmid' || cat === 'per') ? stocks : filterKrStocks(stocks);
-    const catColor = cat === 'smallmid' ? '#c084fc' : cat === 'per' ? '#f0c040' : cat === 'swing' ? '#00d4ff' : cat === 'surge' ? '#ffa500' : '#00ff88';
+    const stocks = cat === 'smallmid' ? DEMO.smallmid : DEMO[cat];
+    const filtered = cat === 'smallmid' ? stocks : filterKrStocks(stocks);
+    const catColor = cat === 'smallmid' ? '#c084fc' : cat === 'swing' ? '#00d4ff' : cat === 'surge' ? '#ffa500' : '#00ff88';
 
     if (filtered.length === 0) {
       const diagLines = [];
@@ -3210,15 +3197,14 @@ function renderCards() {
       if (mktFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ 시장 ${scanSettings.mkt.toUpperCase()} → ${mktFail}종목 제외</span>`);
       if (capFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ 시총 ${scanSettings.cap} → ${capFail}종목 제외</span>`);
       if (rsiFail > 0)  diagLines.push(`<span style="color:var(--accent3)">⚠ RSI ${scanSettings.rsiMin}~${scanSettings.rsiMax} → ${rsiFail}종목 제외</span>`);
-      const emptyMsg = cat === 'per'
-        ? '💎 PER 저평가주 없음<br><span style="font-size:10px;color:#9ca3af">앱 설정 → PER 저평가주 스캔 활성화 후 대기</span>'
-        : `<div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 종목이 없습니다</div>
-           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;line-height:2;margin-bottom:10px">${diagLines.length ? diagLines.join('<br>') : '모든 조건 검토 필요'}</div>
-           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-             <button onclick="openSettings(event)" style="padding:6px 14px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">⚙ 필터 조정</button>
-             <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
-           </div>`;
-      container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><div style="text-align:center">${emptyMsg}</div></div>`;
+      container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><div style="text-align:center">
+        <div style="font-size:13px;color:var(--text-bright);margin-bottom:8px">조건에 맞는 종목이 없습니다</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;line-height:2;margin-bottom:10px">${diagLines.length ? diagLines.join('<br>') : '모든 조건 검토 필요'}</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button onclick="openSettings(event)" style="padding:6px 14px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">⚙ 필터 조정</button>
+          <button onclick="resetScanSettings()" style="padding:6px 14px;background:rgba(255,165,0,0.1);border:1px solid var(--accent4);border-radius:4px;color:var(--accent4);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer">↺ 필터 초기화</button>
+        </div>
+      </div></div>`;
     } else {
       filtered.forEach((stock, i) => {
         const card = buildCard(stock, i+1);
@@ -3231,7 +3217,7 @@ function renderCards() {
 
   setTimeout(() => {
     function drawCat(cat, color) {
-      var stocks = (cat === 'smallmid' || cat === 'per') ? (DEMO[cat] || []) : filterKrStocks(DEMO[cat]);
+      var stocks = cat === 'smallmid' ? DEMO.smallmid : filterKrStocks(DEMO[cat]);
       stocks.forEach(stock => {
         const c3 = document.getElementById(`c3-${stock.code}`);
         const cd = document.getElementById(`cd-${stock.code}`);
@@ -3243,7 +3229,6 @@ function renderCards() {
     drawCat('surge',    '#ffa500');
     drawCat('tomorrow', '#00ff88');
     drawCat('smallmid', '#c084fc');
-    drawCat('per',      '#f0c040');
   }, 100);
 
   // 300ms 후 한번 더 (DOM 완전 렌더 후 보장)
@@ -3340,7 +3325,7 @@ function switchTab(tab, btn, market) {
 
   // 탭 전환 시 차트 재드로우
   setTimeout(() => {
-    var colorMap = {swing:'#00d4ff',surge:'#ffa500',tomorrow:'#00ff88',smallmid:'#c084fc',per:'#f0c040'};
+    var colorMap = {swing:'#00d4ff',surge:'#ffa500',tomorrow:'#00ff88',smallmid:'#c084fc'};
     var target = tab === 'portfolio' ? null : tab;
     if (target && DEMO[target]) {
       var stocks = target === 'smallmid' ? DEMO.smallmid : filterKrStocks(DEMO[target]);
@@ -3523,7 +3508,7 @@ function generateSwingReport(stock) {
   var fundR     = reasons.filter(function(r){ return r.indexOf('[기본적') >= 0; });
   var macroR    = reasons.filter(function(r){ return r.indexOf('[외부요인') >= 0; });
 
-  var catLabel  = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주', per:'PER저평가'}[cat] || cat;
+  var catLabel  = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주'}[cat] || cat;
 
   /* ── 1. 매력도 평점 ── */
   var scoreMsg;
@@ -3722,7 +3707,7 @@ function openAiAnalysis(event, code) {
   var overlay = document.getElementById('ai-modal-overlay');
   var subEl   = document.getElementById('ai-modal-sub');
   var content = document.getElementById('ai-modal-content');
-  var catLabel = {swing:'실시간스윙',surge:'급등전야',tomorrow:'내일관심',smallmid:'중소형주',per:'PER저평가'}[stock.cat] || stock.cat || '';
+  var catLabel = {swing:'실시간스윙',surge:'급등전야',tomorrow:'내일관심',smallmid:'중소형주'}[stock.cat] || stock.cat || '';
   subEl.textContent = stock.name + ' (' + stock.code + ')  ·  ' + catLabel + '  ·  ' + (stock.price || '') + '원  ' + (stock.change || '');
 
   var googleKey = window.__GOOGLE_API_KEY__ || '';
@@ -4534,33 +4519,28 @@ function openKisChart(code, market, name, event) {
   if (market === 'kr') {
     links = [
       {
-        icon: '🏦', name: '한국투자증권 HTS/WTS', desc: 'securities.koreainvestment.com · 로그인 필요',
-        cls: 'primary',
-        url: `https://securities.koreainvestment.com/main/market/stock/_STOCK_ITEM01.jsp?code=${code}&marketcode=J`
-      },
-      {
-        icon: '📱', name: '한국투자증권 ANTS 앱', desc: 'KIS ANTS 모바일 앱 (앱 설치 시)',
-        cls: '',
-        url: `kiwoom://` // 앱 딥링크 — 미설치 시 앱스토어로
-      },
-      {
-        icon: '🟢', name: '네이버 금융 차트', desc: '공개 · 로그인 불필요',
+        icon: '🟢', name: '네이버 금융 차트', desc: '공개 · 로그인 불필요 · 바로 열림',
         cls: 'naver',
         url: `https://finance.naver.com/item/fchart.nhn?code=${code}`
       },
       {
-        icon: '🔵', name: '다음 금융', desc: '공개 · 로그인 불필요',
+        icon: '🔵', name: '다음 금융', desc: '공개 · 로그인 불필요 · 바로 열림',
         cls: 'daum',
         url: `https://finance.daum.net/quotes/A${code}`
+      },
+      {
+        icon: '📊', name: '한국거래소 정보데이터시스템', desc: 'data.krx.co.kr · 로그인 불필요',
+        cls: '',
+        url: `https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020201&isu_cd=${code}`
+      },
+      {
+        icon: '📱', name: 'KIS ANTS 앱으로 보기', desc: '한국투자증권 모바일앱 · 앱 설치 필요',
+        cls: 'primary',
+        url: `https://securities.koreainvestment.com/main/customer/guide/_static/TF04ae010001.jsp`
       }
     ];
   } else {
     links = [
-      {
-        icon: '🏦', name: '한국투자증권 해외주식', desc: 'securities.koreainvestment.com · 로그인 필요',
-        cls: 'primary',
-        url: `https://securities.koreainvestment.com/main/market/overseas/_OVERSEAS_ITEM01.jsp?code=${code}`
-      },
       {
         icon: '📊', name: 'Yahoo Finance 차트', desc: '공개 · 로그인 불필요',
         cls: 'naver',
@@ -4570,11 +4550,36 @@ function openKisChart(code, market, name, event) {
         icon: '🔵', name: 'TradingView 차트', desc: '공개 · 무료 계정',
         cls: 'daum',
         url: `https://www.tradingview.com/chart/?symbol=${code}`
+      },
+      {
+        icon: '🟡', name: 'Investing.com', desc: '공개 · 로그인 불필요',
+        cls: '',
+        url: `https://www.investing.com/search/?q=${code}`
       }
     ];
   }
 
-  linksEl.innerHTML = links.map(l => `
+  // 네이버 차트 미리보기 이미지 (KR만)
+  var previewHtml = '';
+  if (market === 'kr') {
+    previewHtml = `
+      <div style="margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:#0d1220;position:relative;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);padding:5px 8px;display:flex;justify-content:space-between;align-items:center;">
+          <span>📈 네이버 차트 미리보기</span>
+          <a href="https://finance.naver.com/item/fchart.nhn?code=${code}" target="_blank"
+             style="color:var(--accent);text-decoration:none;font-size:9px;" onclick="closeChartPopup()">전체보기 ↗</a>
+        </div>
+        <img
+          src="https://ssl.pstatic.net/imgfinance/chart/item/area/day/${code}.png"
+          onerror="this.parentElement.style.display='none'"
+          style="width:100%;display:block;min-height:60px;"
+          alt="${displayName} 차트"
+          loading="lazy"
+        />
+      </div>`;
+  }
+
+  linksEl.innerHTML = previewHtml + links.map(l => `
     <a class="chart-link-btn ${l.cls}" href="${l.url}" target="_blank" onclick="closeChartPopup()">
       <span class="chart-link-icon">${l.icon}</span>
       <span class="chart-link-info">
@@ -4585,29 +4590,31 @@ function openKisChart(code, market, name, event) {
     </a>
   `).join('');
 
-  // 팝업 표시 + 클릭 위치 배치
+  // 팝업 표시
   popup.style.display = 'block';
   overlay.classList.add('show');
 
   // 팝업 크기 측정 후 위치 결정
-  var pw = popup.offsetWidth  || 290;
-  var ph = popup.offsetHeight || 280;
-  var vw = window.innerWidth  || 360;
-  var vh = window.innerHeight || 640;
-  var cx = event ? event.clientX : vw / 2;
-  var cy = event ? event.clientY : vh / 2;
+  popup.style.width = Math.min(320, window.innerWidth - 24) + 'px';
+  setTimeout(function() {
+    var pw = popup.offsetWidth  || 320;
+    var ph = popup.offsetHeight || 340;
+    var vw = window.innerWidth  || 360;
+    var vh = window.innerHeight || 640;
+    var cx = event ? event.clientX : vw / 2;
+    var cy = event ? event.clientY : vh / 2;
 
-  var left = cx + 10;
-  var top  = cy + 10;
-  if (left + pw > vw - 8)  left = cx - pw - 10;
-  if (left < 8)            left = 8;
-  if (top  + ph > vh - 8) top  = cy - ph - 10;
-  if (top  < 8)            top  = 8;
+    var left = cx + 10;
+    var top  = cy + 10;
+    if (left + pw > vw - 8)  left = cx - pw - 10;
+    if (left < 8)            left = 8;
+    if (top  + ph > vh - 8) top  = Math.max(8, vh - ph - 8);
+    if (top  < 8)            top  = 8;
 
-  popup.style.position = 'fixed';
-  popup.style.left     = left + 'px';
-  popup.style.top      = top  + 'px';
-  popup.style.width    = Math.min(290, vw - 16) + 'px';
+    popup.style.position = 'fixed';
+    popup.style.left     = left + 'px';
+    popup.style.top      = top  + 'px';
+  }, 50);
 }
 
 function closeChartPopup() {
@@ -5180,20 +5187,14 @@ function applyRealScanData() {
   var su = convertScanCards(scan.surge,    'surge');
   var tm = convertScanCards(scan.tomorrow, 'tomorrow');
   var sm = convertScanCards(scan.smallmid, 'smallmid');
-  var pr = convertScanCards(scan.per,      'per');
   if (sw.length > 0) DEMO.swing    = sw;
   if (su.length > 0) DEMO.surge    = su;
   if (tm.length > 0) DEMO.tomorrow = tm;
   if (sm.length > 0) DEMO.smallmid = sm;
-  if (pr.length > 0) DEMO.per      = pr;
-  else if (!DEMO.per) DEMO.per     = [];
 
   // smallmid 배지 직접 업데이트 (updateFilterCounts가 smallmid를 놓치는 경우 대비)
   var _smBadge = document.querySelector('#tabs-kr [data-tab="smallmid"] .tab-badge');
   if (_smBadge) _smBadge.textContent = DEMO.smallmid.length;
-  // PER 배지 업데이트
-  var _perBadge = document.getElementById('badge-per');
-  if (_perBadge) _perBadge.textContent = DEMO.per.length;
 
   renderCards();
 
@@ -5218,56 +5219,11 @@ function applyRealScanData() {
   }
 }
 
-// ── 한국 종목코드 → 이름 fallback 테이블 ──
-var KR_STOCK_NAMES = {
-  '005930':'삼성전자','000660':'SK하이닉스','373220':'LG에너지솔루션',
-  '207940':'삼성바이오로직스','005380':'현대차','005490':'POSCO홀딩스',
-  '035420':'NAVER','000270':'기아','051910':'LG화학','028260':'삼성물산',
-  '034730':'SK','066570':'LG전자','017670':'SK텔레콤','032830':'삼성생명',
-  '105560':'KB금융','055550':'신한지주','009150':'삼성전기','011070':'LG이노텍',
-  '012450':'한화에어로스페이스','035720':'카카오','006400':'삼성SDI','003550':'LG',
-  '247540':'에코프로비엠','086520':'에코프로','352820':'하이브','058470':'리노공업',
-  '140860':'파크시스템스','039440':'에스티아이','084370':'유진테크','064760':'티씨케이',
-  '036830':'솔브레인홀딩스','015760':'한국전력','001450':'현대해상','000810':'삼성화재',
-  '005940':'NH투자증권','086790':'하나금융지주','316140':'우리금융지주','139480':'이마트',
-  '271560':'오리온','004020':'현대제철','011200':'HMM','161390':'한국타이어앤테크놀로지',
-  '009830':'한화솔루션','003490':'대한항공','018880':'한온시스템','096770':'SK이노베이션',
-  '010950':'S-Oil','034220':'LG디스플레이','003670':'포스코퓨처엠',
-  '047050':'포스코인터내셔널','006360':'GS건설','011780':'금호석유','008770':'호텔신라',
-  '001040':'CJ','307950':'현대오토에버','088350':'한화생명','241560':'두산밥캣',
-  '326030':'SK바이오팜','009540':'HD한국조선해양','011790':'SKC','000720':'현대건설',
-  '078935':'GS에너지','030200':'KT','010130':'고려아연','002790':'아모레퍼시픽',
-  '024110':'기업은행','069960':'현대백화점','180640':'한진칼','036460':'한국가스공사',
-  '086280':'현대글로비스','004990':'롯데지주','003090':'대웅제약','001520':'동양',
-  '007070':'GS리테일','000100':'유한양행','082640':'동원산업','039030':'이오테크닉스',
-  '454910':'두산로보틱스','320000':'쿠쿠홀딩스','035900':'JYP Ent.','095340':'ISC',
-  '041510':'에스엠','151910':'DB하이텍','085370':'포스코DX','252990':'코오롱인더',
-  '067160':'JB금융지주','079940':'가나아트홀딩스','067900':'중앙에너비스',
-  '033780':'KT&G','214150':'클래시스','041830':'인바디','086900':'메디오젠',
-  '108860':'셀바스AI','042700':'한미반도체','139670':'KPX케미칼','302920':'더블유씨피',
-  '204210':'모두투어','056080':'유진투자증권','253590':'네패스','078070':'유비쿼스홀딩스',
-  '040350':'넥슨지티','110020':'전진바이오팜','137400':'피앤씨테크','049630':'재영솔루텍',
-  '038680':'에스팩','041440':'현대에버다임','083930':'어보브반도체','025870':'부국증권',
-  '036180':'지티지웰니스','035760':'CJ올리브네트웍스','030350':'드래곤플라이',
-  '084110':'휴온스글로벌','140670':'알씨에스','058970':'엠케이전자','012510':'더존비즈온',
-  '052900':'선주이앤씨','237690':'삼양식품','211050':'인카금융서비스',
-};
-
-function krStockName(code, apiName) {
-  // API 이름이 있고 코드와 다르면 그대로 사용
-  if (apiName && apiName !== code) return apiName;
-  // 테이블 조회
-  if (KR_STOCK_NAMES[code]) return KR_STOCK_NAMES[code];
-  // 그래도 없으면 코드 반환
-  return apiName || code;
-}
-
 function convertScanCards(cards, cat) {
   if (!cards || !Array.isArray(cards)) return [];
   return cards.filter(function(c) { return c != null && c.code; }).map(function(c) {
-    var resolvedName = krStockName(c.code, c.name);
     return {
-      name: resolvedName,
+      name: c.name || c.code,
       code: c.code, score: c.score || 70, grade: c.grade || 'B',
       price: c.price, change: c.change || '0%', up: c.up != null ? c.up : true,
       buy: c.buy || c.price, target: c.target || c.price, stop: c.stop || c.price,
