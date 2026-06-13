@@ -150,7 +150,7 @@ def _start_bg_scan_thread():
             f"💰 <b>{p:,}원</b>  {pct}  |  거래대금 <b>{vol:,}억</b>",
             f"📊 RSI {rsi:.0f}  |  K점수 <b>{score}점({grade})</b>  |  RR <b>{rr}</b>",
             f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원", risk]
-        reasons=c.get("reasons",[])
+        reasons=_rebuild_reasons(c)
         if reasons:
             ls.append(""); ls.append("📋 <b>K 분석 사유</b>")
             for r in reasons:
@@ -984,6 +984,49 @@ def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
         {'icon':'🌐','cat':'purple',
          'text':'[외부요인] ' + ' · '.join(macro)},
     ]
+
+def _rebuild_reasons(c):
+    """카드 dict에서 항상 최신 _build_analysis_reasons로 재생성 (Gist 구버전 덮어쓰기)"""
+    try:
+        price = 0
+        try: price = int(str(c.get('price','0')).replace(',',''))
+        except: pass
+        chg = 0.0
+        try: chg = float(str(c.get('change','0%')).replace('%','').replace('+',''))
+        except: pass
+        buy_p  = int(price * 0.995)
+        stop_p = int(price * 0.97)
+        tgt_p  = int(price * 1.10)
+        tr = 0
+        try: tr = int(c.get('vol', 0))
+        except: pass
+        mkt = c.get('mkt', 'kospi')
+        rsi = c.get('rsiApprox', round(50 + chg * 2.8, 1)) or 50
+
+        # PER 종목은 앞 3개 항목(PER/PBR/ROE, 거래대금, 매입가) 유지 + 기본적+외부요인 추가
+        if c.get('cat') == 'per':
+            per = c.get('per', 0); pbr = c.get('pbr', 0); roe = c.get('roe', 0)
+            sign = '+' if chg >= 0 else ''
+            per_max = 15.0
+            base = [
+                {'icon':'💎','cat':'green',
+                 'text':f"PER {per:.1f}배 (기준:{per_max}배 이하) · PBR {pbr:.2f} · ROE {roe:.1f}%"},
+                {'icon':'📊','cat':'',
+                 'text':f"거래대금 {tr:,}억 · 등락률 {sign}{chg:.2f}%"},
+                {'icon':'📈','cat':'orange',
+                 'text':f"매입가 {buy_p:,}원 → 목표 {tgt_p:,}원 · 손절 {stop_p:,}원"},
+            ]
+            extra = _build_analysis_reasons(
+                {'price':price,'trAmt':tr,'mkt':mkt,'rsiApprox':rsi},
+                chg, buy_p, stop_p, tgt_p
+            )[3:]  # [기본적 분석] + [외부요인] 만 추가
+            return base + extra
+
+        # 일반 종목 — 전체 재생성
+        s_dict = {'price': price, 'trAmt': tr, 'mkt': mkt, 'rsiApprox': rsi}
+        return _build_analysis_reasons(s_dict, chg, buy_p, stop_p, tgt_p)
+    except Exception:
+        return c.get('reasons', [])
 
 def build_card(s, cat):
     """카드 데이터 포맷팅 (기본적 분석 + 외부요인 포함)"""
@@ -2144,7 +2187,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                             f"📊 RSI {rsi:.0f}  |  K점수 <b>{score}점({grade})</b>  |  RR <b>{rr}</b>",
                             f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
                             risk]
-                        reasons=c.get('reasons',[])
+                        reasons=_rebuild_reasons(c)
                         if reasons:
                             ls.append(''); ls.append('📋 <b>K 분석 사유</b>')
                             for r in reasons:
@@ -2324,7 +2367,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                         f"📊 RSI {rsi:.0f}  |  K점수 <b>{score}점({grade})</b>  |  RR <b>{rr}</b>",
                         f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
                         risk]
-                    reasons=c.get('reasons',[])
+                    reasons=_rebuild_reasons(c)
                     if reasons:
                         ls.append(''); ls.append('📋 <b>K 분석 사유</b>')
                         for r in reasons:
@@ -2566,7 +2609,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                         f"📊 RSI {rsi:.0f}  |  K점수 <b>{score}점({grade})</b>  |  RR <b>{rr}</b>",
                         f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
                         risk]
-                    reasons=c.get('reasons',[])
+                    reasons=_rebuild_reasons(c)
                     if reasons:
                         ls.append(''); ls.append('📋 <b>K 분석 사유</b>')
                         for r in reasons:
@@ -2797,7 +2840,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                             f"📊 RSI {rsi:.0f}  |  K점수 <b>{score}점({grade})</b>  |  RR <b>{rr}</b>",
                             f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
                             risk]
-                        reasons=c.get('reasons',[])
+                        reasons=_rebuild_reasons(c)
                         if reasons:
                             ls.append(''); ls.append('📋 <b>K 분석 사유</b>')
                             for r in reasons:
@@ -3064,7 +3107,7 @@ def _send_tg_by_cat(token, chat_id, cats_d, iv_lbl, k_n, kd_n, ts_str, total_n, 
             f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
             risk_lbl,
         ]
-        reasons = c.get('reasons',[])
+        reasons = _rebuild_reasons(c)
         if reasons:
             lines.append('')
             lines.append('📋 <b>K 분석 사유</b>')
@@ -3399,29 +3442,7 @@ if _gist_active or st.session_state.kis_token:
             chg = 0.0
             try: chg = float(str(c.get('change','0%')).replace('%','').replace('+',''))
             except: pass
-            reasons = c.get('reasons', [])
-            if not reasons:
-                tr = 0
-                try: tr = int(c.get('vol', 0))
-                except: pass
-                mkt = c.get('mkt', 'kospi')
-                fund_parts = []
-                if tr >= 2000: fund_parts.append("기관·외국인 대규모 순매수 추정")
-                elif tr >= 800: fund_parts.append("기관 매수세 유입 추정")
-                elif tr >= 300: fund_parts.append("외국인·기관 중형 수급 진입 추정")
-                else: fund_parts.append("개인 중심 수급 · 단기 모멘텀 주도")
-                if chg >= 4: fund_parts.append("단기 실적 개선 뉴스 반응")
-                elif chg >= 1: fund_parts.append("점진적 실적 개선 기대")
-                fund_parts.append("KOSPI 대형주" if mkt == 'kospi' else "KOSDAQ 중소형주 · 고성장 섹터")
-                h = kst_now().hour
-                if 9 <= h < 11: macro_p = "오전 장 · 외국인·기관 방향성 구간"
-                elif 11 <= h < 13: macro_p = "점심 전후 · 단기 변동성 주의"
-                else: macro_p = "오후 장 · 프로그램 매매 구간"
-                if chg >= 3: macro_p += " · 금리·환율 우호 또는 섹터 호재"
-                reasons = [
-                    {'icon':'🏢', 'text': '[기본적 분석] ' + ' · '.join(fund_parts)},
-                    {'icon':'🌐', 'text': '[외부요인] ' + macro_p},
-                ]
+            reasons = _rebuild_reasons(c)
             return _ai_reasons(reasons, rsi, chg, rr, score, grade)
 
 
@@ -3776,7 +3797,7 @@ if _gist_active or st.session_state.kis_token:
                     f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
                     risk_lbl,
                 ]
-                reasons = c.get('reasons',[])
+                reasons = _rebuild_reasons(c)
                 if reasons:
                     lines.append('')
                     lines.append('📋 <b>K 분석 사유</b>')
@@ -3939,23 +3960,25 @@ if not os.path.exists("app.html"):
 if scan_result.get('swing') or scan_result.get('surge') or scan_result.get('tomorrow') or scan_result.get('smallmid'):
     scan_json = json.dumps(scan_result, ensure_ascii=False)
 @st.cache_data(ttl=86400, show_spinner=False)
-@st.cache_data(ttl=86400, show_spinner=False)
 def _load_app_html():
     with open("app.html","r",encoding="utf-8") as f: return f.read()
 
 def _safe_json(s):
     return s.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
 
-# ── 정적 HTML (항상 동일 — React DOM 재조정 충돌 방지) ──────────────
-# __STREAMLIT_MODE__ 만 주입 (변하지 않는 값)
+# ── 정적 HTML — app.html 수정시간 기반 캐시 (파일 변경 즉시 반영) ──
 _STATIC_INJECT = '<script>window.__STREAMLIT_MODE__=true;</script>'
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def _get_static_html():
-    html = _load_app_html()
+@st.cache_data(show_spinner=False)
+def _get_static_html(mtime: float):
+    """mtime이 변하면 캐시 무효화 → 항상 최신 app.html 사용"""
+    with open("app.html", "r", encoding="utf-8") as f:
+        html = f.read()
     return html.replace('</head>', _STATIC_INJECT + '\n</head>')
 
-_final_html = _get_static_html()
+import os as _os
+_html_mtime = _os.path.getmtime("app.html") if _os.path.exists("app.html") else 0
+_final_html = _get_static_html(_html_mtime)
 
 # 설정 서버 저장
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}

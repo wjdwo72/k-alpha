@@ -688,7 +688,14 @@ def main():
             f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
             risk_lbl,
         ]
-        reasons = c.get('reasons',[])
+        try:
+            _s_dict = {'price': p, 'trAmt': vol, 'mkt': mkt,
+                       'rsiApprox': rsi, 'changePct': chg}
+            reasons = build_fundamental_reasons(_s_dict, c.get('cat','swing'))
+        except Exception:
+            reasons = c.get('reasons', [])
+        if not reasons:
+            reasons = c.get('reasons', [])
         if reasons:
             lines.append('')
             lines.append('📋 <b>K 분석 사유</b>')
