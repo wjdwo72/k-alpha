@@ -3994,68 +3994,6 @@ _final_html = st.session_state['_cached_html']
 # 설정 서버 저장
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
-# ── 우측 하단 버튼: window.top.document.body에 직접 주입 ──
-# st.markdown div는 overflow:hidden에 갇혀 fixed 불가 → top document에 직접 추가
-st.markdown("""
-<script>
-(function() {
-  function inject() {
-    var topDoc = window.top ? window.top.document : window.document;
-    // 이미 있으면 제거
-    ['kalpha-fab-style','kalpha-fab-wrap'].forEach(function(id) {
-      var el = topDoc.getElementById(id);
-      if (el) el.remove();
-    });
-    // 스타일
-    var s = topDoc.createElement('style');
-    s.id = 'kalpha-fab-style';
-    s.textContent = '#kalpha-fab-wrap{position:fixed!important;bottom:24px;right:20px;display:flex;flex-direction:column;gap:10px;z-index:2147483647!important}'
-      + '#kalpha-fab-up{width:44px;height:44px;border-radius:50%;background:rgba(2,6,16,0.95);color:#00d4ff;border:2px solid #00d4ff;font-size:20px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,0.8)}'
-      + '#kalpha-fab-cfg{width:52px;height:52px;border-radius:50%;background:#00d4ff;color:#020408;border:none;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(0,212,255,0.5)}';
-    topDoc.head.appendChild(s);
-    // 버튼 div
-    var wrap = topDoc.createElement('div');
-    wrap.id = 'kalpha-fab-wrap';
-    // 위로가기
-    var up = topDoc.createElement('button');
-    up.id = 'kalpha-fab-up'; up.title = '맨 위로';
-    up.textContent = '↑';
-    up.onclick = function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      alert('클릭됨! scrollIntoView 시도...');
-      try {
-        var a = topDoc.createElement('a');
-        a.id = 'kalpha-top-anchor';
-        a.style.cssText = 'position:absolute;top:0;left:0;';
-        var old = topDoc.getElementById('kalpha-top-anchor');
-        if (old) old.remove();
-        topDoc.body.insertBefore(a, topDoc.body.firstChild);
-        a.scrollIntoView({behavior: 'smooth', block: 'start'});
-      } catch(ex) { alert('오류: ' + ex.message); }
-    };
-    // 설정
-    var cfg = topDoc.createElement('button');
-    cfg.id = 'kalpha-fab-cfg'; cfg.textContent = '⚙'; cfg.title = '필터 설정';
-    cfg.onclick = function() {
-      var iframes = topDoc.querySelectorAll('iframe');
-      iframes.forEach(function(f) {
-        try { f.contentWindow.postMessage({type:'kalpha_open_settings'},'*'); } catch(e) {}
-      });
-    };
-    wrap.appendChild(up);
-    wrap.appendChild(cfg);
-    topDoc.body.appendChild(wrap);
-  }
-  // DOM 준비 후 실행 + 재시도
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', inject);
-  } else { inject(); }
-  setTimeout(inject, 500);
-  setTimeout(inject, 2000);
-})();
-</script>
-""", unsafe_allow_html=True)
 
 # 정적 HTML 렌더
 # scrolling=False + 큰 height → React DOM 재조정 없음 (removeChild 오류 방지)
@@ -4097,3 +4035,48 @@ _data_js = f"""<script>
 }})();
 </script>"""
 components.html(_data_js, height=0, scrolling=False)
+
+# ── 버튼 주입 컴포넌트 (별도 height=0 iframe에서 부모 DOM에 직접 주입) ──
+_btn_js = """<script>
+(function() {
+  var p = window.parent ? window.parent.document : null;
+  if (!p) return;
+
+  // 기존 버튼 제거
+  ['_kfab','_kfab_s'].forEach(function(id){var e=p.getElementById(id);if(e)e.remove();});
+
+  // 스타일
+  var s = p.createElement('style'); s.id = '_kfab_s';
+  s.textContent = '#_kfab{position:fixed;bottom:20px;right:16px;display:flex;flex-direction:column;gap:10px;z-index:2147483647}'
+    +'#_kfab_u{width:44px;height:44px;border-radius:50%;background:rgba(2,6,16,.95);color:#00d4ff;border:2px solid #00d4ff;font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,.8)}'
+    +'#_kfab_c{width:52px;height:52px;border-radius:50%;background:#00d4ff;color:#020408;border:none;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(0,212,255,.5)}';
+  p.head.appendChild(s);
+
+  // 버튼
+  var w = p.createElement('div'); w.id = '_kfab';
+
+  var u = p.createElement('button'); u.id = '_kfab_u'; u.textContent = '↑'; u.title='맨 위로';
+  u.addEventListener('click', function() {
+    // scrollIntoView: 최상위 body 앞에 앵커 추가 후 이동
+    var a = p.getElementById('_kfab_anchor') || p.createElement('a');
+    a.id = '_kfab_anchor';
+    a.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;';
+    if (!a.parentNode) p.body.insertBefore(a, p.body.firstChild);
+    a.scrollIntoView({behavior:'smooth', block:'start'});
+    // 추가 시도
+    try { p.documentElement.scrollTop = 0; } catch(e){}
+    try { p.body.scrollTop = 0; } catch(e){}
+  });
+
+  var c = p.createElement('button'); c.id = '_kfab_c'; c.textContent = '⚙'; c.title='필터 설정';
+  c.addEventListener('click', function() {
+    p.querySelectorAll('iframe').forEach(function(f){
+      try{f.contentWindow.postMessage({type:'kalpha_open_settings'},'*');}catch(e){}
+    });
+  });
+
+  w.appendChild(u); w.appendChild(c);
+  p.body.appendChild(w);
+})();
+</script>"""
+components.html(_btn_js, height=0, scrolling=False)
