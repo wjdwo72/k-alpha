@@ -722,11 +722,10 @@
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     z-index: 9000;
-    background: rgba(2,4,8,0.92);
+    background: rgba(2,4,8,0.88);
     overflow-y: auto;
-    padding: 20px 12px;
   }
-  #ai-modal-overlay.show { display: flex; align-items: flex-start; justify-content: center; }
+  #ai-modal-overlay.show { display: block; }
   #ai-modal-box {
     position: relative;
     margin: 0 auto;
@@ -1469,50 +1468,6 @@
     <span id="clock">--:--:--</span>
   </div>
 </div>
-
-<!-- ── 우측 하단 고정 버튼 (scrolling=True iframe에서 position:fixed 정상 작동) ── -->
-<style>
-#k-fab-wrap {
-  position: fixed;
-  bottom: 20px;
-  right: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 2147483647;
-}
-#k-fab-up {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: rgba(2,6,16,0.95); color: #00d4ff;
-  border: 2px solid #00d4ff; font-size: 22px; font-weight: bold;
-  cursor: pointer; padding: 0; line-height: 1;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.8);
-}
-#k-fab-cfg {
-  width: 52px; height: 52px; border-radius: 50%;
-  background: #00d4ff; color: #020408; border: none;
-  font-size: 22px; cursor: pointer; padding: 0; line-height: 1;
-  box-shadow: 0 0 20px rgba(0,212,255,0.6);
-}
-#k-fab-up:active  { transform: scale(0.9); }
-#k-fab-cfg:active { transform: scale(0.9); }
-</style>
-<div id="k-fab-wrap">
-  <button id="k-fab-up"  title="맨 위로">↑</button>
-  <button id="k-fab-cfg" title="필터 설정">⚙</button>
-</div>
-<script>
-document.getElementById('k-fab-up').addEventListener('click', function(e) {
-  e.stopPropagation();
-  e.preventDefault();
-  window.scrollTo({top: 0, behavior: 'smooth'});
-});
-document.getElementById('k-fab-cfg').addEventListener('click', function(e) {
-  e.stopPropagation();
-  e.preventDefault();
-  if (typeof openSettings === 'function') openSettings(e);
-});
-</script>
 
 
 <!-- RISK BANNER -->
@@ -3543,7 +3498,7 @@ function _getSectorInfo(code, name) {
             geo:'북한 해킹·사이버 공격 리스크. 화웨이 장비 교체 비용 발생 가능'};
   }
   // 기본값 — 종목명/코드로 특정 불가
-  return {sector:mkt + ' 상장 종목', macro:'거시경제 지표(GDP·물가·고용)와 연동. 금리·환율·글로벌 수급이 주가 방향 결정',
+  return {sector:'KOSPI/KOSDAQ 상장 종목', macro:'거시경제 지표(GDP·물가·고용)와 연동. 금리·환율·글로벌 수급이 주가 방향 결정',
           policy:'국내 산업 정책 변화 및 규제 리스크 모니터링. 정부 지원·보조금 대상 여부 확인',
           global:'글로벌 공급망 재편 및 AI·디지털 전환 수혜 여부 검토',
           geo:'미·중 갈등·지정학 리스크가 수출 비중 높은 종목에 영향. 환율 헤지 여부 확인'};
@@ -3759,7 +3714,15 @@ function _buildUserMsg(stock) {
 function _positionModalForStreamlit(el, clickY) {
   try {
     var box = el.querySelector('.modal, #ai-modal-box');
-    if (box) box.style.marginTop = '20px';
+    if (!box) return;
+    // 클릭 위치 기준 (scrollY + clientY)
+    var sy = window.scrollY || document.documentElement.scrollTop || 0;
+    var topPx = Math.max(10, sy + (clickY || 200) - 40);
+    box.style.position = 'absolute';
+    box.style.top = topPx + 'px';
+    box.style.left = '50%';
+    box.style.transform = 'translateX(-50%)';
+    box.style.margin = '0';
   } catch(e) {}
 }
 function _resetModalPosition(el) {
@@ -3803,9 +3766,12 @@ function openAiAnalysis(event, code) {
     content.innerHTML = '<span class="ai-loading">⏳ Gemini AI 분석 중... 잠시만 기다려 주세요.</span>\n\n'
       + '<span style="color:#4a5568;font-size:11px">─ 로컬 KIS 분석 (미리보기) ─\n</span>'
       + generateSwingReport(stock);
-    _positionModalForStreamlit(overlay, clickY);
     overlay.classList.add('show');
-    overlay.scrollTop = 0;
+    // 클릭 위치로 스크롤 (모달이 보이게)
+    setTimeout(function() {
+      var box = document.getElementById('ai-modal-box');
+      if (box) box.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 50);
 
     if (_aiAbortCtrl) { try { _aiAbortCtrl.abort(); } catch(e){} }
     _aiAbortCtrl = new AbortController();
@@ -3845,9 +3811,11 @@ function openAiAnalysis(event, code) {
   } else {
     // API 키 없음 → 로컬 분석 즉시 표시
     content.textContent = generateSwingReport(stock);
-    _positionModalForStreamlit(overlay, clickY);
     overlay.classList.add('show');
-    overlay.scrollTop = 0;
+    setTimeout(function() {
+      var box = document.getElementById('ai-modal-box');
+      if (box) box.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 50);
   }
 }
 
@@ -5702,6 +5670,50 @@ setTimeout(function() {
   </div>
   <div class="chart-popup-links" id="chart-popup-links"></div>
 </div>
+
+<!-- ── 우측 하단 고정 버튼 (scrolling=True iframe에서 position:fixed 정상 작동) ── -->
+<style>
+#k-fab-wrap {
+  position: fixed;
+  bottom: 20px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 2147483647;
+}
+#k-fab-up {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(2,6,16,0.95); color: #00d4ff;
+  border: 2px solid #00d4ff; font-size: 22px; font-weight: bold;
+  cursor: pointer; padding: 0; line-height: 1;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.8);
+}
+#k-fab-cfg {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: #00d4ff; color: #020408; border: none;
+  font-size: 22px; cursor: pointer; padding: 0; line-height: 1;
+  box-shadow: 0 0 20px rgba(0,212,255,0.6);
+}
+#k-fab-up:active  { transform: scale(0.9); }
+#k-fab-cfg:active { transform: scale(0.9); }
+</style>
+<div id="k-fab-wrap">
+  <button id="k-fab-up"  title="맨 위로">↑</button>
+  <button id="k-fab-cfg" title="필터 설정">⚙</button>
+</div>
+<script>
+document.getElementById('k-fab-up').addEventListener('click', function(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+});
+document.getElementById('k-fab-cfg').addEventListener('click', function(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  if (typeof openSettings === 'function') openSettings(e);
+});
+</script>
 
 </body>
 </html>

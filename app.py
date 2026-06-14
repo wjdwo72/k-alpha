@@ -3996,27 +3996,6 @@ server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.sessi
 
 
 
-# Streamlit 외부 스크롤바 숨기기 (iframe scrolling=True 사용)
-st.markdown("""
-<style>
-/* iframe 자체 스크롤 사용 - 외부 스크롤바 숨김 */
-[data-testid="stAppViewContainer"] {
-  overflow: hidden !important;
-  height: 100vh !important;
-}
-[data-testid="stAppViewBlockContainer"] {
-  overflow: hidden !important;
-  padding-bottom: 0 !important;
-}
-/* iframe을 전체 화면으로 */
-iframe[title="components.v1.html"] {
-  width: 100% !important;
-  height: 100vh !important;
-  max-height: 100vh !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
 # 정적 HTML 렌더
 components.html(_final_html, height=30000, scrolling=True)
 
