@@ -3994,7 +3994,37 @@ _final_html = st.session_state['_cached_html']
 # 설정 서버 저장
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
-# 정적 HTML 렌더 (세션 내 항상 동일한 문자열 → React 재조정 없음)
+# ── 위로가기 버튼 (Streamlit 네이티브 — iframe 밖에서 작동) ──
+st.markdown("""
+<style>
+#fab-container {
+  position: fixed; bottom: 20px; right: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  z-index: 999999;
+}
+#fab-scroll-top {
+  width:44px;height:44px;border-radius:50%;
+  background:rgba(13,18,32,0.95);color:#00d4ff;
+  border:2px solid #00d4ff;font-size:20px;font-weight:bold;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 16px rgba(0,0,0,0.8);
+}
+#fab-settings {
+  width:52px;height:52px;border-radius:50%;
+  background:#00d4ff;color:#020408;border:none;font-size:22px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 20px rgba(0,212,255,.6);
+}
+</style>
+<div id="fab-container">
+  <button id="fab-scroll-top" title="맨 위로"
+    onclick="window.scrollTo(0,0);try{window.parent.scrollTo({top:0,behavior:'smooth'});}catch(e){}">↑</button>
+  <button id="fab-settings" title="필터 설정"
+    onclick="var fs=document.querySelectorAll('iframe');fs.forEach(function(f){try{f.contentWindow.postMessage({type:'kalpha_open_settings'},'*');}catch(e){}});">⚙</button>
+</div>
+""", unsafe_allow_html=True)
+
+# 정적 HTML 렌더
 components.html(_final_html, height=15000, scrolling=True)
 
 # ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
