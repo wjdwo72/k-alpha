@@ -4019,7 +4019,26 @@ st.markdown("""
     // 위로가기
     var up = topDoc.createElement('button');
     up.id = 'kalpha-fab-up'; up.textContent = '↑'; up.title = '맨 위로';
-    up.onclick = function() { window.top.scrollTo({top:0,behavior:'smooth'}); };
+    up.onclick = function() {
+      // Streamlit의 실제 스크롤 컨테이너 모두 시도
+      var selectors = [
+        '[data-testid="stAppViewContainer"]',
+        '[data-testid="stMain"]',
+        '[data-testid="stAppViewBlockContainer"]',
+        '.main', 'section.main', 'main',
+        'html', 'body'
+      ];
+      selectors.forEach(function(sel) {
+        try {
+          var el = topDoc.querySelector(sel);
+          if (el) { el.scrollTop = 0; el.scrollLeft = 0; }
+        } catch(e) {}
+      });
+      try { topDoc.documentElement.scrollTop = 0; } catch(e) {}
+      try { topDoc.body.scrollTop = 0; } catch(e) {}
+      try { window.top.scrollTo(0, 0); } catch(e) {}
+      try { window.scrollTo(0, 0); } catch(e) {}
+    };
     // 설정
     var cfg = topDoc.createElement('button');
     cfg.id = 'kalpha-fab-cfg'; cfg.textContent = '⚙'; cfg.title = '필터 설정';
