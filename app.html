@@ -3449,6 +3449,69 @@ function _num(str) {
   return parseFloat(String(str).replace(/,/g, '')) || 0;
 }
 
+function _getSectorInfo(code, name) {
+  // 종목코드/종목명 기반 섹터 분류 → 종목별 다른 분석
+  var c = String(code || '');
+  var n = String(name || '');
+  // 반도체
+  if (['000660','005930','042700','095570','058470','009150','011070'].indexOf(c) >= 0
+      || n.match(/하이닉스|삼성전자|한미반도체|에스티아이|이오테크|삼성전기|LG이노텍/)) {
+    return {sector:'반도체·전자', macro:'미국 AI 설비투자 확대 → HBM·파운드리 수요 폭증. 미·중 반도체 수출 규제 핵심 변수',
+            policy:'반도체 특별법·K-칩스법 보조금 지원. 미국 CHIPS Act 연계 수혜 가능성',
+            global:'AI 서버·데이터센터 투자 사이클 — 글로벌 구조적 수요 장기 상승 국면',
+            geo:'미국 대중국 반도체 장비 수출 규제 강화 시 직접 타격. 화웨이·SMIC 동향 모니터링 필수'};
+  }
+  // 2차전지·배터리
+  if (['373220','006400','051910','003670','247540','086520'].indexOf(c) >= 0
+      || n.match(/LG에너지|삼성SDI|LG화학|포스코퓨처|에코프로/)) {
+    return {sector:'2차전지·배터리', macro:'글로벌 EV 보급률 둔화 우려 vs 에너지저장장치(ESS) 수요 급증. 리튬·니켈 가격 변동이 원가에 직접 영향',
+            policy:'IRA(인플레이션감축법) 세액공제 수혜 유지 여부 핵심. 유럽 배터리 규제·탄소국경세 대응 필요',
+            global:'전고체 배터리 상용화 경쟁 — 선점 기업 프리미엄 부여. 중국 CATL과의 가격경쟁 심화',
+            geo:'중국 리튬·흑연 수출 규제 리스크. 광물 공급망 다변화(호주·칠레) 진행도 확인'};
+  }
+  // 바이오·제약
+  if (n.match(/삼성바이오|셀트리온|유한양행|대웅|한미약품|종근당|보령/) || c.match(/^207940|^068270|^000100|^003220/)) {
+    return {sector:'바이오·제약', macro:'미국 FDA 승인 사이클과 임상 결과가 주가 최대 변수. 달러 강세 시 수출 바이오 유리',
+            policy:'약가 인하 정책(미국 IRA 약가협상) 리스크. 국내 건강보험 약가 재평가 주의',
+            global:'글로벌 CMO 시장 급성장 — 위탁생산 수주 경쟁. AI 신약개발 패러다임 전환',
+            geo:'미·중 바이오 디커플링 → 국내 기업 반사수혜 가능. 임상시험 국가 리스크 분산 필요'};
+  }
+  // 자동차
+  if (['005380','000270','012330','018880'].indexOf(c) >= 0 || n.match(/현대차|기아|현대모비스|한온시스템/)) {
+    return {sector:'자동차·부품', macro:'EV 전환 속도 조절 + 하이브리드 수요 반등. 원/달러 환율이 수출 실적에 직접 영향(약달러 불리)',
+            policy:'IRA 전기차 세액공제 북미 현지생산 요건. 유럽 내연기관 퇴출 일정(2035) 관련 전략 확인',
+            global:'테슬라 가격 인하 경쟁 압력. 중국 BYD 글로벌 확장 vs 국내 브랜드 프리미엄',
+            geo:'러시아·우크라이나 갈등 → 팔라듐 등 원자재 수급 불안. 미국 관세 정책 변화 모니터링'};
+  }
+  // 금융
+  if (['105560','055550','086790','316140','032830','000810'].indexOf(c) >= 0
+      || n.match(/KB금융|신한|하나금융|우리금융|삼성생명|삼성화재/)) {
+    return {sector:'금융·보험', macro:'한국은행 기준금리 인하 사이클 진입 여부가 NIM(순이자마진) 핵심 변수. 부동산 PF 리스크 완화 여부',
+            policy:'금융당국 밸류업 프로그램 — 배당 확대·자사주 소각 압력. PBR 1배 이하 종목 정책 수혜',
+            global:'미국 연준 금리 결정이 글로벌 자금 흐름과 환율에 영향. 글로벌 크레딧 리스크 동향',
+            geo:'북한 리스크·지정학 불안 시 외국인 금융주 이탈 패턴. 중국 부동산 위기 국내 익스포저 확인'};
+  }
+  // 에너지·화학
+  if (['010950','096770','009830','011780'].indexOf(c) >= 0 || n.match(/S-Oil|SK이노|한화솔루션|금호석유|한국전력/)) {
+    return {sector:'에너지·화학', macro:'WTI 유가·나프타 가격이 원가 및 스프레드에 직접 영향. 탄소중립 정책으로 정유·화학 장기 구조 변화',
+            policy:'탄소배출권 거래제 비용 증가. 수소경제·그린에너지 전환 투자 방향 확인',
+            global:'OPEC+ 감산 여부와 미국 셰일 생산량이 유가 결정. 중국 석유화학 과잉공급 압력',
+            geo:'중동 지정학 리스크(이란·이스라엘) → 유가 급등 변수. 러시아 에너지 제재 영향'};
+  }
+  // 통신
+  if (['017670','030200','032640'].indexOf(c) >= 0 || n.match(/SK텔레콤|KT|LG유플러스/)) {
+    return {sector:'통신·IT서비스', macro:'5G 투자 성숙기 → AI 인프라(데이터센터·클라우드) 신사업 전환이 성장 동력',
+            policy:'통신요금 인가제·인하 압력. 주파수 경매 비용 부담. 알뜰폰 경쟁 심화',
+            global:'AI 에이전트·자율주행 통신 인프라 수요. 위성통신(Starlink) 경쟁 압력',
+            geo:'북한 해킹·사이버 공격 리스크. 화웨이 장비 교체 비용 발생 가능'};
+  }
+  // 기본값 — 종목명/코드로 특정 불가
+  return {sector:mkt + ' 상장 종목', macro:'거시경제 지표(GDP·물가·고용)와 연동. 금리·환율·글로벌 수급이 주가 방향 결정',
+          policy:'국내 산업 정책 변화 및 규제 리스크 모니터링. 정부 지원·보조금 대상 여부 확인',
+          global:'글로벌 공급망 재편 및 AI·디지털 전환 수혜 여부 검토',
+          geo:'미·중 갈등·지정학 리스크가 수출 비중 높은 종목에 영향. 환율 헤지 여부 확인'};
+}
+
 function generateSwingReport(stock) {
   var score     = stock.score || 70;
   var grade     = stock.grade || 'B';
@@ -3462,12 +3525,15 @@ function generateSwingReport(stock) {
   var tgtP      = _num(stock.target);
   var stopP     = _num(stock.stop);
   var catLabel  = {swing:'실시간스윙', surge:'급등전야', tomorrow:'내일관심', smallmid:'중소형주', per:'PER저평가'}[cat] || cat;
+  var mkt       = (stock.mkt || 'kospi').toUpperCase();
+
+  // 종목별 섹터 정보 (핵심: 종목마다 다른 분석)
+  var si = _getSectorInfo(stock.code, stock.name);
 
   var reasons   = (stock.reasons || []).map(function(r){ return r.text || ''; });
   var fundR     = reasons.filter(function(r){ return r.indexOf('[기본적') >= 0; });
   var macroR    = reasons.filter(function(r){ return r.indexOf('[외부요인') >= 0; });
-  var macroText = macroR.length ? macroR[0].replace('[외부요인] ','') : '';
-  var fundText  = fundR.length  ? fundR[0].replace('[기본적 분석] ','') : '';
+  var fundText  = fundR.length ? fundR[0].replace('[기본적 분석] ','') : '';
 
   // 종합 평점
   var scoreMsg = score >= 90 ? '최상위 진입 적합 — 즉시 매수 검토 가능'
@@ -3477,34 +3543,49 @@ function generateSwingReport(stock) {
 
   var tgtPct  = price > 0 ? ((tgtP / price - 1) * 100).toFixed(1) : '?';
   var stopPct = price > 0 ? Math.abs((stopP / price - 1) * 100).toFixed(1) : '?';
-  var mkt     = (stock.mkt || 'kospi').toUpperCase();
 
-  // PER 종목 특이 정보
+  // PER 종목
   var perInfo = '';
   if (cat === 'per' && stock.per) {
     perInfo = 'PER ' + stock.per + '배 · PBR ' + (stock.pbr||'?') + ' · ROE ' + (stock.roe||'?') + '%';
   }
 
-  // 매크로 분석 파싱
-  var macroLines = macroText ? macroText.split(' · ') : [];
-  var timeZone   = macroLines[0] || '장중 구간';
-  var mktEnv     = macroLines[1] || '시장 환경 모니터링';
-  var rateFx     = macroLines[2] || '금리·환율 방향 주시';
-  var sectorEnv  = macroLines[3] || mkt + ' 섹터 환경';
-  var riskCheck  = macroLines[4] || '';
+  // 금리/환율 분석 (등락률 기반)
+  var rateMsg = changePct >= 3 ? '금리 인하 기대 + 환율 안정 시 외국인 수급 유입 가능성 높음'
+              : changePct <= -3 ? '금리·환율 불안정 — 외국인 이탈 리스크 점검 필요'
+              : '금리·환율 중립 구간 — 미국 FOMC 결정 및 원/달러 1,300~1,400원 범위 주시';
 
-  // 리스크
-  var risks = [];
-  if (rsi > 72)       risks.push('RSI ' + rsi.toFixed(0) + ' 과매수 — 단기 조정 가능성');
-  else if (rsi < 28)  risks.push('RSI ' + rsi.toFixed(0) + ' 과매도 — 반등 기대, 추가 하락 주의');
-  if (changePct >= 7) risks.push('당일 +' + changePct.toFixed(1) + '% 급등 — 고점 추격 위험, 갭 매물 주의');
-  else if (changePct >= 4) risks.push('당일 +' + changePct.toFixed(1) + '% — 눌림목 대기 후 진입 권장');
-  if (changePct <= -6) risks.push('당일 ' + changePct.toFixed(1) + '% — 하락 추세 가능성, 지지 확인 전 매수 자제');
-  if (rr < 1.5)        risks.push('손익비 ' + rr + ' — 1.5 미만, 목표가 상향 검토');
-  if (riskCheck)       risks.push(riskCheck);
-  if (!risks.length)   risks.push('현재 스캔 기준 주요 리스크 없음 — 실시간 공시·뉴스 별도 확인 필수');
+  // 공시 리스크
+  var disclosureMsg = changePct >= 8 || changePct <= -8
+    ? '⚠ 급등락 → 유상증자·CB·실적쇼크 공시 즉시 확인 (DART 필수)'
+    : '현재 스캔 기준 주요 공시 이상 없음 — DART 실시간 확인 권고';
+
+  // 뉴스 모멘텀
+  var momentumMsg = changePct >= 5 ? '강한 상승 → 호재 선반영 가능성. 추가 상승 동력 확인 필요'
+                 : changePct >= 2 ? '상승 초기 → 뉴스 모멘텀 신선도 양호, 미반영 재료 존재 가능성'
+                 : changePct <= -3 ? '하락 구간 → 악재 선반영 여부 또는 추가 하락 리스크 확인'
+                 : '횡보 → 모멘텀 소진 또는 방향성 대기 구간';
+
+  // 타점 합리성
+  var tapMsg = rr >= 3 ? '손익비 ' + rr + ' — 외부 변수 감안해도 타점 합리적. 분할 진입 적합'
+             : rr >= 2 ? '손익비 ' + rr + ' — 리스크 발생 시 손절 엄수 필수'
+             : '손익비 ' + rr + ' — 외부 변수 고려 시 타점 재검토 권고';
+
+  // 최대 리스크 결론 (종목 섹터 반영)
+  var bigRisk, bigDetail;
+  if (changePct >= 8 || (vol >= 3000 && changePct >= 5)) {
+    bigRisk = '고점 추격 + 차익 매물 출회';
+    bigDetail = '급등 후 기관 차익 실현 매물 가능. 손절가(' + stopP.toLocaleString() + '원) 이탈 즉시 청산';
+  } else {
+    bigRisk = si.sector + ' 섹터 핵심 외부 변수';
+    bigDetail = si.geo;
+  }
+
+  var opinion = score >= 85 ? '매수 적극 검토' : score >= 75 ? '조건부 매수' : score >= 65 ? '관망' : '매수 자제';
 
   var L = [];
+  L.push('[ ' + stock.name + ' (' + stock.code + ') | ' + si.sector + ' | ' + mkt + ' ]');
+  L.push('');
   L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
   L.push('📊 종합 매수 매력도 평점');
   L.push('');
@@ -3513,101 +3594,53 @@ function generateSwingReport(stock) {
   if (perInfo) L.push('  💎 ' + perInfo);
   L.push('  근거: K스코어 ' + score + '점 · RR ' + rr + ' · 거래대금 ' + vol + '억 · RSI ' + rsi.toFixed(0));
   L.push('');
-
   L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
-  L.push('🌐 1. 매크로 및 산업 환경 분석');
+  L.push('🌐 1. 매크로 및 산업 환경 분석  [' + si.sector + ']');
   L.push('');
-  // 금리/환율
-  var rateMsg = changePct >= 3 ? '금리 인하 기대 + 환율 안정 시 외국인 수급 유입 가능성 높음'
-              : changePct <= -3 ? '금리·환율 불안정 구간 — 외국인 이탈 리스크 점검 필요'
-              : '금리·환율 중립 구간 — 미국 FOMC 결정 및 원/달러 1,300~1,400원 범위 주시';
   L.push('  - 금리/환율: ' + rateMsg);
-  // 원자재
-  var rawMsg = vol >= 2000 ? '대형 거래대금 → 기관·외국인 공급망 이슈 선반영 가능성'
-             : '원자재·공급망 이슈는 섹터별 별도 확인 필요 (DART 공시 참조)';
-  L.push('  - 원자재/공급망: ' + rawMsg);
-  // 정책
-  var mktType = (stock.mkt || 'kospi').toLowerCase();
-  var policyMsg = mktType === 'kospi'
-    ? 'KOSPI 대형주 — 정부 밸류업 정책·배당 확대 기조 수혜 가능 · 외국인 지분율 동향 확인'
-    : 'KOSDAQ 중소형 — 정부 중소·벤처 육성 정책 또는 규제 리스크 확인 필요';
-  L.push('  - 정부 정책/규제: ' + policyMsg);
-  // 글로벌 구조
-  var structMsg = vol >= 5000 ? '초대형 거래대금 → 해당 섹터 글로벌 구조적 수요 폭발 국면 진입 가능성'
-                : vol >= 1000 ? '섹터 테마 모멘텀 — AI·반도체·배터리 등 글로벌 구조 변화 수혜 여부 확인'
-                : '개별 종목 내러티브 — 산업 구조 변화 포지션 확인 필요';
-  L.push('  - 글로벌 구조 변화: ' + structMsg);
+  L.push('  - 원자재/공급망: ' + si.macro);
+  L.push('  - 정부 정책/규제: ' + si.policy);
+  L.push('  - 글로벌 구조 변화: ' + si.global);
+  if (fundText) L.push('  - 수급 분석: ' + fundText.substring(0, 100));
   L.push('');
-
   L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
   L.push('🔍 2. 뉴스·공시 리스크 검증');
   L.push('');
-  // 공시 리스크
-  L.push('  - 공시 리스크: ' + (changePct >= 8 || changePct <= -8
-    ? '급등락 → 유상증자·CB 발행·실적쇼크 등 공시 즉시 확인 (DART 필수)'
-    : '현재 스캔 기준 주요 공시 리스크 없음 — DART 실시간 확인 권고'));
-  // 경영/지배구조
-  L.push('  - 경영/지배구조: ' + (vol >= 3000
-    ? '초대형 수급 유입 → 경영진 변화·대주주 매도 동향 확인 필요'
-    : '정기 보고서·사업보고서 기준 경영 안정성 확인 권고'));
-  // 지정학
-  var geoMsg = mktType === 'kospi' && vol >= 2000
-    ? '수출 비중 높은 대형주 — 미·중 무역 분쟁·반도체 수출 규제 영향 직접 점검 필요'
-    : '지정학적 리스크는 간접 영향 — 환율·수출 지표 추이 모니터링';
-  L.push('  - 지정학적 리스크: ' + geoMsg);
-  // 뉴스 모멘텀
-  var momentumMsg = changePct >= 5 ? '강한 상승 → 호재 선반영 가능성 높음 · 추가 상승 동력(신규 계약·실적) 확인 필요'
-                 : changePct >= 2 ? '상승 초기 → 뉴스 모멘텀 신선도 양호 · 미반영 재료 존재 가능성'
-                 : '횡보·하락 → 뉴스 모멘텀 소진 또는 악재 선반영 여부 확인';
+  L.push('  - 공시 리스크: ' + disclosureMsg);
+  L.push('  - 경영/지배구조: ' + (vol >= 3000 ? '초대형 수급 유입 → 경영진 변화·대주주 매도 동향 확인 필요' : '정기보고서 기준 경영 안정성 확인 권고'));
+  L.push('  - 지정학적 리스크: ' + si.geo);
   L.push('  - 뉴스 모멘텀 신선도: ' + momentumMsg);
   L.push('');
-
   L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
   L.push('⚖️ 3. 기술적 전략 보완 (비판적 검토)');
   L.push('');
-  var tapMsg = rr >= 3 ? '손익비 ' + rr + ' — 외부 변수 감안해도 타점 합리적. 분할 진입 적합'
-             : rr >= 2 ? '손익비 ' + rr + ' — 외부 리스크 발생 시 손절 엄수 필수'
-             : '손익비 ' + rr + ' — 외부 변수 고려 시 타점 재검토 권고. 목표가 상향 또는 손절 조정';
   L.push('  - 타점 합리성: ' + tapMsg);
   L.push('  - 매입가: ' + buyP.toLocaleString() + '원 / 손절가: ' + stopP.toLocaleString() + '원 / 목표가: ' + tgtP.toLocaleString() + '원');
   L.push('  - 반드시 확인할 체크포인트:');
   L.push('    ☐ 매수 진입 전 양봉 캔들 + 거래량 동반 확인');
   L.push('    ☐ 외국인/기관 순매수 방향 (당일 수급 확인)');
-  L.push('    ☐ 코스피/나스닥 지수 방향성 (역행 시 진입 자제)');
+  L.push('    ☐ ' + (si.sector.indexOf('반도체') >= 0 ? 'SOX 지수·필라델피아 반도체 방향성 확인' :
+                     si.sector.indexOf('배터리') >= 0 ? '리튬·니켈 가격 동향 및 EV 판매 지표 확인' :
+                     si.sector.indexOf('자동차') >= 0 ? '원/달러 환율 방향 및 글로벌 EV 판매 확인' :
+                     '코스피/나스닥 지수 방향성 (역행 시 진입 자제)'));
   L.push('    ☐ DART 최근 공시 이상 없음 확인');
   L.push('');
-
   L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
   L.push('🎯 4. 결론 — 가장 큰 외부 변수');
   L.push('');
-  var bigRisk, bigDetail;
-  if (changePct >= 8 || (vol >= 3000 && changePct >= 5)) {
-    bigRisk = '고점 추격 + 차익 매물';
-    bigDetail = '급등 후 기관 차익 실현 매물 출회 가능. 갭상승 유지 실패 시 단기 급락 진입 → 손절가 이탈 즉시 청산';
-  } else if (changePct <= -5) {
-    bigRisk = '추가 하락 리스크';
-    bigDetail = '현재 하락 추세 지속 여부 불명확. 지지선 확인 전 매수 자제 — 반등 캔들 출현 후 재진입 전략 권고';
-  } else if (mktType === 'kospi' && vol >= 2000) {
-    bigRisk = '미·중 무역/환율 변동성';
-    bigDetail = '외국인 대형 수급 유입 종목은 환율 급등(원화 약세) 또는 미·중 갈등 재점화 시 외국인 이탈 직격. 원/달러 1,400원 돌파 여부 핵심 모니터링 지표';
-  } else {
-    bigRisk = '미국 FOMC·금리 불확실성';
-    bigDetail = 'FOMC 금리 결정 및 CPI 발표에 따라 전체 시장 방향성이 결정됨. 발표 전후 변동성 확대 구간에서는 포지션 축소 또는 관망 권고';
-  }
-  L.push('  ⚠️ ' + bigRisk + ': ' + bigDetail);
+  L.push('  ⚠️ ' + bigRisk + ':');
+  L.push('  ' + bigDetail);
   L.push('');
-
   L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
   L.push('💡 최종 투자 의견');
   L.push('');
-  var opinion = score >= 85 ? '매수 적극 검토' : score >= 75 ? '조건부 매수' : score >= 65 ? '관망' : '매수 자제';
   L.push('  - 의견: ' + opinion);
-  L.push('  - 목표가: ' + tgtP.toLocaleString() + '원 (+' + tgtPct + '%) · 기간: ' + ({swing:'3~7일',surge:'1~3일',tomorrow:'1~3일',smallmid:'5~14일',per:'5~10일'}[cat]||'3~7일'));
+  L.push('  - 목표가: ' + tgtP.toLocaleString() + '원 (+' + tgtPct + '%) · ' + ({swing:'3~7일',surge:'1~3일',tomorrow:'1~3일',smallmid:'5~14일',per:'5~10일'}[cat]||'3~7일'));
   L.push('  - 손절선: ' + stopP.toLocaleString() + '원 (-' + stopPct + '%) · 손익비 ' + rr);
   L.push('  - 핵심 전제: 손절가 엄수 · 분할 진입(30%→30%→40%) · 지수 역행 시 진입 자제');
   L.push('  - 무효화 조건: 손절가 이탈 / 부정적 공시 / 코스피 -1.5% 이상 급락');
   L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
-  L.push('⚡ K-ALPHA 로컬 분석 · AI(Gemini) 연결 시 더 정확한 분석 제공');
+  L.push('⚡ K-ALPHA 로컬 분석 [' + si.sector + '] · Gemini AI 연결 시 더 정확한 분석 제공');
   return L.join('\n');
 }
 
