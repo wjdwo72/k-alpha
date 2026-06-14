@@ -4018,25 +4018,31 @@ st.markdown("""
     wrap.id = 'kalpha-fab-wrap';
     // 위로가기
     var up = topDoc.createElement('button');
-    up.id = 'kalpha-fab-up'; up.textContent = '↑'; up.title = '맨 위로';
-    up.onclick = function() {
-      // 실제로 스크롤된 element 찾기 (scrollTop > 0인 element)
-      var found = false;
+    up.id = 'kalpha-fab-up'; up.title = '맨 위로';
+    up.textContent = '↑';
+    up.onclick = function(e) {
+      e.preventDefault();
+      // 방법1: location.hash로 앵커 이동 (부모 페이지)
+      try {
+        var a = topDoc.createElement('a');
+        a.id = 'kalpha-top-anchor';
+        a.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;';
+        // 기존 앵커 제거 후 재추가
+        var old = topDoc.getElementById('kalpha-top-anchor');
+        if (old) old.remove();
+        topDoc.body.insertBefore(a, topDoc.body.firstChild);
+        a.scrollIntoView({behavior: 'smooth', block: 'start'});
+        return;
+      } catch(e1) {}
+      // 방법2: 모든 스크롤 가능한 요소 scrollTop=0
       try {
         var all = topDoc.querySelectorAll('*');
         for (var i = 0; i < all.length; i++) {
-          if (all[i].scrollTop > 0) {
-            all[i].scrollTo({top: 0, behavior: 'smooth'});
-            found = true;
-          }
+          try {
+            if (all[i].scrollTop > 10) all[i].scrollTop = 0;
+          } catch(e2) {}
         }
-      } catch(e) {}
-      if (!found) {
-        // fallback: 가능한 모든 방법
-        try { topDoc.documentElement.scrollTop = 0; } catch(e) {}
-        try { topDoc.body.scrollTop = 0; } catch(e) {}
-        try { window.top.scrollTo(0, 0); } catch(e) {}
-      }
+      } catch(e3) {}
     };
     // 설정
     var cfg = topDoc.createElement('button');
