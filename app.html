@@ -1468,33 +1468,6 @@
 </div>
 
 <!-- 우측 하단 버튼 바 (sticky → 스크롤해도 항상 화면에 보임) -->
-<div id="side-btns" style="
-  position: sticky;
-  top: calc(100vh - 130px);
-  float: right;
-  margin-right: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 9999;
-  pointer-events: all;
-">
-  <button onclick="document.getElementById('app-top').scrollIntoView({behavior:'smooth'})"
-    title="맨 위로"
-    style="width:44px;height:44px;border-radius:50%;
-      background:rgba(2,6,16,0.95);color:#00d4ff;
-      border:2px solid #00d4ff;font-size:22px;font-weight:bold;
-      cursor:pointer;display:flex;align-items:center;justify-content:center;
-      box-shadow:0 2px 12px rgba(0,0,0,0.8);padding:0;">↑</button>
-  <button onclick="openSettings(event)"
-    title="필터 설정"
-    style="width:52px;height:52px;border-radius:50%;
-      background:#00d4ff;color:#020408;border:none;
-      font-size:22px;cursor:pointer;
-      display:flex;align-items:center;justify-content:center;
-      box-shadow:0 0 16px rgba(0,212,255,0.5);padding:0;">⚙</button>
-</div>
-<div id="app-top" style="position:absolute;top:0;left:0;width:1px;height:1px;"></div>
 
 
 <!-- RISK BANNER -->
@@ -5656,31 +5629,16 @@ updateClock();
 
 // ── Streamlit iframe 높이 자동 조정 ──
 function sendHeight() {
-  var h = Math.max(
-    document.body.scrollHeight,
-    document.documentElement.scrollHeight,
-    document.body.offsetHeight,
-    3000
-  ) + 80;
-  try { window.parent.postMessage({ type: 'streamlit:setFrameHeight', height: h }, '*'); } catch(e) {}
+  // iframe 높이를 화면 높이로 제한 → 내부 스크롤 유지 → position:fixed 정상 작동
+  var vh = window.innerHeight || 800;
+  try { window.parent.postMessage({ type: 'streamlit:setFrameHeight', height: vh }, '*'); } catch(e) {}
 }
 
 if (IS_STREAMLIT) {
-  // 초기 로드
   setTimeout(sendHeight, 300);
   setTimeout(sendHeight, 800);
   setTimeout(sendHeight, 2000);
-  setTimeout(sendHeight, 4000);
-  // 탭 전환·클릭 시 재측정
   window.addEventListener('click', function() { setTimeout(sendHeight, 400); });
-  // 탭 패널 클릭 감지
-  document.addEventListener('click', function(e) {
-    if (e.target && (e.target.classList.contains('tab') || e.target.closest('.tab'))) {
-      setTimeout(sendHeight, 300);
-      setTimeout(sendHeight, 700);
-    }
-  });
-  // ResizeObserver — 콘텐츠 크기 변할 때마다 자동 전송
   if (typeof ResizeObserver !== 'undefined') {
     var _ro = new ResizeObserver(function() { sendHeight(); });
     _ro.observe(document.body);
@@ -5717,5 +5675,15 @@ setTimeout(function() {
 
 
 
+<!-- 우측 하단 고정 버튼 -->
+<style>
+#kab-wrap{position:fixed;bottom:20px;right:16px;display:flex;flex-direction:column;gap:10px;z-index:2147483647}
+#kab-up{width:44px;height:44px;border-radius:50%;background:rgba(2,6,16,.95);color:#00d4ff;border:2px solid #00d4ff;font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,.8);padding:0}
+#kab-cfg{width:52px;height:52px;border-radius:50%;background:#00d4ff;color:#020408;border:none;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(0,212,255,.5);padding:0}
+</style>
+<div id="kab-wrap">
+  <button id="kab-up" title="맨 위로" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+  <button id="kab-cfg" title="필터 설정" onclick="openSettings(event)">⚙</button>
+</div>
 </body>
 </html>

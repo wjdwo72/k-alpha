@@ -3997,7 +3997,7 @@ server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.sessi
 
 # 정적 HTML 렌더
 # scrolling=False + 큰 height → React DOM 재조정 없음 (removeChild 오류 방지)
-components.html(_final_html, height=20000, scrolling=False)
+components.html(_final_html, height=800, scrolling=True)
 
 # ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
 _data_js = f"""<script>
@@ -4032,6 +4032,7 @@ _data_js = f"""<script>
     }});
   }}catch(e){{}}
   try{{window.parent.postMessage(payload,'*');}}catch(e){{}}
+
 }})();
 </script>"""
 components.html(_data_js, height=0, scrolling=False)
