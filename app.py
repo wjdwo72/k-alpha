@@ -3994,35 +3994,6 @@ _final_html = st.session_state['_cached_html']
 # 설정 서버 저장
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
-# ── 우측 하단 버튼 (Streamlit 레이어 - iframe 외부) ──
-st.markdown("""
-<style>
-.kalpha-fab {
-  position: fixed !important;
-  right: 20px;
-  z-index: 9999999;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
-}
-#kb-up  { bottom: 82px; width:44px; height:44px; background:rgba(2,6,16,0.9);
-           color:#00d4ff; border:2px solid #00d4ff; font-weight:bold; }
-#kb-cfg { bottom: 22px; width:52px; height:52px; background:#00d4ff;
-           color:#020408; border:none; }
-</style>
-<button class="kalpha-fab" id="kb-up"
-  onclick="window.scrollTo(0,0);
-           var fs=document.querySelectorAll('iframe');
-           fs.forEach(function(f){try{f.contentWindow.scrollTo(0,0);}catch(e){}});">↑</button>
-<button class="kalpha-fab" id="kb-cfg"
-  onclick="var fs=document.querySelectorAll('iframe');
-           fs.forEach(function(f){try{f.contentWindow.postMessage({type:'kalpha_open_settings'},'*');}catch(e){}});">⚙</button>
-""", unsafe_allow_html=True)
-
 
 # 정적 HTML 렌더
 components.html(_final_html, height=30000, scrolling=False)
