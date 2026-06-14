@@ -1865,9 +1865,9 @@ if (IS_STREAMLIT) {
     '.modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }',
     '.modal-overlay.show { display:block !important; }',
     '.modal-overlay.show > .modal { position:absolute !important; left:50% !important; transform:translateX(-50%) !important; margin:0 !important; }',
-    '#ai-modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }',
-    '#ai-modal-overlay.show { display:block !important; }',
-    '#ai-modal-overlay.show #ai-modal-box { position:absolute !important; left:50% !important; transform:translateX(-50%) !important; margin:0 !important; }'
+    /* AI 모달은 position:fixed 유지 (iframe 안에서 fixed = iframe 기준 고정) */
+    '#ai-modal-overlay { position:fixed !important; top:0 !important; left:0 !important; right:0 !important; bottom:0 !important; height:100% !important; overflow-y:auto !important; z-index:9999 !important; }',
+    '#ai-modal-overlay.show { display:flex !important; align-items:flex-start !important; justify-content:center !important; padding:20px 12px !important; }'
   ].join('');
   document.head.appendChild(_ss);
 }
@@ -3071,8 +3071,8 @@ function buildCard(stock, rank) {
           <span class="pgl">손익비</span><span class="pgv rr">${stock.rr}</span>
         </div>
       </div>
-      <!-- 차트 2개: 전체 너비, 나란히 -->
-      <div style="display:flex;gap:6px;width:100%;">
+      <!-- 차트 2개: 최대 600px, 나란히 -->
+      <div style="display:flex;gap:6px;width:100%;max-width:600px;">
         <!-- 봉차트(일봉) 왼쪽 -->
         <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);background:#0a0e16;position:relative;flex:1;"
           onclick="(function(e){e.stopPropagation();openKisChart('${stock.code}','kr','${stock.name}',e,'day')}).call(this,event)"
@@ -3081,7 +3081,7 @@ function buildCard(stock, rank) {
           <img
             src="https://ssl.pstatic.net/imgfinance/chart/item/candle/day/${stock.code}.png"
             onerror="this.src='https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png';this.onerror=function(){this.parentElement.style.display='none'}"
-            style="width:100%;display:block;height:90px;object-fit:fill;"
+            style="width:100%;display:block;height:120px;object-fit:fill;"
             loading="lazy" alt="${stock.name} 봉차트"
           />
         </div>
@@ -3093,7 +3093,7 @@ function buildCard(stock, rank) {
           <img
             src="https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png"
             onerror="this.src='https://ssl.pstatic.net/imgfinance/chart/item/area/3month/${stock.code}.png';this.onerror=function(){this.parentElement.style.display='none'}"
-            style="width:100%;display:block;height:90px;object-fit:fill;"
+            style="width:100%;display:block;height:120px;object-fit:fill;"
             loading="lazy" alt="${stock.name} 선차트"
           />
         </div>
