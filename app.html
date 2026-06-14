@@ -5686,11 +5686,11 @@ setTimeout(function() {
   <div class="chart-popup-links" id="chart-popup-links"></div>
 </div>
 
-<!-- ── 우측 하단 고정 버튼 (scrolling=True iframe에서 position:fixed 정상 작동) ── -->
+
+<!-- ── 우측 하단 버튼 (scrolling=False 대응: JS로 위치 동적 계산) ── -->
 <style>
 #k-fab-wrap {
-  position: fixed;
-  bottom: 20px;
+  position: absolute;
   right: 16px;
   display: flex;
   flex-direction: column;
@@ -5718,16 +5718,53 @@ setTimeout(function() {
   <button id="k-fab-cfg" title="필터 설정">⚙</button>
 </div>
 <script>
-document.getElementById('k-fab-up').addEventListener('click', function(e) {
-  e.stopPropagation();
-  e.preventDefault();
-  window.scrollTo({top: 0, behavior: 'smooth'});
-});
-document.getElementById('k-fab-cfg').addEventListener('click', function(e) {
-  e.stopPropagation();
-  e.preventDefault();
-  if (typeof openSettings === 'function') openSettings(e);
-});
+(function() {
+  var fabWrap = document.getElementById('k-fab-wrap');
+  var fabUp   = document.getElementById('k-fab-up');
+  var fabCfg  = document.getElementById('k-fab-cfg');
+
+  fabUp.addEventListener('click', function(e) {
+    e.stopPropagation(); e.preventDefault();
+    try { window.parent.scrollTo({top:0, behavior:'smooth'}); } catch(ex){}
+    window.scrollTo(0, 0);
+  });
+  fabCfg.addEventListener('click', function(e) {
+    e.stopPropagation(); e.preventDefault();
+    if (typeof openSettings === 'function') openSettings(e);
+  });
+
+  // 부모 스크롤에 따라 버튼 위치 업데이트
+  function updatePos() {
+    try {
+      var ps = window.parent.document.documentElement.scrollTop
+             || window.parent.document.body.scrollTop || 0;
+      var pvh = window.parent.innerHeight || 600;
+      // iframe의 부모 내 top 위치
+      var iframeTop = 0;
+      var iframes = window.parent.document.querySelectorAll('iframe');
+      for (var i = 0; i < iframes.length; i++) {
+        if (iframes[i].contentWindow === window) {
+          iframeTop = iframes[i].getBoundingClientRect().top
+                    + (window.parent.document.documentElement.scrollTop || 0);
+          break;
+        }
+      }
+      var top = ps - iframeTop + pvh - 120;
+      if (top > 0) {
+        fabWrap.style.top = Math.max(top, 100) + 'px';
+        fabWrap.style.bottom = 'auto';
+      }
+    } catch(ex) {
+      // cross-origin 차단 시 document 하단에 고정
+      fabWrap.style.top = (document.body.scrollHeight - 120) + 'px';
+    }
+  }
+
+  try { window.parent.addEventListener('scroll', updatePos, {passive:true}); } catch(ex){}
+  setInterval(updatePos, 500);
+  setTimeout(updatePos, 300);
+  setTimeout(updatePos, 1000);
+})();
 </script>
 
 </body>

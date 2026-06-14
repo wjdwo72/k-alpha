@@ -3975,8 +3975,8 @@ def _safe_json(s):
 _STATIC_INJECT = '<script>window.__STREAMLIT_MODE__=true;</script>'
 
 import os as _os, hashlib as _hashlib
-_html_path = "app.html"
 
+_html_path = "app.html"
 with open(_html_path, "r", encoding="utf-8") as _f:
     _raw_html = _f.read()
 
@@ -3994,10 +3994,9 @@ _final_html = st.session_state['_cached_html']
 # 설정 서버 저장
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
-
-
 # 정적 HTML 렌더
-components.html(_final_html, height=800, scrolling=True)
+# scrolling=False + 큰 height → React DOM 재조정 없음 (removeChild 오류 방지)
+components.html(_final_html, height=20000, scrolling=False)
 
 # ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
 _data_js = f"""<script>
