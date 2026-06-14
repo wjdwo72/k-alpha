@@ -3710,9 +3710,19 @@ function _positionModalForStreamlit(el, clickY) {
   try {
     var box = el.querySelector('.modal, #ai-modal-box');
     if (!box) return;
-    var vh = window.innerHeight || 600;
-    // 클릭 위치 기준으로 모달 표시 (fixed 기준 viewport Y)
-    var topPx = Math.max(10, Math.min((clickY || vh/3) - 40, vh - 100));
+    // 부모 스크롤 기준 현재 viewport top 계산
+    var parentScroll = 0;
+    var iframeTop = 0;
+    try {
+      parentScroll = window.parent.document.documentElement.scrollTop
+        || window.parent.document.body.scrollTop || 0;
+      var iframes = window.parent.document.querySelectorAll('iframe');
+      iframes.forEach(function(f) {
+        try { if (f.contentWindow === window) iframeTop = f.getBoundingClientRect().top + parentScroll; } catch(ex) {}
+      });
+    } catch(ex) {}
+    var visibleTop = Math.max(0, parentScroll - iframeTop);
+    var topPx = visibleTop + Math.max(20, (clickY || 200) - 60);
     box.style.marginTop = topPx + 'px';
   } catch(e) {}
 }
@@ -5654,7 +5664,6 @@ setTimeout(function() {
 <script>
 (function() {
   function mountFabs() {
-    // 기존 버튼 제거 후 body에 직접 추가
     ['scroll-top-btn','filter-fab'].forEach(function(id){
       var old = document.getElementById(id);
       if (old) old.remove();
@@ -5672,9 +5681,11 @@ setTimeout(function() {
       + 'box-shadow:0 2px 16px rgba(0,0,0,0.8);line-height:1;padding:0;';
     upBtn.addEventListener('click', function(e) {
       e.stopPropagation();
+      // 부모 페이지(Streamlit) 스크롤
+      try { window.parent.scrollTo({top:0, behavior:'smooth'}); } catch(ex) {}
+      try { window.parent.document.documentElement.scrollTop = 0; } catch(ex) {}
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
     });
     document.body.appendChild(upBtn);
 
@@ -5692,6 +5703,42 @@ setTimeout(function() {
       openSettings(e);
     });
     document.body.appendChild(fab);
+
+    // 부모 페이지 스크롤에 따라 버튼 위치 동기화
+    function syncFromParent() {
+      try {
+        var parentScroll = window.parent.document.documentElement.scrollTop
+          || window.parent.document.body.scrollTop || 0;
+        var parentVH = window.parent.innerHeight || 600;
+        var iframeTop = 0;
+        // iframe의 부모 페이지 기준 top 위치 찾기
+        try {
+          var iframes = window.parent.document.querySelectorAll('iframe');
+          iframes.forEach(function(f) {
+            try {
+              if (f.contentWindow === window) {
+                iframeTop = f.getBoundingClientRect().top + parentScroll;
+              }
+            } catch(ex) {}
+          });
+        } catch(ex) {}
+        // 현재 뷰포트에서 iframe의 보이는 영역 계산
+        var visibleTop = Math.max(0, parentScroll - iframeTop);
+        var bottomPos = visibleTop + parentVH - 24;
+        if (upBtn.parentNode) upBtn.style.top = (bottomPos - 44 - 16) + 'px';
+        if (fab.parentNode) fab.style.top = (bottomPos - 52) + 'px';
+        // bottom 대신 top 사용
+        upBtn.style.bottom = 'auto';
+        fab.style.bottom = 'auto';
+      } catch(ex) {
+        // 접근 불가 시 그냥 fixed 유지
+      }
+    }
+    try {
+      window.parent.addEventListener('scroll', syncFromParent, {passive:true});
+    } catch(ex) {}
+    setInterval(syncFromParent, 200);
+    setTimeout(syncFromParent, 100);
   }
 
   if (document.readyState === 'loading') {
