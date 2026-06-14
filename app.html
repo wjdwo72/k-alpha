@@ -1843,12 +1843,12 @@ if (IS_STREAMLIT) {
     '#tab-portfolio { height:auto !important; overflow:visible !important; }',
     '.portfolio-summary, .pf-market-tabs, .pf-holdings, #pf-holdings-kr, #pf-holdings-us { height:auto !important; overflow:visible !important; }',
     '#section-kr, #section-us { height:auto !important; overflow:visible !important; }',
-    '.modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }',
-    '.modal-overlay.show { display:block !important; }',
-    '.modal-overlay.show > .modal { position:absolute !important; left:50% !important; transform:translateX(-50%) !important; margin:0 !important; }',
-    /* AI 모달 — Streamlit iframe에서 전체 뷰포트 커버 */
+    '.modal-overlay { position:fixed !important; inset:0 !important; height:100vh !important; overflow-y:auto !important; }',
+    '.modal-overlay.show { display:flex !important; align-items:flex-start !important; justify-content:center !important; padding:20px 12px !important; }',
+    '.modal-overlay.show > .modal { position:relative !important; margin:auto !important; }',
+    /* AI 모달 */
     '#ai-modal-overlay { position:fixed !important; inset:0 !important; height:100vh !important; overflow-y:auto !important; z-index:9999 !important; }',
-    '#ai-modal-overlay.show { display:flex !important; }'
+    '#ai-modal-overlay.show { display:flex !important; align-items:flex-start !important; justify-content:center !important; padding:12px !important; }'
   ].join('');
   document.head.appendChild(_ss);
 }
@@ -3710,13 +3710,10 @@ function _positionModalForStreamlit(el, clickY) {
   try {
     var box = el.querySelector('.modal, #ai-modal-box');
     if (!box) return;
-    // 모달을 클릭 위치(scrollY + clientY) 근처로 스크롤
-    var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    var targetScroll = Math.max(0, scrollY + (clickY || 200) - 80);
-    el.scrollTop = 0;
-    setTimeout(function() {
-      window.scrollTo({ top: targetScroll, behavior: 'smooth' });
-    }, 50);
+    var vh = window.innerHeight || 600;
+    // 클릭 위치 기준으로 모달 표시 (fixed 기준 viewport Y)
+    var topPx = Math.max(10, Math.min((clickY || vh/3) - 40, vh - 100));
+    box.style.marginTop = topPx + 'px';
   } catch(e) {}
 }
 function _resetModalPosition(el) {
@@ -5557,6 +5554,23 @@ if (!kisToken) {
 
 renderCards();
 renderUsCards();
+
+// 초기 DEMO 종목 전체 _aiStockMap 등록 (AI 버튼 즉시 작동)
+(function() {
+  var allCats = ['swing','surge','tomorrow','smallmid','per'];
+  allCats.forEach(function(cat) {
+    (DEMO[cat] || []).forEach(function(s) {
+      if (s && s.code) _aiStockMap[s.code] = s;
+    });
+  });
+  var usCats = ['swing','surge','tomorrow'];
+  usCats.forEach(function(cat) {
+    ((DEMO_US || {})[cat] || []).forEach(function(s) {
+      if (s && s.code) _aiStockMap[s.code] = s;
+    });
+  });
+})();
+
 setInterval(updateClock, 1000);
 updateClock();
 
@@ -5608,25 +5622,22 @@ setTimeout(function() {
 </div>
 
 <!-- ⚙ 필터 플로팅 버튼 (항상 표시, 모든 환경) -->
-<!-- ── 플로팅 버튼 바 (Streamlit iframe 호환) ── -->
-<div id="fab-bar" style="position:sticky;bottom:0;left:0;right:0;z-index:3000;
-  display:flex;justify-content:flex-end;align-items:center;gap:8px;
-  padding:8px 16px 8px 8px;pointer-events:none;background:transparent;">
-  <button id="scroll-top-btn" title="맨 위로"
-    onclick="document.documentElement.scrollTop=0;document.body.scrollTop=0;window.scrollTo(0,0);"
-    style="pointer-events:all;width:44px;height:44px;border-radius:50%;
-      background:rgba(13,18,32,0.92);color:var(--accent);
-      border:1px solid rgba(0,212,255,0.5);font-size:18px;cursor:pointer;
-      display:flex;align-items:center;justify-content:center;
-      box-shadow:0 2px 12px rgba(0,0,0,0.6);
-      touch-action:manipulation;-webkit-tap-highlight-color:transparent;">↑</button>
-  <button id="filter-fab" onclick="openSettings(event)" title="스캔 필터 설정"
-    style="pointer-events:all;width:52px;height:52px;border-radius:50%;
-      background:var(--accent);color:#020408;border:none;font-size:20px;cursor:pointer;
-      display:flex;align-items:center;justify-content:center;
-      box-shadow:0 0 20px rgba(0,212,255,.5);
-      touch-action:manipulation;-webkit-tap-highlight-color:transparent;">⚙</button>
-</div>
+<!-- ── 플로팅 버튼 (scrolling=True iframe에서 fixed 작동) ── -->
+<button id="scroll-top-btn" title="맨 위로"
+  onclick="window.scrollTo({top:0,behavior:'smooth'});"
+  style="position:fixed;bottom:82px;right:16px;width:44px;height:44px;border-radius:50%;
+    background:rgba(13,18,32,0.92);color:var(--accent);
+    border:1.5px solid rgba(0,212,255,0.6);font-size:20px;font-weight:bold;cursor:pointer;
+    z-index:9000;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 16px rgba(0,0,0,0.7),0 0 12px rgba(0,212,255,0.3);
+    touch-action:manipulation;-webkit-tap-highlight-color:transparent;">↑</button>
+
+<button id="filter-fab" onclick="openSettings(event)" title="스캔 필터 설정"
+  style="position:fixed;bottom:24px;right:16px;width:52px;height:52px;border-radius:50%;
+    background:var(--accent);color:#020408;border:none;font-size:20px;cursor:pointer;
+    z-index:9000;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 20px rgba(0,212,255,.5);
+    touch-action:manipulation;-webkit-tap-highlight-color:transparent;">⚙</button>
 
 <!-- 차트 링크 팝업 -->
 <div class="chart-popup-overlay" id="chart-popup-overlay" onclick="closeChartPopup()"></div>

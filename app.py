@@ -3995,7 +3995,7 @@ _final_html = st.session_state['_cached_html']
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
 # 정적 HTML 렌더 (세션 내 항상 동일한 문자열 → React 재조정 없음)
-components.html(_final_html, height=15000, scrolling=False)
+components.html(_final_html, height=15000, scrolling=True)
 
 # ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
 _data_js = f"""<script>
