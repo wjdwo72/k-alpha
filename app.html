@@ -1467,17 +1467,67 @@
       <span class="spin">↻</span> 새로고침
     </button>
     <span id="clock">--:--:--</span>
-    <!-- 위로가기 + 필터 버튼: 탑바 안에 고정 배치 -->
-    <button onclick="window.scrollTo({top:0,behavior:'smooth'});try{window.parent.scrollTo({top:0,behavior:'smooth'});}catch(e){}"
-      title="맨 위로" style="width:30px;height:30px;border-radius:50%;background:rgba(0,212,255,0.15);
-      color:#00d4ff;border:1px solid rgba(0,212,255,0.5);font-size:14px;font-weight:bold;
-      cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;">↑</button>
-    <button onclick="openSettings(event)" title="필터 설정"
-      style="width:30px;height:30px;border-radius:50%;background:#00d4ff;color:#020408;
-      border:none;font-size:14px;cursor:pointer;padding:0;
-      display:flex;align-items:center;justify-content:center;flex-shrink:0;">⚙</button>
   </div>
 </div>
+
+<!-- ── 우측 하단 고정 버튼 (JS로 스크롤 따라 이동) ── -->
+<div id="fab-wrap">
+  <button id="fab-up" title="맨 위로"
+    onclick="try{window.parent.scrollTo({top:0,behavior:'smooth'});}catch(e){};window.scrollTo(0,0);"
+    style="width:44px;height:44px;border-radius:50%;background:rgba(13,18,32,0.95);
+      color:#00d4ff;border:2px solid #00d4ff;font-size:20px;font-weight:bold;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 16px rgba(0,0,0,0.8);">↑</button>
+  <button id="fab-cfg" title="필터 설정" onclick="openSettings(event)"
+    style="width:52px;height:52px;border-radius:50%;background:#00d4ff;color:#020408;
+      border:none;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      box-shadow:0 0 20px rgba(0,212,255,.6);">⚙</button>
+</div>
+<style>
+#fab-wrap {
+  position: absolute;
+  right: 16px;
+  bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 5000;
+}
+</style>
+<script>
+// 스크롤에 따라 fab 위치 업데이트
+(function() {
+  var lastUpdate = 0;
+  function updateFab() {
+    var now = Date.now();
+    if (now - lastUpdate < 100) return;
+    lastUpdate = now;
+    var fab = document.getElementById('fab-wrap');
+    if (!fab) return;
+    try {
+      var pScroll = window.parent.document.documentElement.scrollTop || window.parent.document.body.scrollTop || 0;
+      var pVH = window.parent.innerHeight || 600;
+      var iframeOffsetTop = 0;
+      var iframes = window.parent.document.querySelectorAll('iframe');
+      for (var i=0; i<iframes.length; i++) {
+        if (iframes[i].contentWindow === window) {
+          iframeOffsetTop = iframes[i].getBoundingClientRect().top + pScroll;
+          break;
+        }
+      }
+      // 현재 화면에서 보이는 iframe 하단 위치
+      var visibleBottom = pScroll + pVH - iframeOffsetTop;
+      fab.style.top = (visibleBottom - 150) + 'px';
+      fab.style.bottom = 'auto';
+    } catch(e) {
+      // cross-origin 불가 시 그냥 페이지 하단에
+    }
+  }
+  try { window.parent.addEventListener('scroll', updateFab, {passive:true}); } catch(e) {}
+  setInterval(updateFab, 300);
+  setTimeout(updateFab, 500);
+})();
+</script>
 
 <!-- RISK BANNER -->
 <div class="risk-banner" id="risk-banner">
@@ -3111,7 +3161,7 @@ function buildCard(stock, rank) {
       <button class="btn-approve" id="btn-${stock.code}" onclick="openModal(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
         ⬡ K-자동매매 승인
       </button>
-      <button class="btn-ai" id="btn-ai-${stock.code}" onclick="openAiAnalysis(event,'${stock.code}')">
+      <button class="btn-ai" id="btn-ai-${stock.code}" data-code="${stock.code}">
         🤖 AI 분석
       </button>
     </div>
@@ -5373,19 +5423,6 @@ function applyRealScanData() {
       if (s && s.code) _aiStockMap[s.code] = s;
     });
   });
-
-  // 실시간 카드 btn-ai 재등록
-  setTimeout(function() {
-    document.querySelectorAll('.btn-ai[id^="btn-ai-"]').forEach(function(btn) {
-      var code = btn.id.replace('btn-ai-', '');
-      var newBtn = btn.cloneNode(true);
-      newBtn.addEventListener('click', function(e) {
-        e.stopPropagation(); e.preventDefault();
-        openAiAnalysis(e, code);
-      }, true);
-      btn.parentNode.replaceChild(newBtn, btn);
-    });
-  }, 300);
   var banner = document.getElementById('demo-banner');
   if (banner) banner.style.display='none';
   var live = document.getElementById('live-banner');
@@ -5599,28 +5636,18 @@ renderUsCards();
     });
   });
 
-  // btn-ai 버튼 이벤트 리스너 강제 재등록 (카드 onclick 충돌 방지)
-  function reRegisterAiBtns() {
-    document.querySelectorAll('.btn-ai[id^="btn-ai-"]').forEach(function(btn) {
-      var code = btn.id.replace('btn-ai-', '');
-      // stock이 _aiStockMap에 없으면 DEMO에서 찾아 등록
-      if (!_aiStockMap[code]) {
-        ['swing','surge','tomorrow','smallmid','per'].forEach(function(cat) {
-          (DEMO[cat]||[]).forEach(function(s){ if(s&&s.code===code) _aiStockMap[code]=s; });
-        });
-      }
-      var newBtn = btn.cloneNode(true);
-      newBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        openAiAnalysis(e, code);
-      }, true);
-      if (btn.parentNode) btn.parentNode.replaceChild(newBtn, btn);
-    });
-  }
-  setTimeout(reRegisterAiBtns, 300);
-  setTimeout(reRegisterAiBtns, 1000);
-  setTimeout(reRegisterAiBtns, 3000);
+  // ── AI 버튼 전역 이벤트 위임 (가장 확실한 방법)
+  // 개별 버튼 onclick/addEventListener 불필요 — document 레벨에서 처리
+  document.addEventListener('click', function(e) {
+    // btn-ai 버튼 또는 그 자식 요소 클릭 감지
+    var btn = e.target.closest('.btn-ai');
+    if (!btn) return;
+    e.stopPropagation();
+    e.preventDefault();
+    var code = btn.dataset.code || btn.id.replace('btn-ai-', '');
+    if (!code) return;
+    openAiAnalysis(e, code);
+  }, true);  // capture=true: 카드 click 이벤트보다 먼저 처리
 })();
 
 setInterval(updateClock, 1000);
