@@ -3052,44 +3052,47 @@ function buildCard(stock, rank) {
         <div style="display:flex;gap:6px">${tradingBadge}${rsiBadge}</div>
       </div>
     </div>
-    <div class="card-body">
-      <div class="price-block">
+    <div class="card-body" style="flex-direction:column;gap:8px;padding:10px 14px;">
+      <div class="price-block" style="min-width:unset;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
           <span id="price-badge-${stock.code}" style="font-family:'Share Tech Mono',monospace;font-size:8px;padding:1px 5px;border-radius:3px;${stock._isLive || kisToken ? 'background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.3);color:#00ff88' : 'background:rgba(255,200,0,0.12);border:1px solid rgba(255,200,0,0.3);color:#ffc800'}">${stock._isLive || kisToken ? 'LIVE' : 'DEMO'}</span>
           <button id="price-refresh-${stock.code}" onclick="refreshOnePrice('${stock.code}','${stock.name}')" title="현재가 갱신" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:0;line-height:1;transition:color 0.2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">↻</button>
           <span id="price-ts-${stock.code}" style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-dim)"></span>
         </div>
-        <div class="price-current" id="price-val-${stock.code}">${stock.price}</div>
-        <div class="price-change ${stock.up ? 'up' : 'dn'}" id="price-chg-${stock.code}">${stock.change}</div>
-        <div class="price-grid">
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+          <div class="price-current" id="price-val-${stock.code}">${stock.price}</div>
+          <div class="price-change ${stock.up ? 'up' : 'dn'}" id="price-chg-${stock.code}">${stock.change}</div>
+        </div>
+        <div class="price-grid" style="margin-top:4px;">
           <span class="pgl">매입가</span><span class="pgv buy">${stock.buy}</span>
           <span class="pgl">목표가</span><span class="pgv target">${stock.target}</span>
           <span class="pgl">손절가</span><span class="pgv stop">${stock.stop}</span>
           <span class="pgl">손익비</span><span class="pgv rr">${stock.rr}</span>
         </div>
       </div>
-      <div class="chart-block">
-        <!-- 봉차트(일봉) 왼쪽 — 클릭 시 팝업 -->
-        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0d1117;position:relative;flex:1;min-height:52px;"
+      <!-- 차트 2개: 전체 너비, 나란히 -->
+      <div style="display:flex;gap:6px;width:100%;">
+        <!-- 봉차트(일봉) 왼쪽 -->
+        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);background:#0a0e16;position:relative;flex:1;"
           onclick="(function(e){e.stopPropagation();openKisChart('${stock.code}','kr','${stock.name}',e,'day')}).call(this,event)"
-          title="${stock.name} 봉차트(일봉) — 클릭시 확대">
-          <div class="chart-label" style="position:absolute;top:3px;left:5px;z-index:2;background:rgba(0,0,0,0.6);padding:1px 5px;border-radius:2px;font-size:9px;">봉차트 ↗</div>
+          title="${stock.name} 봉차트(일봉)">
+          <div style="position:absolute;top:3px;left:5px;z-index:2;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);background:rgba(0,0,0,0.7);padding:1px 5px;border-radius:2px;">봉차트 ↗</div>
           <img
             src="https://ssl.pstatic.net/imgfinance/chart/item/candle/day/${stock.code}.png"
             onerror="this.src='https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png';this.onerror=function(){this.parentElement.style.display='none'}"
-            style="width:100%;display:block;height:auto;max-height:80px;object-fit:contain;"
+            style="width:100%;display:block;height:90px;object-fit:fill;"
             loading="lazy" alt="${stock.name} 봉차트"
           />
         </div>
-        <!-- 선차트(당일) 오른쪽 — 클릭 시 팝업 -->
-        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0d1117;position:relative;flex:1;min-height:52px;"
+        <!-- 선차트(당일) 오른쪽 -->
+        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);background:#0a0e16;position:relative;flex:1;"
           onclick="(function(e){e.stopPropagation();openKisChart('${stock.code}','kr','${stock.name}',e,'minute')}).call(this,event)"
-          title="${stock.name} 선차트(당일) — 클릭시 확대">
-          <div class="chart-label" style="position:absolute;top:3px;left:5px;z-index:2;background:rgba(0,0,0,0.6);padding:1px 5px;border-radius:2px;font-size:9px;">선차트 ↗</div>
+          title="${stock.name} 선차트(당일)">
+          <div style="position:absolute;top:3px;left:5px;z-index:2;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);background:rgba(0,0,0,0.7);padding:1px 5px;border-radius:2px;">선차트 ↗</div>
           <img
             src="https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png"
             onerror="this.src='https://ssl.pstatic.net/imgfinance/chart/item/area/3month/${stock.code}.png';this.onerror=function(){this.parentElement.style.display='none'}"
-            style="width:100%;display:block;height:auto;max-height:80px;object-fit:contain;"
+            style="width:100%;display:block;height:90px;object-fit:fill;"
             loading="lazy" alt="${stock.name} 선차트"
           />
         </div>
@@ -3742,20 +3745,21 @@ function openAiAnalysis(event, code) {
   event.stopPropagation();
   var stock = _aiStockMap[code];
   if (!stock) {
-    // _aiStockMap에 없는 경우 — DEMO 데이터에서 직접 검색
-    var allCats = ['swing','surge','tomorrow','smallmid','per'];
-    for (var ci = 0; ci < allCats.length; ci++) {
-      var arr = DEMO[allCats[ci]] || [];
-      for (var si = 0; si < arr.length; si++) {
-        if (arr[si].code === code) { stock = arr[si]; break; }
-      }
-      if (stock) break;
-    }
+    // _aiStockMap에 없으면 DEMO 전체에서 검색
+    var _allSrc = [
+      ...(DEMO.swing||[]), ...(DEMO.surge||[]), ...(DEMO.tomorrow||[]),
+      ...(DEMO.smallmid||[]), ...(DEMO.per||[]),
+      ...(DEMO_US?.swing||[]), ...(DEMO_US?.surge||[]), ...(DEMO_US?.tomorrow||[])
+    ];
+    stock = _allSrc.find(function(s){ return s && s.code === code; }) || null;
     if (stock) _aiStockMap[code] = stock;
   }
   if (!stock) {
-    alert('종목 정보를 찾을 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요.');
-    return;
+    // 마지막 수단: 빈 stock 객체로 로컬 분석이라도 표시
+    stock = { code: code, name: code, price: '-', change: '0%', up: true,
+              buy: '-', target: '-', stop: '-', rr: '1.0', vol: 0,
+              score: 70, grade: 'B', cat: 'swing', mkt: 'kospi',
+              rsiApprox: 50, reasons: [], inds: [] };
   }
   var overlay = document.getElementById('ai-modal-overlay');
   var subEl   = document.getElementById('ai-modal-sub');
