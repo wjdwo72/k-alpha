@@ -1502,13 +1502,19 @@
   <button id="fab-cfg" title="필터 설정">⚙</button>
 </div>
 <script>
-document.getElementById('fab-up').addEventListener('click', function(e) {
-  e.stopPropagation();
-  window.scrollTo({top:0, behavior:'smooth'});
-});
-document.getElementById('fab-cfg').addEventListener('click', function(e) {
-  e.stopPropagation();
-  openSettings(e);
+window.addEventListener('load', function() {
+  var fabUp = document.getElementById('fab-up');
+  var fabCfg = document.getElementById('fab-cfg');
+  if (fabUp) fabUp.addEventListener('click', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+  if (fabCfg) fabCfg.addEventListener('click', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (typeof openSettings === 'function') openSettings(e);
+  });
 });
 </script>
 
@@ -5619,18 +5625,24 @@ renderUsCards();
     });
   });
 
-  // ── AI 버튼 전역 이벤트 위임 (가장 확실한 방법)
-  // 개별 버튼 onclick/addEventListener 불필요 — document 레벨에서 처리
+  // ── AI 버튼 전역 이벤트 위임
   document.addEventListener('click', function(e) {
-    // btn-ai 버튼 또는 그 자식 요소 클릭 감지
-    var btn = e.target.closest('.btn-ai');
+    var btn = e.target.closest ? e.target.closest('.btn-ai') : null;
+    if (!btn) {
+      // closest 미지원 브라우저 대비
+      var t = e.target;
+      while (t && t !== document) {
+        if (t.classList && t.classList.contains('btn-ai')) { btn = t; break; }
+        t = t.parentNode;
+      }
+    }
     if (!btn) return;
     e.stopPropagation();
     e.preventDefault();
-    var code = btn.dataset.code || btn.id.replace('btn-ai-', '');
+    var code = (btn.dataset && btn.dataset.code) || btn.id.replace('btn-ai-', '');
     if (!code) return;
     openAiAnalysis(e, code);
-  }, true);  // capture=true: 카드 click 이벤트보다 먼저 처리
+  }, false);
 })();
 
 setInterval(updateClock, 1000);
