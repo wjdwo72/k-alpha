@@ -1296,27 +1296,8 @@
     padding: 8px !important;
   }
 
-  #filter-fab {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #020408;
-    border: none;
-    font-size: 20px;
-    cursor: pointer;
-    z-index: 3000;
-    box-shadow: 0 0 20px rgba(0,212,255,.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
   #filter-fab:active { transform: scale(.9); }
+  #scroll-top-btn:active { transform: scale(.9); }
 
   /* 모달 — position:fixed 사용 (IS_STREAMLIT일 때만 absolute로 전환) */
   .modal-overlay {
@@ -1865,9 +1846,9 @@ if (IS_STREAMLIT) {
     '.modal-overlay { position:absolute !important; top:0 !important; left:0 !important; right:0 !important; min-height:100% !important; height:auto !important; }',
     '.modal-overlay.show { display:block !important; }',
     '.modal-overlay.show > .modal { position:absolute !important; left:50% !important; transform:translateX(-50%) !important; margin:0 !important; }',
-    /* AI 모달은 position:fixed 유지 (iframe 안에서 fixed = iframe 기준 고정) */
-    '#ai-modal-overlay { position:fixed !important; top:0 !important; left:0 !important; right:0 !important; bottom:0 !important; height:100% !important; overflow-y:auto !important; z-index:9999 !important; }',
-    '#ai-modal-overlay.show { display:flex !important; align-items:flex-start !important; justify-content:center !important; padding:20px 12px !important; }'
+    /* AI 모달 — Streamlit iframe에서 전체 뷰포트 커버 */
+    '#ai-modal-overlay { position:fixed !important; inset:0 !important; height:100vh !important; overflow-y:auto !important; z-index:9999 !important; }',
+    '#ai-modal-overlay.show { display:flex !important; }'
   ].join('');
   document.head.appendChild(_ss);
 }
@@ -3729,19 +3710,13 @@ function _positionModalForStreamlit(el, clickY) {
   try {
     var box = el.querySelector('.modal, #ai-modal-box');
     if (!box) return;
-    var vh = window.innerHeight || 600;
+    // 모달을 클릭 위치(scrollY + clientY) 근처로 스크롤
     var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    // 클릭 위치 기준으로 모달 상단 위치 결정
-    var targetTop = scrollY + Math.max(20, (clickY || vh/2) - 60);
-    // 모달이 화면 아래로 벗어나지 않게 조정
-    var boxH = box.offsetHeight || 500;
-    if (targetTop + boxH > scrollY + vh - 20) {
-      targetTop = Math.max(scrollY + 10, scrollY + vh - boxH - 20);
-    }
-    box.style.position = 'relative';
-    box.style.top = '';
-    box.style.marginTop = Math.max(10, targetTop - scrollY) + 'px';
-    box.style.marginBottom = '20px';
+    var targetScroll = Math.max(0, scrollY + (clickY || 200) - 80);
+    el.scrollTop = 0;
+    setTimeout(function() {
+      window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+    }, 50);
   } catch(e) {}
 }
 function _resetModalPosition(el) {
@@ -5633,41 +5608,25 @@ setTimeout(function() {
 </div>
 
 <!-- ⚙ 필터 플로팅 버튼 (항상 표시, 모든 환경) -->
-<button id="filter-fab" onclick="openSettings(event)" title="스캔 필터 설정">⚙</button>
-
-<!-- 위로가기 버튼 -->
-<button id="scroll-top-btn" title="맨 위로"
-  onclick="window.scrollTo({top:0,behavior:'smooth'});document.documentElement.scrollTop=0;document.body.scrollTop=0;"
-  style="position:fixed;bottom:80px;right:20px;width:44px;height:44px;border-radius:50%;
-    background:rgba(0,212,255,0.15);color:var(--accent);border:1px solid rgba(0,212,255,0.4);
-    font-size:18px;cursor:pointer;z-index:3000;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 0 12px rgba(0,212,255,0.3);touch-action:manipulation;-webkit-tap-highlight-color:transparent;">↑</button>
-
-<script>
-// Streamlit iframe: position:fixed가 iframe 뷰포트 기준 → 스크롤 따라 버튼 위치 조정
-(function() {
-  function updateFabPos() {
-    var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    var vh = window.innerHeight || 600;
-    var fab = document.getElementById('filter-fab');
-    var topBtn = document.getElementById('scroll-top-btn');
-    var bottomOffset = 20;
-    if (fab)    fab.style.top    = (scrollY + vh - fab.offsetHeight - bottomOffset) + 'px';
-    if (topBtn) topBtn.style.top = (scrollY + vh - topBtn.offsetHeight - bottomOffset - 60) + 'px';
-  }
-  // fixed → absolute로 전환 (Streamlit 모드에서 올바르게 작동)
-  window.addEventListener('DOMContentLoaded', function() {
-    var fab = document.getElementById('filter-fab');
-    var topBtn = document.getElementById('scroll-top-btn');
-    if (fab)    { fab.style.position = 'absolute'; fab.style.bottom = ''; fab.style.right = '20px'; }
-    if (topBtn) { topBtn.style.position = 'absolute'; topBtn.style.bottom = ''; topBtn.style.right = '20px'; }
-    updateFabPos();
-  });
-  window.addEventListener('scroll', updateFabPos, { passive: true });
-  window.addEventListener('resize', updateFabPos, { passive: true });
-  setInterval(updateFabPos, 500); // 안전장치
-})();
-</script>
+<!-- ── 플로팅 버튼 바 (Streamlit iframe 호환) ── -->
+<div id="fab-bar" style="position:sticky;bottom:0;left:0;right:0;z-index:3000;
+  display:flex;justify-content:flex-end;align-items:center;gap:8px;
+  padding:8px 16px 8px 8px;pointer-events:none;background:transparent;">
+  <button id="scroll-top-btn" title="맨 위로"
+    onclick="document.documentElement.scrollTop=0;document.body.scrollTop=0;window.scrollTo(0,0);"
+    style="pointer-events:all;width:44px;height:44px;border-radius:50%;
+      background:rgba(13,18,32,0.92);color:var(--accent);
+      border:1px solid rgba(0,212,255,0.5);font-size:18px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 12px rgba(0,0,0,0.6);
+      touch-action:manipulation;-webkit-tap-highlight-color:transparent;">↑</button>
+  <button id="filter-fab" onclick="openSettings(event)" title="스캔 필터 설정"
+    style="pointer-events:all;width:52px;height:52px;border-radius:50%;
+      background:var(--accent);color:#020408;border:none;font-size:20px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 0 20px rgba(0,212,255,.5);
+      touch-action:manipulation;-webkit-tap-highlight-color:transparent;">⚙</button>
+</div>
 
 <!-- 차트 링크 팝업 -->
 <div class="chart-popup-overlay" id="chart-popup-overlay" onclick="closeChartPopup()"></div>
