@@ -4022,27 +4022,17 @@ st.markdown("""
     up.textContent = '↑';
     up.onclick = function(e) {
       e.preventDefault();
-      // 방법1: location.hash로 앵커 이동 (부모 페이지)
+      e.stopPropagation();
+      alert('클릭됨! scrollIntoView 시도...');
       try {
         var a = topDoc.createElement('a');
         a.id = 'kalpha-top-anchor';
-        a.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;';
-        // 기존 앵커 제거 후 재추가
+        a.style.cssText = 'position:absolute;top:0;left:0;';
         var old = topDoc.getElementById('kalpha-top-anchor');
         if (old) old.remove();
         topDoc.body.insertBefore(a, topDoc.body.firstChild);
         a.scrollIntoView({behavior: 'smooth', block: 'start'});
-        return;
-      } catch(e1) {}
-      // 방법2: 모든 스크롤 가능한 요소 scrollTop=0
-      try {
-        var all = topDoc.querySelectorAll('*');
-        for (var i = 0; i < all.length; i++) {
-          try {
-            if (all[i].scrollTop > 10) all[i].scrollTop = 0;
-          } catch(e2) {}
-        }
-      } catch(e3) {}
+      } catch(ex) { alert('오류: ' + ex.message); }
     };
     // 설정
     var cfg = topDoc.createElement('button');
