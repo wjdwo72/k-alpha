@@ -3069,28 +3069,28 @@ function buildCard(stock, rank) {
         </div>
       </div>
       <div class="chart-block">
-        <!-- 선차트(당일) — 클릭 시 팝업 -->
-        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0d1117;position:relative;flex:1;"
-          onclick="(function(e){e.stopPropagation();openKisChart('${stock.code}','kr','${stock.name}',e,'minute')}).call(this,event)"
-          title="${stock.name} 선차트(당일) — 클릭시 확대">
-          <div class="chart-label" style="position:absolute;top:3px;left:5px;z-index:2;background:rgba(0,0,0,0.5);padding:1px 4px;border-radius:2px;">선차트 ↗</div>
-          <img
-            src="https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png"
-            onerror="this.src='https://ssl.pstatic.net/imgfinance/chart/item/area/3month/${stock.code}.png';this.onerror=function(){this.parentElement.style.display='none'}"
-            style="width:100%;display:block;height:52px;object-fit:cover;object-position:center center;"
-            loading="lazy" alt="${stock.name} 선차트"
-          />
-        </div>
-        <!-- 봉차트(일봉) — 클릭 시 팝업 -->
-        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0d1117;position:relative;flex:1;"
+        <!-- 봉차트(일봉) 왼쪽 — 클릭 시 팝업 -->
+        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0d1117;position:relative;flex:1;min-height:52px;"
           onclick="(function(e){e.stopPropagation();openKisChart('${stock.code}','kr','${stock.name}',e,'day')}).call(this,event)"
           title="${stock.name} 봉차트(일봉) — 클릭시 확대">
-          <div class="chart-label" style="position:absolute;top:3px;left:5px;z-index:2;background:rgba(0,0,0,0.5);padding:1px 4px;border-radius:2px;">봉차트 ↗</div>
+          <div class="chart-label" style="position:absolute;top:3px;left:5px;z-index:2;background:rgba(0,0,0,0.6);padding:1px 5px;border-radius:2px;font-size:9px;">봉차트 ↗</div>
           <img
             src="https://ssl.pstatic.net/imgfinance/chart/item/candle/day/${stock.code}.png"
             onerror="this.src='https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png';this.onerror=function(){this.parentElement.style.display='none'}"
-            style="width:100%;display:block;height:52px;object-fit:cover;object-position:center center;"
+            style="width:100%;display:block;height:auto;max-height:80px;object-fit:contain;"
             loading="lazy" alt="${stock.name} 봉차트"
+          />
+        </div>
+        <!-- 선차트(당일) 오른쪽 — 클릭 시 팝업 -->
+        <div style="cursor:pointer;border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0d1117;position:relative;flex:1;min-height:52px;"
+          onclick="(function(e){e.stopPropagation();openKisChart('${stock.code}','kr','${stock.name}',e,'minute')}).call(this,event)"
+          title="${stock.name} 선차트(당일) — 클릭시 확대">
+          <div class="chart-label" style="position:absolute;top:3px;left:5px;z-index:2;background:rgba(0,0,0,0.6);padding:1px 5px;border-radius:2px;font-size:9px;">선차트 ↗</div>
+          <img
+            src="https://ssl.pstatic.net/imgfinance/chart/item/area/day/${stock.code}.png"
+            onerror="this.src='https://ssl.pstatic.net/imgfinance/chart/item/area/3month/${stock.code}.png';this.onerror=function(){this.parentElement.style.display='none'}"
+            style="width:100%;display:block;height:auto;max-height:80px;object-fit:contain;"
+            loading="lazy" alt="${stock.name} 선차트"
           />
         </div>
       </div>
@@ -5365,7 +5365,12 @@ function applyRealScanData() {
 
   renderCards();
 
-  // 배너 업데이트
+  // 실시간 스캔 종목 전체를 _aiStockMap에 등록 (AI 분석 버튼 작동 보장)
+  ['swing','surge','tomorrow','smallmid','per'].forEach(function(cat) {
+    (DEMO[cat] || []).forEach(function(s) {
+      if (s && s.code) _aiStockMap[s.code] = s;
+    });
+  });
   var banner = document.getElementById('demo-banner');
   if (banner) banner.style.display='none';
   var live = document.getElementById('live-banner');
