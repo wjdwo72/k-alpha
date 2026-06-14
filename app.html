@@ -3634,49 +3634,59 @@ function generateSwingReport(stock) {
   return L.join('\n');
 }
 
-var SWING_SYSTEM_PROMPT = `당신은 베테랑 주식 시장 분석가입니다. 이미 기술적 분석(차트 및 수급 지표)은 준비되어 있으니, 이를 보완할 수 있는 외부적 환경 요인과 펀더멘털 분석에 집중하여 투자 의견을 제시해 주세요.
+var SWING_SYSTEM_PROMPT = `당신은 한국 주식 시장 전문 애널리스트입니다. Google Search를 통해 해당 종목의 최신 뉴스, 증권사 리포트, 애널리스트 의견을 실시간으로 검색·수집한 후 아래 형식으로 분석을 작성하세요.
 
-반드시 아래 출력 형식을 준수하고, 각 항목을 구체적이고 근거 있게 서술하세요.
+## 분석 지침
+1. 반드시 Google Search로 "[종목명] 주가 뉴스", "[종목명] 증권사 리포트", "[종목명] 애널리스트 목표주가" 등을 검색하세요.
+2. 검색된 실제 데이터를 근거로 작성하고, 출처(언론사/증권사명)를 명시하세요.
+3. 추측이 아닌 검색된 사실을 기반으로 작성하세요.
 
-# 출력 형식 (Output Format)
+## 출력 형식
 
 ---
 ## 📊 종합 매수 매력도 평점
-[ ]점 / 100점 (기술적 분석 + 외부환경 + 펀더멘털 종합)
-
-근거: (2~3줄로 핵심 이유 요약)
-
----
-## 🌐 1. 매크로 및 산업 환경 분석
-- **금리/환율 영향:** (현재 금리 기조와 환율이 이 종목에 미치는 직접적 영향)
-- **원자재/공급망:** (관련 원자재 가격 또는 공급망 이슈)
-- **정부 정책/규제:** (국내외 정책, 보조금, 규제 변화)
-- **글로벌 구조 변화:** (해당 산업의 중장기 구조적 트렌드)
+**[점수]점 / 100점** (기술적+펀더멘털+뉴스 종합)
+→ [매수 적극 검토 / 조건부 매수 / 관망 / 매수 자제]
+근거: (2줄 핵심 요약)
 
 ---
-## 🔍 2. 뉴스·공시 리스크 검증
-- **공시 리스크:** (유상증자, 대규모 채무, 관계사 이슈 등)
-- **경영/지배구조:** (경영진 변화, 대주주 동향, 소송 등)
-- **지정학적 리스크:** (수출 규제, 무역 분쟁, 지역 갈등 영향)
-- **뉴스 모멘텀 신선도:** (현재 재료가 선반영 vs 미반영)
+## 📰 1. 최신 뉴스·공시 분석 (검색 기반)
+**[검색된 주요 뉴스 헤드라인 및 날짜]**
+- 핵심 뉴스 1: (출처, 날짜, 내용 요약)
+- 핵심 뉴스 2: (출처, 날짜, 내용 요약)
+- 공시 이슈: (최근 DART 공시 중 주요 사항)
+- 뉴스 모멘텀 평가: 선반영 / 미반영 / 재료 소진
 
 ---
-## ⚖️ 3. 기술적 전략 보완 (비판적 검토)
-- **타점 합리성:** (제시된 매입가·손절가가 외부 변수 고려 시 적절한가)
-- **반드시 확인할 체크포인트:**
-  1. [ ] (확인 항목 1)
-  2. [ ] (확인 항목 2)
-  3. [ ] (확인 항목 3)
+## 🏦 2. 애널리스트·증권사 분석
+**[검색된 최신 리포트 기준]**
+- 컨센서스 목표주가: (증권사명, 목표가, 투자의견)
+- 최근 리포트 핵심: (가장 최신 리포트 주요 내용)
+- 실적 전망: (매출·영업이익 컨센서스 또는 예상치)
+- 밸류에이션: (PER/PBR 현재 수준 vs 업종 평균)
 
 ---
-## 🎯 4. 결론 — 가장 큰 외부 변수 한 가지
-> ⚠️ **[핵심 리스크명]:** (구체적인 설명 2~3줄. 이 변수가 현실화될 경우의 시나리오 포함)
+## 🌐 3. 매크로·산업 환경 분석
+- 금리/환율: (현재 기조가 이 종목에 미치는 구체적 영향)
+- 산업 트렌드: (해당 섹터 최신 동향, 경쟁사 대비 포지션)
+- 정책/규제: (관련 정부 정책, 지원·규제 리스크)
+- 글로벌 변수: (미국·중국 등 해외 요인이 이 종목에 미치는 영향)
+
+---
+## ⚠️ 4. 핵심 리스크 & 투자 전략
+**가장 큰 외부 리스크:**
+> [리스크명]: (구체적 설명, 현실화 시나리오)
+
+**매수 전략:**
+- 진입 조건: (구체적 캔들/거래량 조건)
+- 목표가 근거: (애널리스트 목표가 vs K-ALPHA 제안가 비교)
+- 손절 기준: (기술적 지지선 기반)
 
 ---
 ## 💡 최종 투자 의견
-- **의견:** 매수 적극 검토 / 조건부 매수 / 관망 / 매수 자제 중 선택
-- **핵심 전제:** (이 의견이 유효한 조건)
-- **무효화 조건:** (이 조건 발생 시 의견 철회)
+- **의견:** [매수/관망/자제]  
+- **핵심 전제:** (이 의견이 유효한 조건 1가지)
+- **무효화 조건:** (즉시 청산해야 할 조건 1가지)
 ---`;
 
 
@@ -3686,27 +3696,25 @@ var _aiStockMap = {};
 function _buildUserMsg(stock) {
   var reasons = (stock.reasons || []).map(function(r){ return '  · ' + (r.text || ''); }).join('\n');
   var catKr = {swing:'실시간스윙',surge:'급등전야',tomorrow:'내일관심',smallmid:'중소형주',per:'PER저평가'}[stock.cat] || stock.cat || '';
-  return '=== 분석 대상 종목 정보 ===\n'
-    + '종목명: ' + (stock.name || '') + '\n'
-    + '종목코드: ' + (stock.code || '') + '\n'
-    + '시장구분: ' + ((stock.mkt || 'KOSPI').toUpperCase()) + '\n'
-    + '스캔카테고리: ' + catKr + '\n\n'
+  var si = _getSectorInfo(stock.code, stock.name);
+  return '=== 분석 대상 종목 ===\n'
+    + '종목명: ' + (stock.name||'') + ' (' + (stock.code||'') + ')\n'
+    + '시장: ' + ((stock.mkt||'KOSPI').toUpperCase()) + ' | 섹터: ' + si.sector + '\n'
+    + '스캔 카테고리: ' + catKr + '\n\n'
     + '=== 현재 가격 정보 ===\n'
-    + '현재가: ' + (stock.price || '') + '원\n'
-    + '등락률: ' + (stock.change || '') + '\n'
-    + '거래대금: ' + (stock.vol || '') + '억원\n'
-    + 'RSI(추정): ' + (stock.rsiApprox || '') + '\n\n'
-    + '=== K-ALPHA 기술적 분석 결과 ===\n'
-    + 'K스코어: ' + (stock.score || '') + '점 / 100점 (' + (stock.grade || '') + '등급)\n'
-    + '제안 매입가: ' + (stock.buy || '') + '원\n'
-    + '목표가: ' + (stock.target || '') + '원\n'
-    + '손절가: ' + (stock.stop || '') + '원\n'
-    + '손익비(RR): ' + (stock.rr || '') + '\n\n'
-    + '=== K 분석 사유 (기술적) ===\n' + reasons + '\n\n'
-    + '=== 요청 ===\n'
-    + '위 기술적 분석은 이미 완료된 상태입니다.\n'
-    + '외부적 환경 요인(매크로, 산업, 뉴스·공시 리스크)과 펀더멘털 관점에서\n'
-    + '보완 분석을 제공해주세요. 출력 형식을 반드시 준수하세요.';
+    + '현재가: ' + (stock.price||'') + '원 | 등락률: ' + (stock.change||'') + '\n'
+    + '거래대금: ' + (stock.vol||'') + '억원 | RSI: ' + (stock.rsiApprox||'') + '\n\n'
+    + '=== K-ALPHA 기술적 분석 ===\n'
+    + 'K스코어: ' + (stock.score||'') + '점/' + (stock.grade||'') + '등급\n'
+    + '매입가: ' + (stock.buy||'') + '원 | 목표가: ' + (stock.target||'') + '원 | 손절가: ' + (stock.stop||'') + '원 | RR: ' + (stock.rr||'') + '\n\n'
+    + '=== K 분석 사유 ===\n' + reasons + '\n\n'
+    + '=== 검색 요청 ===\n'
+    + '다음 항목을 Google Search로 반드시 검색하세요:\n'
+    + '1. "' + stock.name + ' 주가 뉴스 2025" — 최신 뉴스\n'
+    + '2. "' + stock.name + ' 증권사 리포트 목표주가" — 애널리스트 의견\n'
+    + '3. "' + stock.name + ' 실적 전망 매출 영업이익" — 실적\n'
+    + '4. "' + si.sector + ' 섹터 전망 2025" — 산업 동향\n'
+    + '검색 결과를 바탕으로 출처와 날짜를 명시하여 분석을 작성하세요.';
 }
 
 function _positionModalForStreamlit(el, clickY) {
@@ -3776,7 +3784,9 @@ function openAiAnalysis(event, code) {
     if (_aiAbortCtrl) { try { _aiAbortCtrl.abort(); } catch(e){} }
     _aiAbortCtrl = new AbortController();
 
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=' + googleKey;
+    // gemini-2.0-flash-exp: Google Search grounding으로 실시간 뉴스/애널리스트 수집
+    var model = 'gemini-2.0-flash-exp';
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + googleKey;
     fetch(url, {
       method: 'POST',
       signal: _aiAbortCtrl.signal,
@@ -3784,29 +3794,48 @@ function openAiAnalysis(event, code) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SWING_SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: _buildUserMsg(stock) }] }],
-        generationConfig: { maxOutputTokens: 4096, temperature: 0.8 }
+        tools: [{ google_search: {} }],
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.7 }
       })
     })
     .then(function(res) {
       if (!res.ok) return res.json().then(function(e) {
-        throw new Error((e.error && e.error.message) || 'API 오류 ' + res.status);
+        // 2.0 실패 시 1.5 pro로 폴백 (grounding 없이)
+        throw new Error('FALLBACK:' + ((e.error && e.error.message) || res.status));
       });
       return res.json();
     })
     .then(function(data) {
-      var text = data.candidates && data.candidates[0] && data.candidates[0].content
-        && data.candidates[0].content.parts && data.candidates[0].content.parts[0]
-        && data.candidates[0].content.parts[0].text;
+      // grounding 응답에서 텍스트 추출 (여러 parts 합치기)
+      var parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts || [];
+      var text = parts.filter(function(p){ return p.text; }).map(function(p){ return p.text; }).join('');
       if (text) {
         content.textContent = text;
-        // 카드에 외부요인 요약 표시 (📊 평점 + 🌐 매크로 + 🎯 결론 추출)
         _updateCardExtFactor(code, text);
       } else content.textContent = generateSwingReport(stock);
     })
     .catch(function(err) {
       if (err.name === 'AbortError') return;
-      // API 오류 시 로컬 분석만 조용히 표시 (에러 메시지 노출 안 함)
-      content.textContent = generateSwingReport(stock);
+      // 1.5 pro 폴백
+      var url2 = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=' + googleKey;
+      content.innerHTML = '<span class="ai-loading">⚠ 검색 연동 실패, 1.5 Pro로 재시도 중...</span>';
+      fetch(url2, {
+        method: 'POST',
+        signal: _aiAbortCtrl.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SWING_SYSTEM_PROMPT }] },
+          contents: [{ role: 'user', parts: [{ text: _buildUserMsg(stock) }] }],
+          generationConfig: { maxOutputTokens: 4096, temperature: 0.7 }
+        })
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var t = d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts&&d.candidates[0].content.parts[0]&&d.candidates[0].content.parts[0].text;
+        content.textContent = t || generateSwingReport(stock);
+        if (t) _updateCardExtFactor(code, t);
+      })
+      .catch(function(){ content.textContent = generateSwingReport(stock); });
     });
   } else {
     // API 키 없음 → 로컬 분석 즉시 표시
@@ -3830,50 +3859,34 @@ function _updateCardExtFactor(code, fullText) {
   if (!contentEl) return;
 
   var lines = fullText.split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
-  var sections = { score:'', macro:'', risk:'', warn:'', opinion:'' };
-  var currentSection = '';
+  var sections = { score:'', news:'', analyst:'', macro:'', risk:'', opinion:'' };
+  var cur = '';
 
   lines.forEach(function(l) {
     var clean = l.replace(/^[#>\-•*\s]+/, '').replace(/\*\*/g, '').trim();
     if (!clean) return;
+    if (l.match(/📊.*평점|종합.*매수.*매력/))        { cur = 'score';   return; }
+    if (l.match(/📰.*뉴스|최신.*뉴스/))              { cur = 'news';    return; }
+    if (l.match(/🏦.*애널|증권사.*분석/))             { cur = 'analyst'; return; }
+    if (l.match(/🌐.*매크로|매크로.*산업/))           { cur = 'macro';   return; }
+    if (l.match(/⚠️.*리스크|핵심.*리스크/))           { cur = 'risk';    return; }
+    if (l.match(/💡.*최종|최종.*투자/))               { cur = 'opinion'; return; }
 
-    // 섹션 헤더 감지
-    if (l.match(/📊.*평점|종합.*평점/))        { currentSection = 'score'; return; }
-    if (l.match(/🌐.*매크로|매크로.*산업/))      { currentSection = 'macro'; return; }
-    if (l.match(/🔍.*뉴스|공시.*리스크/))        { currentSection = 'risk';  return; }
-    if (l.match(/🎯.*결론|가장 큰.*외부/))        { currentSection = 'warn';  return; }
-    if (l.match(/💡.*최종|최종.*의견/))           { currentSection = 'opinion'; return; }
-    if (l.match(/⚖️.*기술적|기술적.*전략/))       { currentSection = ''; return; }
-
-    // 각 섹션 첫 번째 의미있는 내용만 수집
-    if (currentSection === 'score' && !sections.score && clean.match(/\d+점|점수/)) {
-      sections.score = '📊 ' + clean.substring(0, 80);
-    }
-    if (currentSection === 'macro' && !sections.macro && clean.length > 15) {
-      sections.macro = '🌐 ' + clean.substring(0, 90) + (clean.length > 90 ? '…' : '');
-    }
-    if (currentSection === 'risk' && !sections.risk && clean.length > 10) {
-      sections.risk = '🔍 ' + clean.substring(0, 90) + (clean.length > 90 ? '…' : '');
-    }
-    if (currentSection === 'warn' && !sections.warn) {
-      sections.warn = '⚠️ ' + clean.substring(0, 100) + (clean.length > 100 ? '…' : '');
-    }
-    if (currentSection === 'opinion' && !sections.opinion && clean.match(/의견|매수|관망/)) {
-      sections.opinion = '💡 ' + clean.substring(0, 80) + (clean.length > 80 ? '…' : '');
-    }
+    if (cur === 'score' && !sections.score && clean.match(/\d+점/))
+      sections.score = '📊 ' + clean.substring(0,70);
+    if (cur === 'news' && !sections.news && clean.length > 15)
+      sections.news = '📰 ' + clean.substring(0,90) + (clean.length>90?'…':'');
+    if (cur === 'analyst' && !sections.analyst && clean.match(/목표주가|컨센서스|투자의견/))
+      sections.analyst = '🏦 ' + clean.substring(0,90) + (clean.length>90?'…':'');
+    if (cur === 'macro' && !sections.macro && clean.length > 15)
+      sections.macro = '🌐 ' + clean.substring(0,80) + (clean.length>80?'…':'');
+    if (cur === 'risk' && !sections.risk && clean.length > 10)
+      sections.risk = '⚠️ ' + clean.substring(0,90) + (clean.length>90?'…':'');
+    if (cur === 'opinion' && !sections.opinion && clean.match(/의견|매수|관망/))
+      sections.opinion = '💡 ' + clean.substring(0,70) + (clean.length>70?'…':'');
   });
 
-  // ⚠️ 직접 줄 fallback
-  if (!sections.warn) {
-    for (var i = 0; i < lines.length; i++) {
-      if (lines[i].match(/⚠️/) && lines[i].length > 5) {
-        sections.warn = lines[i].replace(/\*\*/g, '').substring(0, 100);
-        break;
-      }
-    }
-  }
-
-  var result = [sections.score, sections.macro, sections.risk, sections.warn, sections.opinion]
+  var result = [sections.score, sections.news, sections.analyst, sections.macro, sections.risk, sections.opinion]
     .filter(function(s){ return s && s.length > 4; });
 
   if (result.length > 0) {
