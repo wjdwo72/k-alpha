@@ -483,8 +483,9 @@
 
   .price-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: auto 1fr auto 1fr;
     gap: 4px 10px;
+    align-items: center;
   }
   .pgl { font-size: 10px; color: var(--text-dim); }
   .pgv {
@@ -3743,19 +3744,18 @@ function _resetModalPosition(el) {
 
 function openAiAnalysis(event, code) {
   event.stopPropagation();
+  event.preventDefault();
   var stock = _aiStockMap[code];
   if (!stock) {
-    // _aiStockMap에 없으면 DEMO 전체에서 검색
     var _allSrc = [
       ...(DEMO.swing||[]), ...(DEMO.surge||[]), ...(DEMO.tomorrow||[]),
       ...(DEMO.smallmid||[]), ...(DEMO.per||[]),
-      ...(DEMO_US?.swing||[]), ...(DEMO_US?.surge||[]), ...(DEMO_US?.tomorrow||[])
+      ...((DEMO_US||{}).swing||[]), ...((DEMO_US||{}).surge||[]), ...((DEMO_US||{}).tomorrow||[])
     ];
     stock = _allSrc.find(function(s){ return s && s.code === code; }) || null;
     if (stock) _aiStockMap[code] = stock;
   }
   if (!stock) {
-    // 마지막 수단: 빈 stock 객체로 로컬 분석이라도 표시
     stock = { code: code, name: code, price: '-', change: '0%', up: true,
               buy: '-', target: '-', stop: '-', rr: '1.0', vol: 0,
               score: 70, grade: 'B', cat: 'swing', mkt: 'kospi',
@@ -3776,6 +3776,13 @@ function openAiAnalysis(event, code) {
       + generateSwingReport(stock);
     _positionModalForStreamlit(overlay, event.clientY);
     overlay.classList.add('show');
+    // Streamlit 모드: 모달이 보이도록 스크롤
+    if (IS_STREAMLIT) {
+      setTimeout(function() {
+        var box = document.getElementById('ai-modal-box');
+        if (box) box.scrollIntoView({behavior:'smooth', block:'center'});
+      }, 100);
+    }
 
     if (_aiAbortCtrl) { try { _aiAbortCtrl.abort(); } catch(e){} }
     _aiAbortCtrl = new AbortController();
@@ -3817,6 +3824,12 @@ function openAiAnalysis(event, code) {
     content.textContent = generateSwingReport(stock);
     _positionModalForStreamlit(overlay, event.clientY);
     overlay.classList.add('show');
+    if (IS_STREAMLIT) {
+      setTimeout(function() {
+        var box = document.getElementById('ai-modal-box');
+        if (box) box.scrollIntoView({behavior:'smooth', block:'center'});
+      }, 100);
+    }
   }
 }
 
