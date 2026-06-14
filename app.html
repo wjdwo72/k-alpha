@@ -5360,6 +5360,19 @@ function applyRealScanData() {
       if (s && s.code) _aiStockMap[s.code] = s;
     });
   });
+
+  // 실시간 카드 btn-ai 재등록
+  setTimeout(function() {
+    document.querySelectorAll('.btn-ai[id^="btn-ai-"]').forEach(function(btn) {
+      var code = btn.id.replace('btn-ai-', '');
+      var newBtn = btn.cloneNode(true);
+      newBtn.addEventListener('click', function(e) {
+        e.stopPropagation(); e.preventDefault();
+        openAiAnalysis(e, code);
+      }, true);
+      btn.parentNode.replaceChild(newBtn, btn);
+    });
+  }, 300);
   var banner = document.getElementById('demo-banner');
   if (banner) banner.style.display='none';
   var live = document.getElementById('live-banner');
@@ -5569,6 +5582,22 @@ renderUsCards();
       if (s && s.code) _aiStockMap[s.code] = s;
     });
   });
+
+  // btn-ai 버튼 이벤트 리스너 강제 재등록 (카드 onclick 충돌 방지)
+  function reRegisterAiBtns() {
+    document.querySelectorAll('.btn-ai[id^="btn-ai-"]').forEach(function(btn) {
+      var code = btn.id.replace('btn-ai-', '');
+      var newBtn = btn.cloneNode(true);  // 기존 핸들러 완전 제거
+      newBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        openAiAnalysis(e, code);
+      }, true);
+      btn.parentNode.replaceChild(newBtn, btn);
+    });
+  }
+  setTimeout(reRegisterAiBtns, 600);
+  setTimeout(reRegisterAiBtns, 2000);  // 실시간 카드 로드 후 재등록
 })();
 
 setInterval(updateClock, 1000);
@@ -5621,23 +5650,57 @@ setTimeout(function() {
   <div class="refresh-ov-step" id="refresh-ov-step"></div>
 </div>
 
-<!-- ⚙ 필터 플로팅 버튼 (항상 표시, 모든 환경) -->
-<!-- ── 플로팅 버튼 (scrolling=True iframe에서 fixed 작동) ── -->
-<button id="scroll-top-btn" title="맨 위로"
-  onclick="window.scrollTo({top:0,behavior:'smooth'});"
-  style="position:fixed;bottom:82px;right:16px;width:44px;height:44px;border-radius:50%;
-    background:rgba(13,18,32,0.92);color:var(--accent);
-    border:1.5px solid rgba(0,212,255,0.6);font-size:20px;font-weight:bold;cursor:pointer;
-    z-index:9000;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 2px 16px rgba(0,0,0,0.7),0 0 12px rgba(0,212,255,0.3);
-    touch-action:manipulation;-webkit-tap-highlight-color:transparent;">↑</button>
+<!-- ── 플로팅 버튼 → JS로 body에 직접 마운트 ── -->
+<script>
+(function() {
+  function mountFabs() {
+    // 기존 버튼 제거 후 body에 직접 추가
+    ['scroll-top-btn','filter-fab'].forEach(function(id){
+      var old = document.getElementById(id);
+      if (old) old.remove();
+    });
 
-<button id="filter-fab" onclick="openSettings(event)" title="스캔 필터 설정"
-  style="position:fixed;bottom:24px;right:16px;width:52px;height:52px;border-radius:50%;
-    background:var(--accent);color:#020408;border:none;font-size:20px;cursor:pointer;
-    z-index:9000;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 0 20px rgba(0,212,255,.5);
-    touch-action:manipulation;-webkit-tap-highlight-color:transparent;">⚙</button>
+    // 위로가기 버튼
+    var upBtn = document.createElement('button');
+    upBtn.id = 'scroll-top-btn';
+    upBtn.title = '맨 위로';
+    upBtn.innerHTML = '↑';
+    upBtn.style.cssText = 'position:fixed;bottom:82px;right:16px;width:44px;height:44px;'
+      + 'border-radius:50%;background:rgba(13,18,32,0.95);color:#00d4ff;'
+      + 'border:2px solid #00d4ff;font-size:20px;font-weight:bold;cursor:pointer;'
+      + 'z-index:2147483647;display:flex;align-items:center;justify-content:center;'
+      + 'box-shadow:0 2px 16px rgba(0,0,0,0.8);line-height:1;padding:0;';
+    upBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+    document.body.appendChild(upBtn);
+
+    // 설정 버튼
+    var fab = document.createElement('button');
+    fab.id = 'filter-fab';
+    fab.title = '스캔 필터 설정';
+    fab.innerHTML = '⚙';
+    fab.style.cssText = 'position:fixed;bottom:24px;right:16px;width:52px;height:52px;'
+      + 'border-radius:50%;background:#00d4ff;color:#020408;border:none;font-size:20px;'
+      + 'cursor:pointer;z-index:2147483647;display:flex;align-items:center;justify-content:center;'
+      + 'box-shadow:0 0 20px rgba(0,212,255,.6);line-height:1;padding:0;';
+    fab.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openSettings(e);
+    });
+    document.body.appendChild(fab);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountFabs);
+  } else {
+    mountFabs();
+  }
+})();
+</script>
 
 <!-- 차트 링크 팝업 -->
 <div class="chart-popup-overlay" id="chart-popup-overlay" onclick="closeChartPopup()"></div>
