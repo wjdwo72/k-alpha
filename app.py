@@ -3995,8 +3995,30 @@ _final_html = st.session_state['_cached_html']
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
 
+
+# Streamlit 외부 스크롤바 숨기기 (iframe scrolling=True 사용)
+st.markdown("""
+<style>
+/* iframe 자체 스크롤 사용 - 외부 스크롤바 숨김 */
+[data-testid="stAppViewContainer"] {
+  overflow: hidden !important;
+  height: 100vh !important;
+}
+[data-testid="stAppViewBlockContainer"] {
+  overflow: hidden !important;
+  padding-bottom: 0 !important;
+}
+/* iframe을 전체 화면으로 */
+iframe[title="components.v1.html"] {
+  width: 100% !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # 정적 HTML 렌더
-components.html(_final_html, height=30000, scrolling=False)
+components.html(_final_html, height=30000, scrolling=True)
 
 # ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
 _data_js = f"""<script>
