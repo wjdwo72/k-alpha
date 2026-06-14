@@ -3972,15 +3972,21 @@ def _safe_json(s):
 
 # ── 정적 HTML — 세션 내 한 번만 생성 (React DOM 재조정 완전 차단) ──────
 # session_state에 캐시 → autorefresh 시 동일 객체 재사용 → React 충돌 없음
+# app.html 수정시간 체크 → 파일 변경 시 자동 캐시 갱신
 _STATIC_INJECT = '<script>window.__STREAMLIT_MODE__=true;</script>'
 
-if '_cached_html' not in st.session_state:
-    _os_mod = __import__('os')
-    with open("app.html", "r", encoding="utf-8") as _f:
+import os as _os
+_html_path = "app.html"
+_cur_mtime = _os.path.getmtime(_html_path) if _os.path.exists(_html_path) else 0
+_cached_mtime = st.session_state.get('_cached_html_mtime', -1)
+
+if '_cached_html' not in st.session_state or _cur_mtime != _cached_mtime:
+    with open(_html_path, "r", encoding="utf-8") as _f:
         _raw_html = _f.read()
     st.session_state['_cached_html'] = _raw_html.replace(
         '</head>', _STATIC_INJECT + '\n</head>'
     )
+    st.session_state['_cached_html_mtime'] = _cur_mtime
 
 _final_html = st.session_state['_cached_html']
 
