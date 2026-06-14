@@ -4020,24 +4020,23 @@ st.markdown("""
     var up = topDoc.createElement('button');
     up.id = 'kalpha-fab-up'; up.textContent = '↑'; up.title = '맨 위로';
     up.onclick = function() {
-      // Streamlit의 실제 스크롤 컨테이너 모두 시도
-      var selectors = [
-        '[data-testid="stAppViewContainer"]',
-        '[data-testid="stMain"]',
-        '[data-testid="stAppViewBlockContainer"]',
-        '.main', 'section.main', 'main',
-        'html', 'body'
-      ];
-      selectors.forEach(function(sel) {
-        try {
-          var el = topDoc.querySelector(sel);
-          if (el) { el.scrollTop = 0; el.scrollLeft = 0; }
-        } catch(e) {}
-      });
-      try { topDoc.documentElement.scrollTop = 0; } catch(e) {}
-      try { topDoc.body.scrollTop = 0; } catch(e) {}
-      try { window.top.scrollTo(0, 0); } catch(e) {}
-      try { window.scrollTo(0, 0); } catch(e) {}
+      // 실제로 스크롤된 element 찾기 (scrollTop > 0인 element)
+      var found = false;
+      try {
+        var all = topDoc.querySelectorAll('*');
+        for (var i = 0; i < all.length; i++) {
+          if (all[i].scrollTop > 0) {
+            all[i].scrollTo({top: 0, behavior: 'smooth'});
+            found = true;
+          }
+        }
+      } catch(e) {}
+      if (!found) {
+        // fallback: 가능한 모든 방법
+        try { topDoc.documentElement.scrollTop = 0; } catch(e) {}
+        try { topDoc.body.scrollTop = 0; } catch(e) {}
+        try { window.top.scrollTo(0, 0); } catch(e) {}
+      }
     };
     // 설정
     var cfg = topDoc.createElement('button');
