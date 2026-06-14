@@ -1470,63 +1470,46 @@
   </div>
 </div>
 
-<!-- ── 우측 하단 고정 버튼 (JS로 스크롤 따라 이동) ── -->
-<div id="fab-wrap">
-  <button id="fab-up" title="맨 위로"
-    onclick="try{window.parent.scrollTo({top:0,behavior:'smooth'});}catch(e){};window.scrollTo(0,0);"
-    style="width:44px;height:44px;border-radius:50%;background:rgba(13,18,32,0.95);
-      color:#00d4ff;border:2px solid #00d4ff;font-size:20px;font-weight:bold;
-      cursor:pointer;display:flex;align-items:center;justify-content:center;
-      box-shadow:0 2px 16px rgba(0,0,0,0.8);">↑</button>
-  <button id="fab-cfg" title="필터 설정" onclick="openSettings(event)"
-    style="width:52px;height:52px;border-radius:50%;background:#00d4ff;color:#020408;
-      border:none;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
-      box-shadow:0 0 20px rgba(0,212,255,.6);">⚙</button>
-</div>
+<!-- ── 우측 하단 고정 버튼 (scrolling=True iframe에서 fixed 작동) ── -->
 <style>
 #fab-wrap {
-  position: absolute;
+  position: fixed;
+  bottom: 24px;
   right: 16px;
-  bottom: 80px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  z-index: 5000;
+  z-index: 9999;
 }
+#fab-up {
+  width:44px;height:44px;border-radius:50%;
+  background:rgba(13,18,32,0.95);color:#00d4ff;
+  border:2px solid #00d4ff;font-size:22px;font-weight:bold;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 16px rgba(0,0,0,0.8);padding:0;
+}
+#fab-cfg {
+  width:52px;height:52px;border-radius:50%;
+  background:#00d4ff;color:#020408;
+  border:none;font-size:22px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 20px rgba(0,212,255,.6);padding:0;
+}
+#fab-up:active, #fab-cfg:active { transform: scale(0.9); }
 </style>
+<div id="fab-wrap">
+  <button id="fab-up" title="맨 위로">↑</button>
+  <button id="fab-cfg" title="필터 설정">⚙</button>
+</div>
 <script>
-// 스크롤에 따라 fab 위치 업데이트
-(function() {
-  var lastUpdate = 0;
-  function updateFab() {
-    var now = Date.now();
-    if (now - lastUpdate < 100) return;
-    lastUpdate = now;
-    var fab = document.getElementById('fab-wrap');
-    if (!fab) return;
-    try {
-      var pScroll = window.parent.document.documentElement.scrollTop || window.parent.document.body.scrollTop || 0;
-      var pVH = window.parent.innerHeight || 600;
-      var iframeOffsetTop = 0;
-      var iframes = window.parent.document.querySelectorAll('iframe');
-      for (var i=0; i<iframes.length; i++) {
-        if (iframes[i].contentWindow === window) {
-          iframeOffsetTop = iframes[i].getBoundingClientRect().top + pScroll;
-          break;
-        }
-      }
-      // 현재 화면에서 보이는 iframe 하단 위치
-      var visibleBottom = pScroll + pVH - iframeOffsetTop;
-      fab.style.top = (visibleBottom - 150) + 'px';
-      fab.style.bottom = 'auto';
-    } catch(e) {
-      // cross-origin 불가 시 그냥 페이지 하단에
-    }
-  }
-  try { window.parent.addEventListener('scroll', updateFab, {passive:true}); } catch(e) {}
-  setInterval(updateFab, 300);
-  setTimeout(updateFab, 500);
-})();
+document.getElementById('fab-up').addEventListener('click', function(e) {
+  e.stopPropagation();
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+document.getElementById('fab-cfg').addEventListener('click', function(e) {
+  e.stopPropagation();
+  openSettings(e);
+});
 </script>
 
 <!-- RISK BANNER -->

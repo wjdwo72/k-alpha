@@ -3997,7 +3997,7 @@ server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.sessi
 # 버튼은 탑바 내부에 통합됨
 
 # 정적 HTML 렌더
-components.html(_final_html, height=30000, scrolling=False)
+components.html(_final_html, height=30000, scrolling=True)
 
 # ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
 _data_js = f"""<script>
