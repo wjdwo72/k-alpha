@@ -3439,14 +3439,14 @@ if _gist_active or st.session_state.kis_token:
                         f'✅ 스캔 완료 — 총 {_bg_total}초 소요 '
                         f'(KOSPI {_bkp} + KOSDAQ {_bkd}종목)</div>', unsafe_allow_html=True)
                 elif server_store.get('bg_scan_running'):
-                    # 스캔 진행 중 → 기존 캐시 데이터로 계속 표시
+                    # 스캔 진행 중 → 기존 캐시 데이터로 계속 표시 (rerun 없음 — 모바일 iframe 리로드 방지)
                     st.markdown(
                         '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
                         'padding:6px 10px;background:rgba(255,200,0,0.06);'
                         'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
-                        '📡 KIS 직접 스캔 중 (백그라운드)... KOSPI 200 + KOSDAQ 100 조회 중</div>',
+                        '📡 KIS 스캔 중 (백그라운드) — 현재 데이터 표시 중</div>',
                         unsafe_allow_html=True)
-                    # 캐시 있으면 그걸로 표시
+                    # 캐시 있으면 그걸로 표시 (rerun 없이 그냥 진행)
                     _prev = server_store.get('scan_data')
                     if _prev:
                         kospi_stocks  = _prev.get('kospi', [])
@@ -3454,9 +3454,7 @@ if _gist_active or st.session_state.kis_token:
                         balance       = _prev.get('balance', {})
                         price_ts      = server_store.get('scan_str', kst_strftime("%H:%M:%S"))
                         all_stocks    = kospi_stocks + kosdaq_stocks
-                    # 3초 후 rerun으로 완료 체크
-                    time.sleep(3)
-                    st.rerun()
+                    # rerun 하지 않음 → 스캔 완료 후 다음 자연스러운 페이지 상호작용 시 반영
                 else:
                     # 스캔 시작 → 백그라운드 스레드 실행 후 즉시 계속
                     _kt = st.session_state.kis_token
@@ -3479,7 +3477,7 @@ if _gist_active or st.session_state.kis_token:
                         f'<span style="color:#64748b;font-size:11px">'
                         f'종목 카드는 스캔 완료 후 자동으로 업데이트됩니다</span></div>',
                         unsafe_allow_html=True)
-                    # 이전 캐시 있으면 그걸로 표시 (처음이면 비어있음)
+                    # 이전 캐시 있으면 그걸로 표시 (rerun 없이 즉시 진행)
                     _prev = server_store.get('scan_data')
                     if _prev:
                         kospi_stocks  = _prev.get('kospi', [])
@@ -3487,9 +3485,7 @@ if _gist_active or st.session_state.kis_token:
                         balance       = _prev.get('balance', {})
                         price_ts      = server_store.get('scan_str', kst_strftime("%H:%M:%S"))
                         all_stocks    = kospi_stocks + kosdaq_stocks
-                    # 3초 후 rerun으로 진행 상황 체크
-                    time.sleep(3)
-                    st.rerun()
+                    # rerun 없음 → 스캔 완료 후 다음 상호작용 시 반영
 
         st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
                     f'📊 KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목 · {price_ts}</div>',
