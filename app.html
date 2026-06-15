@@ -4447,16 +4447,16 @@ function openTabStockList(event, tab) {
       const isUp  = changeEl && changeEl.classList.contains('up');
       const isDn  = changeEl && changeEl.classList.contains('dn');
       const chgColor = isUp ? '#00ff88' : isDn ? '#ff4d6d' : '#94a3b8';
-      // 전일대비 금액 / 등락률 분리 (예: "+1,200 (+0.72%)" → "+1,200" / "(+0.72%)")
-      const chgMatch = chgRaw.match(/^([+-]?[\d,]+)\s*(\([+-]?[\d.]+%\))?/);
-      const chgAmt = chgMatch ? chgMatch[1] : chgRaw;
-      const chgPct = (chgMatch && chgMatch[2]) ? chgMatch[2] : '';
+      // 전일대비 금액 / 등락률 분리: "+3,200 (+1.94%)" 또는 "+3,200(+1.94%)"
+      const sepIdx = chgRaw.indexOf('(');
+      const chgAmt = sepIdx > 0 ? chgRaw.substring(0, sepIdx).trim() : chgRaw;
+      const chgPct = sepIdx > 0 ? chgRaw.substring(sepIdx).trim() : '';
       return '<div onclick="scrollToCard(\'' + code + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s" onmouseover="this.style.background=\'rgba(0,212,255,0.07)\'" onmouseout="this.style.background=\'none\'">' +
         '<div><div style="font-size:12px;color:#e2e8f0;font-weight:600">' + name + '</div>' +
         '<div style="font-size:10px;color:var(--text-dim)">' + code + '</div></div>' +
         '<div style="text-align:right">' +
         '<div style="font-size:12px;color:' + cfg.color + ';font-weight:700">' + price + '</div>' +
-        '<div style="font-size:10px;color:' + chgColor + ';font-weight:600">' + chgAmt + ' <span style="opacity:0.8">' + chgPct + '</span></div>' +
+        '<div style="font-size:10px;color:' + chgColor + ';font-weight:600;white-space:nowrap">' + chgAmt + (chgPct ? ' <span style="opacity:0.75;font-size:9px">' + chgPct + '</span>' : '') + '</div>' +
         '</div></div>';
     }).join('');
   }
