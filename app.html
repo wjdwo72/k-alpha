@@ -4541,8 +4541,10 @@ function saveVirtualCash() {
   const cashEl = document.getElementById('popup-avail-cash');
   if (cashEl) cashEl.textContent = amt.toLocaleString() + ' 원';
 }
-// 초기 렌더
-_renderVirtualCash();
+// 초기 렌더 (DOM 준비 후)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { try { _renderVirtualCash(); } catch(e){} });
+} else { try { _renderVirtualCash(); } catch(e){} }
 
 // ── 가상 포트폴리오 DB ───────────────────────────────────────────
 const _VPF_HOLDINGS_KEY = 'k_vpf_holdings_v1';
@@ -4746,8 +4748,10 @@ function vpfClearConfirm() {
   _renderVpf();
 }
 
-// 초기 렌더
-_renderVpf();
+// 초기 렌더 (DOM 준비 후)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { try { _renderVpf(); } catch(e){} });
+} else { try { _renderVpf(); } catch(e){} }
 
 
 // ──────────────────────────────────────────────
