@@ -4360,7 +4360,8 @@ function confirmPopupOrder() {
   }
 
   addLog(ts, '['+cfg.logTag+'] '+name+' '+userBuyPrice.toLocaleString()+'원 × '+record.qty+'주 → 테스트 기록', cfg.logType);
-  const pnlStr = pnlPct!==null ? ' · 수익률 <b style="color:'+(parseFloat(pnlPct)>=0?'var(--accent2)':'var(--accent3)')+'\">'+(parseFloat(pnlPct)>=0?'+':'')+pnlPct+'%</b>' : '';
+  const pnlColor = parseFloat(pnlPct)>=0 ? 'var(--accent2)' : 'var(--accent3)';
+  const pnlStr = pnlPct!==null ? ' · 수익률 <b style="color:'+pnlColor+'">'+(parseFloat(pnlPct)>=0?'+':'')+pnlPct+'%</b>' : '';
   addTelegram('<span class="tg-tag signal">'+cfg.tgTag+'</span><strong>'+name+'</strong> — '+userBuyPrice.toLocaleString()+'원 × '+record.qty+'주'+pnlStr, ts, orderType==='buy'?'S':'');
   _renderOrderHistory();
   closeOrderPopup();
@@ -4724,8 +4725,7 @@ function _renderVpf() {
 
 function openVpfSellPopup(code, name, curPrice, maxQty) {
   // 간단한 prompt로 매도
-  const qty = parseInt(prompt(name + ' 매도 수량 (보유: ' + maxQty + '주)
-현재가: ' + curPrice.toLocaleString() + '원', maxQty));
+  const qty = parseInt(prompt(name + ' 매도 수량 (보유: ' + maxQty + '주)\n현재가: ' + curPrice.toLocaleString() + '원', maxQty));
   if (!qty || qty <= 0 || qty > maxQty) { if (qty !== null) alert('수량을 확인하세요.'); return; }
   const now = new Date();
   const date = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
