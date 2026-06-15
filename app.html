@@ -4446,7 +4446,7 @@ function openTabStockList(event, tab) {
       // 등락 색상: .up / .dn 클래스로 판단
       const isUp  = changeEl && changeEl.classList.contains('up');
       const isDn  = changeEl && changeEl.classList.contains('dn');
-      const chgColor = isUp ? '#00ff88' : isDn ? '#ff4d6d' : '#94a3b8';
+      const chgColor = isUp ? '#ff4d6d' : isDn ? '#4fa3e0' : '#94a3b8';
       // 전일대비 금액 / 등락률 분리: "+3,200 (+1.94%)" 또는 "+3,200(+1.94%)"
       const sepIdx = chgRaw.indexOf('(');
       const chgAmt = sepIdx > 0 ? chgRaw.substring(0, sepIdx).trim() : chgRaw;
