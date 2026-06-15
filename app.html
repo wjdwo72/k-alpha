@@ -1670,6 +1670,63 @@
             <div class="pf-sum-sub" id="pf-pnl-pct">0.00%</div>
           </div>
         </div>
+        <!-- 가상 포트폴리오 섹션 -->
+        <!-- 가상 포트폴리오 섹션 -->
+        <div id="vpf-section" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:12px;font-weight:700;color:var(--accent)">🧪 K-자동매매 가상 포트폴리오</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span id="vpf-remain-cash" style="font-size:11px;font-family:'Share Tech Mono',monospace;color:var(--accent2)">잔여: —</span>
+              <button onclick="vpfClearConfirm()" style="padding:2px 8px;font-size:10px;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);border-radius:4px;color:var(--accent3);cursor:pointer;font-family:'Share Tech Mono',monospace">초기화</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+            <div style="background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);font-family:'Share Tech Mono',monospace">보유종목</div>
+              <div id="vpf-cnt" style="font-size:16px;font-weight:700;color:#e2e8f0;font-family:'Share Tech Mono',monospace">0</div>
+            </div>
+            <div style="background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);font-family:'Share Tech Mono',monospace">총 매입금액</div>
+              <div id="vpf-cost" style="font-size:13px;font-weight:700;color:var(--accent);font-family:'Share Tech Mono',monospace">0원</div>
+            </div>
+            <div style="background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);font-family:'Share Tech Mono',monospace">평가손익</div>
+              <div id="vpf-pnl" style="font-size:13px;font-weight:700;font-family:'Share Tech Mono',monospace">+0원</div>
+            </div>
+            <div style="background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:6px;padding:8px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);font-family:'Share Tech Mono',monospace">수익률</div>
+              <div id="vpf-pct" style="font-size:16px;font-weight:700;font-family:'Share Tech Mono',monospace">0.00%</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto;margin-bottom:10px">
+            <table style="width:100%;border-collapse:collapse;font-family:'Share Tech Mono',monospace;font-size:11px">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border);color:var(--text-dim);font-size:10px">
+                  <th style="padding:5px 6px;text-align:left;font-weight:500">날짜</th>
+                  <th style="padding:5px 6px;text-align:left;font-weight:500">종목명</th>
+                  <th style="padding:5px 6px;text-align:right;font-weight:500">매입가</th>
+                  <th style="padding:5px 6px;text-align:right;font-weight:500">현재가</th>
+                  <th style="padding:5px 6px;text-align:right;font-weight:500">수량</th>
+                  <th style="padding:5px 6px;text-align:right;font-weight:500">평가손익</th>
+                  <th style="padding:5px 6px;text-align:right;font-weight:500">수익률</th>
+                  <th style="padding:5px 6px;text-align:right;font-weight:500">보유비중</th>
+                  <th style="padding:5px 6px;text-align:center;font-weight:500">액션</th>
+                </tr>
+              </thead>
+              <tbody id="vpf-tbody">
+                <tr><td colspan="9" style="text-align:center;padding:16px;color:var(--text-dim);font-size:11px">보유 종목 없음 — K-자동매매 승인 시 자동 추가됩니다</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-dim);font-family:'Share Tech Mono',monospace;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+              <span>📋 가상 거래이력 (날짜별)</span>
+              <span id="vpf-hist-cnt" style="color:var(--accent)">0건</span>
+            </div>
+            <div id="vpf-hist-list" style="max-height:220px;overflow-y:auto"></div>
+          </div>
+        </div>
+
         <div class="pf-market-tabs">
           <button class="pf-mkt-btn active all" id="pf-filter-all" onclick="pfFilter('all',this)">전체</button>
           <button class="pf-mkt-btn kr" id="pf-filter-kr" onclick="pfFilter('kr',this)">🇰🇷 한국주식</button>
@@ -3360,6 +3417,7 @@ function switchTab(tab, btn, market) {
     setTimeout(function() {
       if (typeof pfRenderSummary === 'function') pfRenderSummary();
       if (typeof pfRenderHoldings === 'function') pfRenderHoldings();
+      if (typeof _renderVpf === 'function') _renderVpf();
       if (IS_STREAMLIT && typeof sendHeight === 'function') sendHeight();
     }, 50);
     return;
@@ -4191,15 +4249,13 @@ function openOrderPopup(event, code, name, buy, target, stop, rr, score, grade, 
   // 매입가능금액
   const cashEl = document.getElementById('popup-avail-cash');
   if (cashEl) {
-    let cash = 0;
-    try {
-      const ct = document.getElementById('pf-cash-val') ? document.getElementById('pf-cash-val').textContent : '';
-      cash = parseInt(ct.replace(/[^0-9]/g,''))||0;
-    } catch(e){}
-    cashEl.textContent = cash > 0 ? cash.toLocaleString()+' 원' : '잔고 연결 후 표시';
-    if (cash > 0 && buyNum > 0) {
+    // 가상예수금 우선 사용
+    const vcash = _loadVirtualCash();
+    const vcashRemain = _getVirtualCashRemain();
+    cashEl.textContent = vcashRemain.toLocaleString() + ' 원 (가상)';
+    if (vcashRemain > 0 && buyNum > 0) {
       const bq = document.getElementById('popup-buy-qty');
-      if (bq && !bq.value) bq.value = Math.max(1, Math.floor(cash/buyNum));
+      if (bq && !bq.value) bq.value = Math.max(1, Math.floor(vcashRemain / buyNum));
     }
   }
 
@@ -4278,6 +4334,19 @@ function confirmPopupOrder() {
     pnlPct: pnlPct, profitAmt: profitAmt, target: target, stop: stop, rr: rr, score: score,
   };
   _tradeDB.unshift(record); _saveTradeDB();
+
+  // 가상 포트폴리오 업데이트
+  if (orderType==='buy') {
+    const cost = userBuyPrice * buyQty;
+    const vcRemain = _getVirtualCashRemain();
+    if (cost > vcRemain) {
+      addLog(ts, '[가상] 잔여 가상예수금 부족 (필요:'+cost.toLocaleString()+'원 / 잔여:'+vcRemain.toLocaleString()+'원)', 'warn');
+    }
+    _vpfAddHolding(code, name, userBuyPrice, buyQty, dateStr);
+  } else if (orderType==='sell') {
+    _vpfSellHolding(code, userSellPrice, sellQty, dateStr);
+  }
+  _renderVpf();
 
   if (orderType==='buy') {
     const btn = document.getElementById('btn-'+code);
@@ -4474,6 +4543,211 @@ function saveVirtualCash() {
 }
 // 초기 렌더
 _renderVirtualCash();
+
+// ── 가상 포트폴리오 DB ───────────────────────────────────────────
+const _VPF_HOLDINGS_KEY = 'k_vpf_holdings_v1';
+const _VPF_HIST_KEY     = 'k_vpf_hist_v1';
+
+function _vpfLoadHoldings() {
+  try { return JSON.parse(localStorage.getItem(_VPF_HOLDINGS_KEY) || '[]'); } catch(e) { return []; }
+}
+function _vpfSaveHoldings(arr) {
+  try { localStorage.setItem(_VPF_HOLDINGS_KEY, JSON.stringify(arr)); } catch(e) {}
+}
+function _vpfLoadHist() {
+  try { return JSON.parse(localStorage.getItem(_VPF_HIST_KEY) || '[]'); } catch(e) { return []; }
+}
+function _vpfSaveHist(arr) {
+  try { localStorage.setItem(_VPF_HIST_KEY, JSON.stringify(arr)); } catch(e) {}
+}
+
+function _getVirtualCashRemain() {
+  const total  = _loadVirtualCash();
+  const h      = _vpfLoadHoldings();
+  const used   = h.reduce(function(s,o){ return s + o.avgPrice * o.qty; }, 0);
+  return Math.max(0, total - used);
+}
+
+function _vpfAddHolding(code, name, buyPrice, qty, date) {
+  const arr = _vpfLoadHoldings();
+  const idx = arr.findIndex(function(o){ return o.code === code; });
+  if (idx >= 0) {
+    const cur = arr[idx];
+    const totalQty = cur.qty + qty;
+    cur.avgPrice = Math.round((cur.avgPrice * cur.qty + buyPrice * qty) / totalQty);
+    cur.qty = totalQty;
+    cur.lastBuyDate = date;
+  } else {
+    arr.push({ code:code, name:name, avgPrice:buyPrice, qty:qty, buyDate:date, lastBuyDate:date, curPrice:buyPrice });
+  }
+  _vpfSaveHoldings(arr);
+  // 이력 추가
+  const hist = _vpfLoadHist();
+  hist.unshift({ date:date, code:code, name:name, type:'매입', price:buyPrice, qty:qty });
+  _vpfSaveHist(hist);
+}
+
+function _vpfSellHolding(code, sellPrice, qty, date) {
+  const arr = _vpfLoadHoldings();
+  const idx = arr.findIndex(function(o){ return o.code === code; });
+  if (idx < 0) return;
+  const cur = arr[idx];
+  const pnlAmt = (sellPrice - cur.avgPrice) * Math.min(qty, cur.qty);
+  const pnlPct = ((sellPrice - cur.avgPrice) / cur.avgPrice * 100).toFixed(2);
+  // 이력 추가
+  const hist = _vpfLoadHist();
+  hist.unshift({ date:date, code:code, name:cur.name, type:'매도', price:sellPrice, qty:Math.min(qty,cur.qty), pnlAmt:pnlAmt, pnlPct:pnlPct });
+  _vpfSaveHist(hist);
+  // 수량 차감
+  cur.qty -= qty;
+  if (cur.qty <= 0) arr.splice(idx, 1);
+  _vpfSaveHoldings(arr);
+}
+
+function _vpfGetCurPrice(code) {
+  // 카드에서 현재가 추출
+  const card = document.querySelector('[data-stock-code="'+code+'"]');
+  if (card) {
+    const el = card.querySelector('.price-current');
+    if (el) {
+      const v = parseInt(el.textContent.replace(/[^0-9]/g,''));
+      if (v > 0) return v;
+    }
+  }
+  return 0;
+}
+
+function _renderVpf() {
+  const holdings = _vpfLoadHoldings();
+  const hist     = _vpfLoadHist();
+  const tbody    = document.getElementById('vpf-tbody');
+  const histEl   = document.getElementById('vpf-hist-list');
+  const remain   = _getVirtualCashRemain();
+
+  // 잔여 예수금 표시
+  const remEl = document.getElementById('vpf-remain-cash');
+  if (remEl) remEl.textContent = '잔여: ' + remain.toLocaleString() + '원';
+
+  // 가상예수금 카드에도 반영
+  _renderVirtualCash();
+
+  let totalCost = 0, totalEval = 0;
+  const totalPf = remain + holdings.reduce(function(s,o){
+    const cur = _vpfGetCurPrice(o.code) || o.avgPrice;
+    return s + cur * o.qty;
+  }, 0) + remain; // approximate
+
+  if (!holdings.length) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--text-dim);font-size:11px">보유 종목 없음 — K-자동매매 승인 시 자동 추가됩니다</td></tr>';
+  } else {
+    const totalCostAll = holdings.reduce(function(s,o){ return s + o.avgPrice * o.qty; }, 0);
+    const totalEvalAll = holdings.reduce(function(s,o){
+      const cur = _vpfGetCurPrice(o.code) || o.avgPrice;
+      return s + cur * o.qty;
+    }, 0);
+    const grandTotal = totalCostAll + remain;
+
+    if (tbody) {
+      tbody.innerHTML = holdings.map(function(o) {
+        const cur     = _vpfGetCurPrice(o.code) || o.avgPrice;
+        const cost    = o.avgPrice * o.qty;
+        const eval_   = cur * o.qty;
+        const pnlAmt  = eval_ - cost;
+        const pnlPct  = cost > 0 ? (pnlAmt / cost * 100).toFixed(2) : '0.00';
+        const weight  = grandTotal > 0 ? (cost / grandTotal * 100).toFixed(1) : '0.0';
+        const pnlCls  = pnlAmt >= 0 ? 'color:var(--accent2)' : 'color:var(--accent3)';
+        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">' +
+          '<td style="padding:6px 6px;font-size:10px;color:var(--text-dim)">' + (o.buyDate||'').slice(5) + '</td>' +
+          '<td style="padding:6px 6px"><div style="font-weight:600;color:#e2e8f0">' + o.name + '</div><div style="font-size:9px;color:var(--text-dim)">' + o.code + '</div></td>' +
+          '<td style="padding:6px 6px;text-align:right;color:var(--accent)">' + o.avgPrice.toLocaleString() + '</td>' +
+          '<td style="padding:6px 6px;text-align:right;color:' + (cur > o.avgPrice ? 'var(--accent2)' : cur < o.avgPrice ? 'var(--accent3)' : '#e2e8f0') + '">' + cur.toLocaleString() + '</td>' +
+          '<td style="padding:6px 6px;text-align:right;color:#e2e8f0">' + o.qty + '주</td>' +
+          '<td style="padding:6px 6px;text-align:right;' + pnlCls + '">' + (pnlAmt >= 0 ? '+' : '') + Math.round(pnlAmt).toLocaleString() + '</td>' +
+          '<td style="padding:6px 6px;text-align:right;' + pnlCls + '">' + (parseFloat(pnlPct) >= 0 ? '+' : '') + pnlPct + '%</td>' +
+          '<td style="padding:6px 6px;text-align:right;color:#94a3b8">' + weight + '%</td>' +
+          '<td style="padding:6px 6px;text-align:center"><button onclick="openVpfSellPopup(\'' + o.code + '\',\'' + o.name + '\',' + cur + ',' + o.qty + ')" style="padding:2px 8px;font-size:10px;background:rgba(255,77,109,0.12);border:1px solid rgba(255,77,109,0.35);border-radius:4px;color:var(--accent3);cursor:pointer">매도</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    // 요약 업데이트
+    const pnlAll  = totalEvalAll - totalCostAll;
+    const pctAll  = totalCostAll > 0 ? (pnlAll / totalCostAll * 100).toFixed(2) : '0.00';
+    const pnlClr  = pnlAll >= 0 ? 'var(--accent2)' : 'var(--accent3)';
+    const cntEl   = document.getElementById('vpf-cnt');
+    const costEl  = document.getElementById('vpf-cost');
+    const pnlEl   = document.getElementById('vpf-pnl');
+    const pctEl   = document.getElementById('vpf-pct');
+    if (cntEl)  cntEl.textContent  = holdings.length;
+    if (costEl) costEl.textContent = totalCostAll.toLocaleString() + '원';
+    if (pnlEl)  { pnlEl.textContent = (pnlAll >= 0 ? '+' : '') + Math.round(pnlAll).toLocaleString() + '원'; pnlEl.style.color = pnlClr; }
+    if (pctEl)  { pctEl.textContent = (parseFloat(pctAll) >= 0 ? '+' : '') + pctAll + '%'; pctEl.style.color = pnlClr; }
+  }
+
+  // 거래이력
+  const histCntEl = document.getElementById('vpf-hist-cnt');
+  if (histCntEl) histCntEl.textContent = hist.length + '건';
+  if (histEl) {
+    if (!hist.length) {
+      histEl.innerHTML = '<div style="text-align:center;padding:12px;font-size:11px;color:var(--text-dim)">거래 이력 없음</div>';
+    } else {
+      // 날짜별 그룹핑
+      const byDate = {};
+      hist.forEach(function(h) {
+        if (!byDate[h.date]) byDate[h.date] = [];
+        byDate[h.date].push(h);
+      });
+      histEl.innerHTML = Object.keys(byDate).sort(function(a,b){return b.localeCompare(a);}).map(function(date) {
+        const rows = byDate[date].map(function(h) {
+          const isBuy = h.type === '매입';
+          const pnlHtml = (!isBuy && h.pnlPct != null)
+            ? ' <span style="color:' + (parseFloat(h.pnlPct) >= 0 ? 'var(--accent2)' : 'var(--accent3)') + ';font-weight:700">' + (parseFloat(h.pnlPct) >= 0 ? '+' : '') + h.pnlPct + '%</span>'
+            : '';
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:10px">' +
+            '<div style="display:flex;align-items:center;gap:5px">' +
+            '<span style="padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;background:' + (isBuy ? 'rgba(0,212,255,0.15)' : 'rgba(255,77,109,0.15)') + ';color:' + (isBuy ? 'var(--accent)' : 'var(--accent3)') + '">' + h.type + '</span>' +
+            '<span style="color:#e2e8f0">' + h.name + '</span>' +
+            '<span style="color:var(--text-dim)">' + h.qty + '주</span></div>' +
+            '<div style="text-align:right">' +
+            '<span style="color:' + (isBuy ? 'var(--accent)' : 'var(--accent3)') + '">' + h.price.toLocaleString() + '원</span>' +
+            pnlHtml + '</div></div>';
+        }).join('');
+        return '<div style="margin-bottom:6px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;overflow:hidden">' +
+          '<div style="padding:4px 8px;background:rgba(255,255,255,0.04);font-size:10px;color:var(--text-dim);font-family:Share Tech Mono,monospace;font-weight:700">' + date + '</div>' +
+          rows + '</div>';
+      }).join('');
+    }
+  }
+}
+
+function openVpfSellPopup(code, name, curPrice, maxQty) {
+  // 간단한 prompt로 매도
+  const qty = parseInt(prompt(name + ' 매도 수량 (보유: ' + maxQty + '주)
+현재가: ' + curPrice.toLocaleString() + '원', maxQty));
+  if (!qty || qty <= 0 || qty > maxQty) { if (qty !== null) alert('수량을 확인하세요.'); return; }
+  const now = new Date();
+  const date = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  _vpfSellHolding(code, curPrice, qty, date);
+  // tradeDB에도 기록
+  const ts = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  const h   = _vpfLoadHoldings().find(function(o){ return o.code === code; });
+  _tradeDB.unshift({ id:Date.now(), date:date, ts:ts, code:code, name:name, type:'sell',
+    buyPrice:0, sellPrice:curPrice, qty:qty, buyQty:0, sellQty:qty, pnlPct:null, profitAmt:null });
+  _saveTradeDB();
+  addLog(ts, '[V-SELL] ' + name + ' ' + curPrice.toLocaleString() + '원 × ' + qty + '주 → 가상매도', 'warn');
+  _renderVpf();
+  _renderOrderHistory();
+}
+
+function vpfClearConfirm() {
+  if (!confirm('가상 포트폴리오를 초기화할까요?\n(거래이력 + 보유종목 모두 삭제)')) return;
+  localStorage.removeItem(_VPF_HOLDINGS_KEY);
+  localStorage.removeItem(_VPF_HIST_KEY);
+  _renderVpf();
+}
+
+// 초기 렌더
+_renderVpf();
 
 
 // ──────────────────────────────────────────────
