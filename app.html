@@ -240,8 +240,9 @@
     /* 탑바 — 모바일: 세로 줄바꿈, 가로스크롤 없음 */
     .topbar { padding: 6px 8px; gap: 4px; flex-wrap: wrap; height: auto; min-height: unset; }
     .topbar-center { display: flex; flex-wrap: wrap; overflow: visible; gap: 3px; width: 100%; flex: 0 0 100%; order: 3; }
-    .topbar-right { gap: 4px; font-size: 10px; }
+    .topbar-right { gap: 4px; font-size: 10px; flex-wrap: wrap; justify-content: flex-end; }
     #clock { display: none; }
+    #scan-count { font-size: 9px; color: var(--accent); font-weight: 700; order: -1; width: 100%; text-align: right; padding: 2px 0; }
     .market-pill { font-size: 9px; padding: 2px 5px; white-space: nowrap; flex-shrink: 0; }
     body, html { overflow-x: hidden !important; max-width: 100vw; }
     .mkt-sw-btn { padding: 6px 14px; font-size: 10px; }
@@ -5096,9 +5097,12 @@ async function fetchKisOrders() {
 // ── 5. 전체 KR 카드 현재가 업데이트 ──
 // ── 카드 가격 DOM 업데이트 공통 함수 ──
 function updateCardPrice(stock, p, source) {
-  const sign = p.change >= 0 ? '+' : '';
+  // p.up 기준으로 부호 결정 (KIS API 부호 혼용 방어)
+  const absChange = Math.abs(p.change || 0);
+  const absPct    = Math.abs(p.changePct || 0);
+  const sign = p.up ? '+' : (absChange > 0 || absPct > 0 ? '-' : '');
   stock.price = p.price.toLocaleString('ko-KR');
-  stock.change = `${sign}${p.change.toLocaleString('ko-KR')} (${sign}${p.changePct.toFixed(2)}%)`;
+  stock.change = `${sign}${absChange.toLocaleString('ko-KR')} (${sign}${absPct.toFixed(2)}%)`;
   stock.up = p.up;
 
   const now = new Date();
