@@ -40,6 +40,33 @@ def is_market_open(dt=None):
     total = dt.hour * 60 + dt.minute
     return 480 <= total <= 930  # 08:00(480) ~ 15:30(930)
 
+def get_market_session(dt=None):
+    """넥스트레이드 포함 시장 세션 반환
+    Returns: 'pre' | 'regular' | 'after' | 'closed'
+    - pre:     08:00~08:50 (넥스트레이드 프리마켓)
+    - regular: 09:00~15:30 (정규장)
+    - after:   15:40~20:00 (넥스트레이드 애프터마켓)
+    - closed:  그 외
+    """
+    if dt is None: dt = kst_now()
+    if dt.weekday() >= 5: return 'closed'
+    if is_kr_holiday(dt): return 'closed'
+    total = dt.hour * 60 + dt.minute
+    if 480 <= total <= 530:   return 'pre'      # 08:00~08:50
+    if 540 <= total <= 930:   return 'regular'  # 09:00~15:30
+    if 940 <= total <= 1200:  return 'after'    # 15:40~20:00
+    return 'closed'
+
+SESSION_LABEL = {
+    'pre':     '🟡 프리마켓 (08:00~08:50)',
+    'regular': '🟢 장중 (09:00~15:30)',
+    'after':   '🟠 애프터마켓 (15:40~20:00)',
+    'closed':  '🔴 장마감',
+}
+SESSION_SHORT = {
+    'pre': '🟡 프리', 'regular': '🟢 장중', 'after': '🟠 애프터', 'closed': '🔴 장마감',
+}
+
 # ────────────────────────────────────────────────────────────────
 # 백그라운드 스캔 + TG 전송 스레드 (브라우저 없이도 자동 실행)
 # ────────────────────────────────────────────────────────────────
@@ -164,7 +191,9 @@ def _start_bg_scan_thread():
                 iv   = ss.get("scan_refresh_min") or 10
                 elapsed = time.time() - bg["last_scan"]
 
-                if elapsed >= iv * 60 and is_market_open():
+                _session = get_market_session()
+                _active  = _session in ('pre', 'regular', 'after')
+                if elapsed >= iv * 60 and _active:
                     tok = ss.get("kis_token")
                     gid = _get_secret("GIST_ID")
                     ght = _get_secret("GH_TOKEN")
@@ -191,6 +220,7 @@ def _start_bg_scan_thread():
                                     top_n=min(50, ui_n*3),
                                 )
                                 _ts = kst_strftime("%H:%M:%S")
+                                _sess_lbl = SESSION_SHORT.get(_session, '🟢 장중')
                                 sr = {
                                     "swing":    [build_card(s,"swing")    for s in cats["swing"]],
                                     "surge":    [build_card(s,"surge")    for s in cats["surge"]],
@@ -198,7 +228,10 @@ def _start_bg_scan_thread():
                                     "smallmid": [build_card(s,"smallmid") for s in cats["smallmid"]],
                                     "ts":_ts,"total":len(all_s),
                                     "kospi_n":len(kp),"kosdaq_n":len(kd),
-                                    "updated_at":time.time(),"market_open":True,
+                                    "updated_at":time.time(),
+                                    "market_open": _session == 'regular',
+                                    "session": _session,
+                                    "session_label": _sess_lbl,
                                 }
                                 sj = _jn.dumps(sr, ensure_ascii=False)
                                 r = _req.patch(
@@ -213,8 +246,8 @@ def _start_bg_scan_thread():
                                     bg["last_scan"] = time.time()
                                     try: fetch_gist_scan.clear()
                                     except: pass
-                                    # 스캔 직후 TG 전송
-                                    iv_lbl = f"{iv}분"
+                                    # 스캔 직후 TG 전송 (세션 레이블 포함)
+                                    iv_lbl = f"{_sess_lbl} {iv}분"
                                     _do_tg_send(ss, sr, iv_lbl)
                         except Exception:
                             pass
@@ -3244,13 +3277,17 @@ if _gist_active or st.session_state.kis_token:
         age_color  = "#00ff88" if age_sec < 700 else "#ffc800"
         _ref_sec   = scan_ref_min * 60
         next_scan  = max(0, _ref_sec - age_sec)   # 설정 주기 기준 남은 초
-        _mkt_now   = is_market_open()
+        _session_now = get_market_session()
+        _mkt_now     = _session_now in ('pre', 'regular', 'after')
+        _sess_colors = {'pre':'#ffc800','regular':'#00ff88','after':'#ff9900','closed':'#64748b'}
+        _sess_color  = _sess_colors.get(_session_now, '#64748b')
+        _sess_full   = SESSION_LABEL.get(_session_now, '🔴 장마감')
         if _mkt_now:
             if next_scan > 0:
                 next_lbl = f"{next_scan//60}분 {next_scan%60}초 후"
             else:
                 next_lbl = "곧 갱신"
-            mkt_badge = '<span style="color:#00ff88">🟢 장중</span>'
+            mkt_badge = f'<span style="color:{_sess_color}">{_sess_full}</span>'
         else:
             is_hol = is_kr_holiday()
             is_wkd = kst_now().weekday() >= 5
@@ -3739,8 +3776,16 @@ if _gist_active or st.session_state.kis_token:
         scan_result['per'] = []
 
     # 상태 표시
-    _dm = is_market_open()
-    _dm_lbl = '🟢 장중' if _dm else ('🔴 주말' if kst_now().weekday()>=5 else ('🔴 공휴일' if is_kr_holiday() else '🔴 장마감'))
+    _dm_sess = get_market_session()
+    _dm_lbl_map = {
+        'pre':     '<span style="color:#ffc800">🟡 프리마켓 (08:00~08:50)</span>',
+        'regular': '<span style="color:#00ff88">🟢 장중 (09:00~15:30)</span>',
+        'after':   '<span style="color:#ff9900">🟠 애프터마켓 (15:40~20:00)</span>',
+        'closed':  f'<span style="color:#64748b">🔴 {"주말" if kst_now().weekday()>=5 else ("공휴일" if is_kr_holiday() else "장마감")}</span>',
+    }
+    _dm_lbl = _dm_lbl_map.get(_dm_sess, '')
+    scan_result['session']       = _dm_sess
+    scan_result['session_label'] = SESSION_SHORT.get(_dm_sess, '')
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
 📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl}<br>
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>

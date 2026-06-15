@@ -6136,7 +6136,8 @@ function applyRealScanData() {
       var ts = String(now.getHours()).padStart(2,'0') + ':' +
                String(now.getMinutes()).padStart(2,'0') + ':' +
                String(now.getSeconds()).padStart(2,'0');
-      live.innerHTML = '● LIVE · KOSPI+KOSDAQ ' + scanTotal + '종목 실시간 스캔 · ' + ts;
+      var sessLabel = (scan && scan.session_label) ? ' · ' + scan.session_label : '';
+      live.innerHTML = '● LIVE · KOSPI+KOSDAQ ' + scanTotal + '종목 실시간 스캔' + sessLabel + ' · ' + ts;
     }
     updateLiveBanner();
     if (window._liveBannerTimer) clearInterval(window._liveBannerTimer);
