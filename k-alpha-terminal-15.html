@@ -679,7 +679,64 @@
     background: rgba(0,255,136,0.2);
     border-color: var(--accent2);
     color: var(--accent2);
-    cursor: default;
+    cursor: pointer;
+  }
+  .action-btn-group { display:none; gap:4px; flex-wrap:wrap; align-items:center; }
+  .btn-mini {
+    padding: 5px 9px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-mini-sell  { background:rgba(255,77,109,0.12); border:1px solid var(--accent3); color:var(--accent3); }
+  .btn-mini-sell:hover { background:rgba(255,77,109,0.25); box-shadow:0 0 8px rgba(255,77,109,0.3); }
+  .btn-mini-cancel { background:rgba(255,165,0,0.1); border:1px solid var(--accent4); color:var(--accent4); }
+  .btn-mini-cancel:hover { background:rgba(255,165,0,0.2); box-shadow:0 0 8px rgba(255,165,0,0.25); }
+  .btn-mini-modify { background:rgba(130,100,255,0.12); border:1px solid #a78bfa; color:#a78bfa; }
+  .btn-mini-modify:hover { background:rgba(130,100,255,0.25); box-shadow:0 0 8px rgba(130,100,255,0.3); }
+  /* 팝업 모달 — overlay 없이 클릭 위치 근처 */
+  #order-popup {
+    display: none;
+    position: fixed;
+    z-index: 9000;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 20px;
+    width: 340px;
+    box-shadow: var(--glow-blue), 0 8px 40px rgba(0,0,0,0.7);
+    animation: modalIn 0.2s ease;
+  }
+  #order-popup.show { display: block; }
+  /* 주문내역 패널 */
+  .order-hist-wrap { margin-top:6px; }
+  .order-hist-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 10px; margin-bottom:4px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius:5px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+  }
+  .order-hist-type { padding:2px 6px; border-radius:3px; font-size:9px; margin-right:6px; }
+  .order-hist-buy  { background:rgba(0,212,255,0.15); color:var(--accent); }
+  .order-hist-sell { background:rgba(255,77,109,0.15); color:var(--accent3); }
+  .order-hist-cancel { background:rgba(255,165,0,0.15); color:var(--accent4); }
+  .order-hist-modify { background:rgba(130,100,255,0.15); color:#a78bfa; }
+  .order-hist-pnl.pos { color:var(--accent2); }
+  .order-hist-pnl.neg { color:var(--accent3); }
+  /* 자동매매 글로벌 토글 */
+  .auto-trade-global {
+    margin: 10px 0;
+    padding: 10px 12px;
+    background: rgba(0,212,255,0.05);
+    border: 1px solid var(--border);
+    border-radius:6px;
   }
 
   /* ── SIDEBAR ── */
@@ -1514,6 +1571,20 @@
         <div id="api-status-msg" class="api-status-msg info">앱키 · 시크릿 · 계좌번호를 입력하세요</div>
         <button class="api-connect-btn" id="api-connect-btn" onclick="connectApi()" disabled>API 연결 테스트</button>
 
+        <!-- K-자동매매 글로벌 ON/OFF -->
+        <div class="auto-trade-global" id="auto-trade-global-panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div>
+              <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#e2e8f0;letter-spacing:0.5px">⬡ K-자동매매</div>
+              <div id="global-at-label" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent3);margin-top:2px">비활성 — 버튼 숨김</div>
+            </div>
+            <button id="global-at-btn" onclick="toggleGlobalAutoTrade()" style="padding:5px 14px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;border:1px solid var(--accent3);background:rgba(255,77,109,0.1);color:var(--accent3);cursor:pointer;transition:all 0.2s">OFF</button>
+          </div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);line-height:1.6">
+            ⚠ 테스트 모드 — 실제 주문 전송 없음<br>ON 시 카드에 승인·매도·정정·취소 버튼 표시
+          </div>
+        </div>
+
         <!-- 간편비번 저장/불러오기 -->
         <div style="height:1px;background:var(--border);margin:8px 0"></div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:0.5px;margin-bottom:6px">🔒 간편비번 저장</div>
@@ -1605,6 +1676,9 @@
       <button onclick="fullRefresh()" id="sidebar-refresh-btn" style="width:100%;margin-top:8px;padding:9px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
         <span id="sidebar-refresh-icon" style="font-size:14px">↻</span> 전체 새로고침
       </button>
+      <button onclick="openOrderHist()" style="width:100%;margin-top:6px;padding:9px;background:rgba(57,255,20,0.07);border:1px solid var(--accent2);border-radius:4px;color:var(--accent2);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
+        📋 주문내역 &amp; 수익률
+      </button>
       <button onclick="openSettings()" style="width:100%;margin-top:6px;padding:8px;background:rgba(0,212,255,0.08);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px">⚙ 스캔 필터 설정</button>
     </div>
 
@@ -1684,12 +1758,19 @@
     <div class="modal-title">K-자동매매 승인</div>
     <div class="modal-sub">아래 조건으로 KIS API 주문을 전송합니다.<br>최종 확인 후 승인하십시오.</div>
     <div class="modal-info" id="modal-info"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 8px;padding:10px 14px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.15);border-radius:6px">
+      <div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#e2e8f0;letter-spacing:0.5px">⬡ K-자동매매</div>
+        <div id="auto-trade-status-label" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);margin-top:2px">활성화됨</div>
+      </div>
+      <button id="auto-trade-toggle" onclick="toggleAutoTrade()" style="padding:5px 14px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;border:1px solid var(--accent2);background:rgba(57,255,20,0.12);color:var(--accent2);cursor:pointer;letter-spacing:0.5px;transition:all 0.2s">ON</button>
+    </div>
     <div class="modal-warn">
       ⚠ 테스트 모드: 실제 주문은 전송되지 않습니다. 모든 내역은 로그에 기록됩니다.
     </div>
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeModal()">취소</button>
-      <button class="modal-confirm" onclick="confirmOrder()">✓ 매매 승인 실행</button>
+      <button class="modal-confirm" id="modal-confirm-btn" onclick="confirmOrder()">✓ 매매 승인 실행</button>
     </div>
   </div>
 </div>
@@ -2599,14 +2680,29 @@ function buildCard(stock, rank) {
       <div class="reason-title">K 분석 사유</div>
       <div class="reason-lines">${reasonHtml}</div>
     </div>
-    <div class="action-row">
+    <div class="action-row" style="flex-direction:column;align-items:stretch;gap:6px">
       <div class="vol-bar-wrap">
         <div class="vol-label"><span>컨버전스 강도</span><span style="color:${catColor}">${stock.vol}%</span></div>
         <div class="vol-bar"><div class="vol-bar-fill" style="width:${stock.vol}%;background:linear-gradient(90deg,${catColor},var(--accent2))"></div></div>
       </div>
-      <button class="btn-approve" id="btn-${stock.code}" onclick="openModal('${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
-        ⬡ K-자동매매 승인
-      </button>
+      <div class="action-btn-group" id="action-group-${stock.code}">
+        <button class="btn-approve" id="btn-${stock.code}"
+          onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','buy')">
+          ⬡ K-자동매매 승인
+        </button>
+        <button class="btn-mini btn-mini-sell"
+          onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','sell')">
+          ▼ 매도
+        </button>
+        <button class="btn-mini btn-mini-cancel"
+          onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','cancel')">
+          ✕ 주문취소
+        </button>
+        <button class="btn-mini btn-mini-modify"
+          onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','modify')">
+          ✎ 정정
+        </button>
+      </div>
     </div>
   `;
   return div;
@@ -2837,6 +2933,12 @@ function renderUsCards() {
 // ──────────────────────────────────────────────
 function openModal(code, name, buy, target, stop, rr, score, grade) {
   currentModal = { code, name, buy, target, stop, rr, score, grade };
+  // 버튼에 데이터 저장 (취소 후 재오픈용)
+  const btn = document.getElementById(`btn-${code}`);
+  if (btn) btn._modalData = { target, stop, rr, score, grade };
+  // 자동매매 토글 상태 반영
+  const confirmBtn = document.getElementById('modal-confirm-btn');
+  if (confirmBtn) { confirmBtn.disabled = !autoTradeEnabled; confirmBtn.style.opacity = autoTradeEnabled ? '1' : '0.35'; }
   document.getElementById('modal-info').innerHTML = `
     <div class="modal-info-row"><span class="modal-info-label">종목</span><span class="modal-info-val">${name} (${code})</span></div>
     <div class="modal-info-row"><span class="modal-info-label">매입가</span><span class="modal-info-val" style="color:var(--accent)">${buy} 원</span></div>
@@ -2854,25 +2956,237 @@ function closeModal() {
   currentModal = null;
 }
 
-function confirmOrder() {
-  if (!currentModal) return;
-  const { code, name, buy, score } = currentModal;
+// ── 자동매매 전역 ON/OFF ──────────────────────────────────────────
+let autoTradeEnabled = false;   // 기본 OFF (글로벌)
+let globalAutoTradeOn = false;  // 카드 버튼 표시 여부
+
+function toggleGlobalAutoTrade() {
+  globalAutoTradeOn = !globalAutoTradeOn;
+  const btn = document.getElementById('global-at-btn');
+  const lbl = document.getElementById('global-at-label');
+  if (globalAutoTradeOn) {
+    btn.textContent = 'ON';
+    btn.style.background = 'rgba(57,255,20,0.12)';
+    btn.style.borderColor = 'var(--accent2)';
+    btn.style.color = 'var(--accent2)';
+    lbl.textContent = '활성 — 카드 버튼 표시';
+    lbl.style.color = 'var(--accent2)';
+    autoTradeEnabled = true;
+  } else {
+    btn.textContent = 'OFF';
+    btn.style.background = 'rgba(255,77,109,0.1)';
+    btn.style.borderColor = 'var(--accent3)';
+    btn.style.color = 'var(--accent3)';
+    lbl.textContent = '비활성 — 버튼 숨김';
+    lbl.style.color = 'var(--accent3)';
+    autoTradeEnabled = false;
+  }
+  // 모든 action-btn-group 표시/숨김
+  document.querySelectorAll('.action-btn-group').forEach(g => {
+    g.style.display = globalAutoTradeOn ? 'flex' : 'none';
+  });
+}
+
+function toggleAutoTrade() {
+  autoTradeEnabled = !autoTradeEnabled;
+  const btn = document.getElementById('popup-at-btn');
+  const lbl = document.getElementById('popup-at-label');
+  const confirmBtn = document.getElementById('popup-confirm-btn');
+  if (autoTradeEnabled) {
+    btn.textContent = 'ON';
+    btn.style.background = 'rgba(57,255,20,0.12)';
+    btn.style.borderColor = 'var(--accent2)';
+    btn.style.color = 'var(--accent2)';
+    lbl.textContent = '활성화됨';
+    lbl.style.color = 'var(--accent2)';
+    confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '1';
+  } else {
+    btn.textContent = 'OFF';
+    btn.style.background = 'rgba(255,77,109,0.10)';
+    btn.style.borderColor = 'var(--accent3)';
+    btn.style.color = 'var(--accent3)';
+    lbl.textContent = '비활성화됨 — 주문 불가';
+    lbl.style.color = 'var(--accent3)';
+    confirmBtn.disabled = true;
+    confirmBtn.style.opacity = '0.35';
+  }
+}
+
+// ── 팝업 모달 (클릭 위치) ────────────────────────────────────────
+let _popupData = null;
+
+function openOrderPopup(event, code, name, buy, target, stop, rr, score, grade, orderType) {
+  if (!globalAutoTradeOn) return;
+  event.stopPropagation();
+  _popupData = { code, name, buy, target, stop, rr, score, grade, orderType };
+
+  const popup = document.getElementById('order-popup');
+  const typeMap = {
+    buy:    { label:'K-자동매매 승인', color:'var(--accent)',  bg:'rgba(0,212,255,0.12)' },
+    sell:   { label:'매도 주문',       color:'var(--accent3)', bg:'rgba(255,77,109,0.12)' },
+    cancel: { label:'주문 취소',       color:'var(--accent4)', bg:'rgba(255,165,0,0.12)' },
+    modify: { label:'정정 주문',       color:'#a78bfa',        bg:'rgba(130,100,255,0.12)' },
+  };
+  const t = typeMap[orderType] || typeMap.buy;
+
+  document.getElementById('popup-title').textContent = t.label;
+  document.getElementById('popup-title').style.color = t.color;
+  document.getElementById('popup-confirm-btn').style.borderColor = t.color;
+  document.getElementById('popup-confirm-btn').style.background = t.bg;
+  document.getElementById('popup-confirm-btn').style.color = t.color;
+  document.getElementById('popup-confirm-btn').disabled = !autoTradeEnabled;
+  document.getElementById('popup-confirm-btn').style.opacity = autoTradeEnabled ? '1' : '0.35';
+
+  const modifyExtra = orderType === 'modify'
+    ? `<div class="modal-info-row" style="margin-top:6px">
+        <span class="modal-info-label">정정가</span>
+        <span><input id="popup-modify-price" type="number" value="${buy}"
+          style="background:#0d1220;border:1px solid var(--border);border-radius:3px;color:#e2e8f0;font-family:\'Share Tech Mono\',monospace;font-size:11px;padding:3px 6px;width:90px"> 원</span>
+       </div>` : '';
+
+  const typeLabel = { buy:'매입', sell:'매도', cancel:'취소', modify:'정정' }[orderType] || '';
+  document.getElementById('popup-info').innerHTML = `
+    <div style="font-family:'Share Tech Mono',monospace;font-size:11px">
+      <div class="modal-info-row"><span class="modal-info-label">종목</span><span class="modal-info-val">${name} (${code})</span></div>
+      <div class="modal-info-row"><span class="modal-info-label">주문유형</span><span class="modal-info-val" style="color:${t.color}">${typeLabel} (테스트)</span></div>
+      <div class="modal-info-row"><span class="modal-info-label">기준가</span><span class="modal-info-val" style="color:var(--accent)">${buy} 원</span></div>
+      <div class="modal-info-row"><span class="modal-info-label">목표가</span><span class="modal-info-val" style="color:var(--accent2)">${target} 원</span></div>
+      <div class="modal-info-row"><span class="modal-info-label">손절가</span><span class="modal-info-val" style="color:var(--accent3)">${stop} 원</span></div>
+      <div class="modal-info-row"><span class="modal-info-label">손익비</span><span class="modal-info-val" style="color:var(--accent4)">${rr}</span></div>
+      ${modifyExtra}
+    </div>`;
+
+  // 팝업 위치 계산 (화면 경계 처리)
+  popup.style.display = 'block';
+  popup.classList.add('show');
+  const pw = popup.offsetWidth || 340, ph = popup.offsetHeight || 420;
+  let x = event.clientX + 12, y = event.clientY - 20;
+  if (x + pw > window.innerWidth - 10)  x = event.clientX - pw - 12;
+  if (y + ph > window.innerHeight - 10) y = window.innerHeight - ph - 10;
+  if (y < 10) y = 10;
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+}
+
+function closeOrderPopup() {
+  const popup = document.getElementById('order-popup');
+  popup.classList.remove('show');
+  popup.style.display = 'none';
+  _popupData = null;
+}
+
+// 팝업 외부 클릭 시 닫기
+document.addEventListener('click', () => closeOrderPopup());
+
+function confirmPopupOrder() {
+  if (!_popupData || !autoTradeEnabled) return;
+  const { code, name, buy, target, stop, rr, score, orderType } = _popupData;
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 
-  // Update button
-  const btn = document.getElementById(`btn-${code}`);
-  if (btn) { btn.textContent = '✓ 주문 접수 완료'; btn.classList.add('executed'); btn.disabled = true; }
+  let execPrice = parseInt((buy || '0').toString().replace(/,/g,'')) || 0;
+  if (orderType === 'modify') {
+    const inp = document.getElementById('popup-modify-price');
+    if (inp) execPrice = parseInt(inp.value) || execPrice;
+  }
 
-  // Add log
-  addLog(ts, `[ORDER] ${name} 매입 ${buy}원 → KIS API 전송 완료 (테스트)`, 'ok');
-  addLog(ts, `[LOG] 매매근거 저장 완료 · 점수:${score}`, 'info');
+  const typeConfig = {
+    buy:    { logTag:'ORDER',  logType:'ok',   tgTag:'체결',   tgColor:'var(--accent)',  btnText:'✓ 주문 접수 완료' },
+    sell:   { logTag:'SELL',   logType:'warn',  tgTag:'매도',   tgColor:'var(--accent3)', btnText:'▼ 매도 완료' },
+    cancel: { logTag:'CANCEL', logType:'warn',  tgTag:'취소',   tgColor:'var(--accent4)', btnText:'✕ 취소됨' },
+    modify: { logTag:'MODIFY', logType:'info',  tgTag:'정정',   tgColor:'#a78bfa',        btnText:'✎ 정정 완료' },
+  };
+  const cfg = typeConfig[orderType] || typeConfig.buy;
 
-  // Add telegram
-  addTelegram(`<span class="tg-tag signal">체결</span><strong>${name}</strong> — ${buy}원 매입 접수. 목표: ${currentModal.target}원 · 손절: ${currentModal.stop}원`, ts);
+  // 카드 승인 버튼 상태 업데이트
+  if (orderType === 'buy') {
+    const btn = document.getElementById(`btn-${code}`);
+    if (btn) {
+      btn._modalData = { target, stop, rr, score };
+      btn.textContent = cfg.btnText;
+      btn.classList.add('executed');
+      btn.onclick = (e) => openOrderPopup(e, code, name, buy, target, stop, rr, score, '', 'buy');
+    }
+  }
 
-  closeModal();
+  // 수익률 계산 (매도/취소/정정 시 매입가 기준)
+  let pnlPct = null;
+  if (orderType === 'sell' && execPrice > 0) {
+    const buyP = parseInt((buy||'0').toString().replace(/,/g,'')) || execPrice;
+    pnlPct = ((execPrice - buyP) / buyP * 100).toFixed(2);
+  }
+
+  // 주문내역 기록
+  addOrderHistory({ ts, code, name, type: orderType, price: execPrice, target, stop, pnlPct });
+
+  addLog(ts, `[${cfg.logTag}] ${name} ${execPrice.toLocaleString()}원 → 테스트 처리 완료`, cfg.logType);
+  addTelegram(
+    `<span class="tg-tag signal" style="background:rgba(0,212,255,0.15);color:${cfg.tgColor}">${cfg.tgTag}</span>` +
+    `<strong>${name}</strong> — ${execPrice.toLocaleString()}원` +
+    (pnlPct !== null ? ` · 수익률 <b style="color:${parseFloat(pnlPct)>=0?'var(--accent2)':'var(--accent3)'}">${pnlPct}%</b>` : ''),
+    ts
+  );
+
+  closeOrderPopup();
 }
+
+// ── 주문내역 기록 & 패널 ─────────────────────────────────────────
+const _orderHistory = [];
+
+function addOrderHistory(item) {
+  _orderHistory.unshift(item);
+  renderOrderHistory();
+}
+
+function renderOrderHistory() {
+  const list = document.getElementById('order-hist-list');
+  if (!list) return;
+  document.getElementById('hist-total-cnt').textContent = _orderHistory.length;
+
+  const pnlItems = _orderHistory.filter(o => o.pnlPct !== null && o.pnlPct !== undefined);
+  if (pnlItems.length > 0) {
+    const avg = (pnlItems.reduce((s,o) => s + parseFloat(o.pnlPct), 0) / pnlItems.length).toFixed(2);
+    const total = pnlItems.reduce((s,o) => s + parseFloat(o.pnlPct), 0).toFixed(2);
+    const avgEl = document.getElementById('hist-avg-pnl');
+    const totEl = document.getElementById('hist-total-pnl');
+    avgEl.textContent = (avg >= 0 ? '+' : '') + avg + '%';
+    avgEl.style.color = avg >= 0 ? 'var(--accent2)' : 'var(--accent3)';
+    totEl.textContent = (total >= 0 ? '+' : '') + total + '%';
+    totEl.style.color = total >= 0 ? 'var(--accent2)' : 'var(--accent3)';
+  }
+
+  const typeLabel = { buy:'매입', sell:'매도', cancel:'취소', modify:'정정' };
+  const typeCls   = { buy:'order-hist-buy', sell:'order-hist-sell', cancel:'order-hist-cancel', modify:'order-hist-modify' };
+
+  list.innerHTML = _orderHistory.map(o => {
+    const pnlHtml = o.pnlPct !== null && o.pnlPct !== undefined
+      ? `<span class="order-hist-pnl ${parseFloat(o.pnlPct)>=0?'pos':'neg'}">${parseFloat(o.pnlPct)>=0?'+':''}${o.pnlPct}%</span>`
+      : '';
+    return `<div class="order-hist-item">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+          <span class="order-hist-type ${typeCls[o.type]||''}">${typeLabel[o.type]||o.type}</span>
+          <span style="color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.name}</span>
+          <span style="color:var(--text-dim);font-size:9px">(${o.code})</span>
+        </div>
+        <div style="color:var(--text-dim);font-size:9px">${o.ts} · ${(o.price||0).toLocaleString()}원</div>
+      </div>
+      ${pnlHtml}
+    </div>`;
+  }).join('') || '<div style="font-family:\'Share Tech Mono\',monospace;font-size:11px;color:var(--text-dim);text-align:center;padding:20px">주문 내역 없음</div>';
+}
+
+function openOrderHist() {
+  document.getElementById('order-hist-panel').style.display = 'block';
+  renderOrderHistory();
+}
+function closeOrderHist() {
+  document.getElementById('order-hist-panel').style.display = 'none';
+}
+
+// 기존 openModal 연결 유지 (모달 overlay 버전은 더 이상 사용 안 함)
+function confirmOrder() { confirmPopupOrder(); }
 
 // ──────────────────────────────────────────────
 // LOG & TELEGRAM
@@ -3622,46 +3936,33 @@ async function fullRefresh() {
   topBtn.classList.add('spinning');
   if (sideBtn) { sideBtn.disabled = true; if(sideIcon) sideIcon.style.animation='spinIcon 0.7s linear infinite'; }
 
-  overlay.classList.add('show');
-  subEl.textContent = '데이터 초기화 중...';
+  // 오버레이 없이 배경 처리 — 버튼 스피너만 표시
   setProgress(5, '[INIT] 시스템 초기화...');
-  await new Promise(r => setTimeout(r, 200));
+  await new Promise(r => setTimeout(r, 100));
 
-  // 1. 카드 재렌더 (KR + US 데모 카드)
-  setProgress(15, '[RENDER] 카드 재렌더링...');
-  subEl.textContent = '화면 재구성 중...';
-  await new Promise(r => setTimeout(r, 150));
-  renderCards();
-  renderUsCards();
-  setProgress(30, '[RENDER] 완료');
-  await new Promise(r => setTimeout(r, 200));
+  // 1. 데이터 수집 (백그라운드, 화면 유지)
+  setProgress(15, '[RENDER] 카드 데이터 갱신...');
+  await new Promise(r => setTimeout(r, 100));
 
   // 2. 시장 데이터 로드
   setProgress(40, '[MKT] 시장 데이터 갱신...');
-  subEl.textContent = '시장 데이터 갱신 중...';
-  await new Promise(r => setTimeout(r, 150));
+  await new Promise(r => setTimeout(r, 100));
   loadMarket();
   setProgress(50, '[MKT] 완료');
-  await new Promise(r => setTimeout(r, 200));
 
   // 3. KIS API 연동 중이면 실시간 데이터도 재로드
   if (kisToken) {
     setProgress(55, '[KIS] 지수 갱신...');
-    subEl.textContent = 'KIS 실시간 데이터 재로드 중...';
     await fetchKisIndex();
     setProgress(65, '[KIS] 잔고 조회...');
-    await new Promise(r => setTimeout(r, 300));
     await fetchKisBalance();
     setProgress(75, '[KIS] 체결내역 조회...');
-    await new Promise(r => setTimeout(r, 300));
     await fetchKisOrders();
     setProgress(85, '[KIS] 현재가 갱신...');
-    await new Promise(r => setTimeout(r, 300));
     await refreshAllKrPrices();
     setProgress(97, '[KIS] 실시간 갱신 완료');
   } else {
     setProgress(75, '[YAHOO] Yahoo Finance 현재가 조회...');
-    subEl.textContent = 'Yahoo Finance 현재가 조회 중...';
     await loadYahooPrices();
     setProgress(92, '[YAHOO] 조회 완료');
   }
@@ -3670,18 +3971,19 @@ async function fullRefresh() {
   setProgress(98, '[PF] 포트폴리오 갱신...');
   pfRenderSummary();
   pfRenderHoldings();
-  await new Promise(r => setTimeout(r, 200));
 
-  // 완료
+  // 5. 카드 자연스럽게 교체 (페이드)
   setProgress(100, '✅ 새로고침 완료');
-  subEl.textContent = '완료!';
+  const cardContainers = document.querySelectorAll('[id^="cards-"]');
+  cardContainers.forEach(c => { c.style.transition = 'opacity 0.25s'; c.style.opacity = '0'; });
+  await new Promise(r => setTimeout(r, 250));
+  renderCards();
+  renderUsCards();
+  cardContainers.forEach(c => { c.style.opacity = '1'; });
 
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
   addLog(ts, '[SYS] 전체 새로고침 완료', 'ok');
-
-  await new Promise(r => setTimeout(r, 600));
-  overlay.classList.remove('show');
 
   // 버튼 복원
   topBtn.disabled = false;
@@ -3953,6 +4255,56 @@ updateClock();
   <div class="refresh-ov-sub" id="refresh-ov-sub">데이터 초기화 중...</div>
   <div class="refresh-ov-bar"><div class="refresh-ov-fill" id="refresh-ov-fill"></div></div>
   <div class="refresh-ov-step" id="refresh-ov-step"></div>
+</div>
+
+<!-- 클릭 위치 팝업 모달 -->
+<div id="order-popup" onclick="event.stopPropagation()">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div id="popup-title" style="font-family:'Orbitron',monospace;font-size:14px;font-weight:700;color:var(--accent);letter-spacing:2px">주문 확인</div>
+    <button onclick="closeOrderPopup()" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;line-height:1;padding:0">✕</button>
+  </div>
+  <div id="popup-info" style="margin-bottom:12px"></div>
+  <!-- 자동매매 ON/OFF -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.12);border-radius:5px;margin-bottom:10px">
+    <div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#e2e8f0">⬡ K-자동매매</div>
+      <div id="popup-at-label" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);margin-top:1px">활성화됨</div>
+    </div>
+    <button id="popup-at-btn" onclick="toggleAutoTrade()" style="padding:4px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;border:1px solid var(--accent2);background:rgba(57,255,20,0.12);color:var(--accent2);cursor:pointer;transition:all 0.2s">ON</button>
+  </div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent4);padding:6px 8px;background:rgba(255,165,0,0.06);border:1px solid rgba(255,165,0,0.2);border-radius:4px;margin-bottom:12px">
+    ⚠ 테스트 모드 — 실제 주문 전송 없음
+  </div>
+  <div style="display:flex;gap:8px">
+    <button onclick="closeOrderPopup()" style="flex:1;padding:8px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;border:1px solid var(--border);background:none;color:var(--text-dim);cursor:pointer">취소</button>
+    <button id="popup-confirm-btn" onclick="confirmPopupOrder()" style="flex:2;padding:8px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;border:1px solid var(--accent);background:rgba(0,212,255,0.12);color:var(--accent);cursor:pointer;transition:all 0.2s">✓ 실행</button>
+  </div>
+</div>
+
+<!-- 주문내역 사이드 패널 -->
+<div id="order-hist-panel" style="display:none;position:fixed;top:0;right:0;width:320px;height:100%;background:var(--surface);border-left:1px solid var(--border);z-index:8000;overflow-y:auto;padding:16px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div style="font-family:'Orbitron',monospace;font-size:13px;color:var(--accent);letter-spacing:2px">📋 주문내역</div>
+    <button onclick="closeOrderHist()" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer">✕</button>
+  </div>
+  <!-- 수익률 요약 -->
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <div style="flex:1;padding:10px;background:rgba(0,212,255,0.07);border:1px solid var(--border);border-radius:6px;text-align:center">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:4px">총 주문</div>
+      <div id="hist-total-cnt" style="font-family:'Orbitron',monospace;font-size:16px;color:#e2e8f0">0</div>
+    </div>
+    <div style="flex:1;padding:10px;background:rgba(0,255,136,0.07);border:1px solid var(--border);border-radius:6px;text-align:center">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:4px">평균 수익률</div>
+      <div id="hist-avg-pnl" style="font-family:'Orbitron',monospace;font-size:16px;color:var(--accent2)">—</div>
+    </div>
+    <div style="flex:1;padding:10px;background:rgba(255,77,109,0.07);border:1px solid var(--border);border-radius:6px;text-align:center">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:4px">누적 손익</div>
+      <div id="hist-total-pnl" style="font-family:'Orbitron',monospace;font-size:14px;color:var(--accent2)">—</div>
+    </div>
+  </div>
+  <div class="order-hist-wrap" id="order-hist-list">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);text-align:center;padding:20px">주문 내역 없음</div>
+  </div>
 </div>
 
 <!-- 차트 링크 팝업 -->

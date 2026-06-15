@@ -689,6 +689,55 @@
     box-shadow: var(--glow-blue);
     transform: translateY(-1px);
   }
+  /* ── 자동매매 미니 버튼 ── */
+  .action-btn-group { display:none; gap:4px; flex-wrap:wrap; align-items:center; margin-top:4px; }
+  .btn-mini {
+    padding: 5px 9px; font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    border-radius: 4px; cursor: pointer; letter-spacing: 0.3px; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-mini-sell   { background:rgba(255,77,109,0.12); border:1px solid var(--accent3); color:var(--accent3); }
+  .btn-mini-sell:hover   { background:rgba(255,77,109,0.28); }
+  .btn-mini-cancel { background:rgba(255,165,0,0.10); border:1px solid var(--accent4); color:var(--accent4); }
+  .btn-mini-cancel:hover { background:rgba(255,165,0,0.24); }
+  .btn-mini-modify { background:rgba(130,100,255,0.12); border:1px solid #a78bfa; color:#a78bfa; }
+  .btn-mini-modify:hover { background:rgba(130,100,255,0.28); }
+  /* ── 클릭 위치 팝업 ── */
+  #order-popup {
+    display: none; position: fixed; z-index: 9000;
+    background: var(--surface); border: 1px solid var(--accent); border-radius: 10px;
+    padding: 18px; width: 320px;
+    box-shadow: var(--glow-blue), 0 8px 40px rgba(0,0,0,0.75);
+    animation: modalIn 0.18s ease;
+  }
+  #order-popup.show { display: block; }
+  /* ── 주문내역 패널 ── */
+  #order-hist-panel {
+    display:none; position:fixed; top:0; right:0; width:300px; height:100%;
+    background:var(--surface); border-left:1px solid var(--border);
+    z-index:8500; overflow-y:auto; padding:14px; box-sizing:border-box;
+  }
+  .order-hist-item {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:7px 10px; margin-bottom:4px;
+    background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:5px;
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+  }
+  .oht { padding:2px 5px; border-radius:3px; font-size:9px; margin-right:5px; }
+  .oht-buy    { background:rgba(0,212,255,0.15); color:var(--accent); }
+  .oht-sell   { background:rgba(255,77,109,0.15); color:var(--accent3); }
+  .oht-cancel { background:rgba(255,165,0,0.15); color:var(--accent4); }
+  .oht-modify { background:rgba(130,100,255,0.15); color:#a78bfa; }
+  .oht-pnl-pos { color:var(--accent2); }
+  .oht-pnl-neg { color:var(--accent3); }
+  /* ── 자동매매 글로벌 토글 버튼 (탑바) ── */
+  #global-at-topbar {
+    padding: 4px 12px; font-family:'Share Tech Mono',monospace; font-size:10px;
+    border-radius:4px; cursor:pointer; transition:all 0.2s; letter-spacing:0.5px;
+    border:1px solid var(--accent3); background:rgba(255,77,109,0.1); color:var(--accent3);
+  }
+  #global-at-topbar.on {
+    border-color:var(--accent2); background:rgba(57,255,20,0.12); color:var(--accent2);
+  }
   .btn-approve.executed {
     background: rgba(0,255,136,0.2);
     border-color: var(--accent2);
@@ -1460,6 +1509,8 @@
   <div class="topbar-right">
     <span id="scan-count">스캔대상: — 종목</span>
     <span class="status-badge active" id="sys-status">● LIVE</span>
+    <button id="global-at-topbar" onclick="toggleGlobalAutoTrade()" title="K-자동매매 ON/OFF">⬡ 자동매매 OFF</button>
+    <button onclick="openOrderHist()" style="padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:rgba(57,255,20,0.07);color:var(--accent2);letter-spacing:0.3px" title="주문내역 & 수익률">📋 주문내역</button>
     <button class="refresh-btn" id="topbar-refresh-btn" onclick="fullRefresh()" title="전체 새로고침">
       <span class="spin">↻</span> 새로고침
     </button>
@@ -3099,11 +3150,26 @@ function buildCard(stock, rank) {
         <div class="vol-label"><span>컨버전스 강도</span><span style="color:${catColor}">${stock.vol}%</span></div>
         <div class="vol-bar"><div class="vol-bar-fill" style="width:${stock.vol}%;background:linear-gradient(90deg,${catColor},var(--accent2))"></div></div>
       </div>
-      <button class="btn-approve" id="btn-${stock.code}" onclick="openModal(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}')">
-        ⬡ K-자동매매 승인
-      </button>
       <button class="btn-ai" id="btn-ai-${stock.code}" data-code="${stock.code}" onclick="(function(e){e.stopPropagation();e.preventDefault();openAiAnalysis(e,'${stock.code}');}).call(this,event)">
         🤖 AI 분석
+      </button>
+    </div>
+    <div class="action-btn-group" id="action-group-${stock.code}">
+      <button class="btn-approve" id="btn-${stock.code}"
+        onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','buy')">
+        ⬡ K-자동매매 승인
+      </button>
+      <button class="btn-mini btn-mini-sell"
+        onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','sell')">
+        ▼ 매도
+      </button>
+      <button class="btn-mini btn-mini-cancel"
+        onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','cancel')">
+        ✕ 주문취소
+      </button>
+      <button class="btn-mini btn-mini-modify"
+        onclick="openOrderPopup(event,'${stock.code}','${stock.name}','${stock.buy}','${stock.target}','${stock.stop}','${stock.rr}','${stock.score}','${stock.grade}','modify')">
+        ✎ 정정
       </button>
     </div>
   `;
@@ -3997,28 +4063,187 @@ function sendAiToTelegram() {
   }
 }
 
-function confirmOrder() {
-  if (!currentModal) return;
-  const { code, name, buy, target, stop, rr, score, grade } = currentModal;
+function confirmOrder() { confirmPopupOrder(); }
+
+// ── 글로벌 자동매매 ON/OFF ─────────────────────────────────────────
+let _globalAutoTradeOn = false;
+let _autoTradeEnabled  = false;
+
+function toggleGlobalAutoTrade() {
+  _globalAutoTradeOn = !_globalAutoTradeOn;
+  _autoTradeEnabled  = _globalAutoTradeOn;
+  const btn = document.getElementById('global-at-topbar');
+  if (_globalAutoTradeOn) {
+    btn.textContent = '⬡ 자동매매 ON';
+    btn.classList.add('on');
+  } else {
+    btn.textContent = '⬡ 자동매매 OFF';
+    btn.classList.remove('on');
+  }
+  document.querySelectorAll('.action-btn-group').forEach(g => {
+    g.style.display = _globalAutoTradeOn ? 'flex' : 'none';
+  });
+}
+
+function toggleAutoTrade() {
+  _autoTradeEnabled = !_autoTradeEnabled;
+  const btn = document.getElementById('popup-at-btn');
+  const lbl = document.getElementById('popup-at-label');
+  const cfm = document.getElementById('popup-confirm-btn');
+  if (_autoTradeEnabled) {
+    btn.textContent='ON'; btn.style.borderColor='var(--accent2)'; btn.style.background='rgba(57,255,20,0.12)'; btn.style.color='var(--accent2)';
+    lbl.textContent='활성화됨'; lbl.style.color='var(--accent2)';
+    cfm.disabled=false; cfm.style.opacity='1';
+  } else {
+    btn.textContent='OFF'; btn.style.borderColor='var(--accent3)'; btn.style.background='rgba(255,77,109,0.10)'; btn.style.color='var(--accent3)';
+    lbl.textContent='비활성화됨 — 주문 불가'; lbl.style.color='var(--accent3)';
+    cfm.disabled=true; cfm.style.opacity='0.35';
+  }
+}
+
+// ── 팝업 모달 (클릭 위치) ────────────────────────────────────────
+let _popupData = null;
+
+function openOrderPopup(event, code, name, buy, target, stop, rr, score, grade, orderType) {
+  if (!_globalAutoTradeOn) return;
+  event.stopPropagation();
+  _popupData = { code, name, buy, target, stop, rr, score, grade, orderType };
+
+  const typeMap = {
+    buy:    { label:'K-자동매매 승인', color:'var(--accent)',  bg:'rgba(0,212,255,0.12)' },
+    sell:   { label:'매도 주문',       color:'var(--accent3)', bg:'rgba(255,77,109,0.12)' },
+    cancel: { label:'주문 취소',       color:'var(--accent4)', bg:'rgba(255,165,0,0.12)' },
+    modify: { label:'정정 주문',       color:'#a78bfa',        bg:'rgba(130,100,255,0.12)' },
+  };
+  const t = typeMap[orderType] || typeMap.buy;
+  const typeLabel = { buy:'매입', sell:'매도', cancel:'취소', modify:'정정' }[orderType] || '';
+
+  document.getElementById('popup-title').textContent = t.label;
+  document.getElementById('popup-title').style.color = t.color;
+  const cfm = document.getElementById('popup-confirm-btn');
+  cfm.style.borderColor = t.color; cfm.style.background = t.bg; cfm.style.color = t.color;
+  cfm.disabled = !_autoTradeEnabled; cfm.style.opacity = _autoTradeEnabled ? '1' : '0.35';
+
+  const modifyExtra = orderType === 'modify'
+    ? `<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+        <span style="color:var(--text-dim)">정정가</span>
+        <input id="popup-modify-price" type="number" value="${(buy||'').toString().replace(/,/g,'')}"
+          style="background:#0d1220;border:1px solid var(--border);border-radius:3px;color:#e2e8f0;font-family:'Share Tech Mono',monospace;font-size:11px;padding:3px 6px;width:100px"> 원
+       </div>` : '';
+
+  document.getElementById('popup-info').innerHTML = `
+    <div class="modal-info-row"><span class="modal-info-label">종목</span><span class="modal-info-val">${name} (${code})</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">주문유형</span><span class="modal-info-val" style="color:${t.color}">${typeLabel} [테스트]</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">기준가</span><span class="modal-info-val" style="color:var(--accent)">${buy} 원</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">목표가</span><span class="modal-info-val" style="color:var(--accent2)">${target} 원</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">손절가</span><span class="modal-info-val" style="color:var(--accent3)">${stop} 원</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">손익비</span><span class="modal-info-val" style="color:var(--accent4)">${rr}</span></div>
+    ${modifyExtra}`;
+
+  // 팝업 위치 — 화면 경계 처리
+  const popup = document.getElementById('order-popup');
+  popup.style.display = 'block';
+  popup.classList.add('show');
+  const pw = popup.offsetWidth || 320, ph = popup.offsetHeight || 400;
+  let x = event.clientX + 12, y = event.clientY - 20;
+  if (x + pw > window.innerWidth  - 10) x = event.clientX - pw - 12;
+  if (y + ph > window.innerHeight - 10) y = window.innerHeight - ph - 10;
+  if (y < 10) y = 10;
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+}
+
+function closeOrderPopup() {
+  const p = document.getElementById('order-popup');
+  p.classList.remove('show'); p.style.display = 'none';
+  _popupData = null;
+}
+document.addEventListener('click', () => closeOrderPopup());
+
+function confirmPopupOrder() {
+  if (!_popupData || !_autoTradeEnabled) return;
+  const { code, name, buy, target, stop, rr, score, orderType } = _popupData;
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 
-  // Update button
-  const btn = document.getElementById(`btn-${code}`);
-  if (btn) { btn.textContent = '✓ 주문 접수 완료'; btn.classList.add('executed'); btn.disabled = true; }
+  let execPrice = parseInt((buy||'0').toString().replace(/,/g,'')) || 0;
+  if (orderType === 'modify') {
+    const inp = document.getElementById('popup-modify-price');
+    if (inp) execPrice = parseInt(inp.value) || execPrice;
+  }
 
-  // Add log
-  addLog(ts, `[ORDER] ${name} 매입 ${buy}원 → KIS API 전송 완료 (테스트)`, 'ok');
-  addLog(ts, `[LOG] 매매근거 저장 완료 · 점수:${score}`, 'info');
+  const cfg = {
+    buy:    { logTag:'ORDER',  logType:'ok',   tgTag:'매입체결' },
+    sell:   { logTag:'SELL',   logType:'warn',  tgTag:'매도'     },
+    cancel: { logTag:'CANCEL', logType:'warn',  tgTag:'취소'     },
+    modify: { logTag:'MODIFY', logType:'info',  tgTag:'정정'     },
+  }[orderType] || { logTag:'ORDER', logType:'ok', tgTag:'체결' };
 
-  // 텔레그램 실시간 전송
-  onAutoTradeApprove(name, code, buy, target, stop, rr, score);
+  // 매입 버튼 상태 업데이트
+  if (orderType === 'buy') {
+    const btn = document.getElementById(`btn-${code}`);
+    if (btn) {
+      btn._md = { target, stop, rr, score, grade: _popupData.grade };
+      btn.textContent = '✓ 접수완료';
+      btn.classList.add('executed');
+      btn.onclick = (e) => openOrderPopup(e, code, name, buy, target, stop, rr, score, _popupData.grade, 'buy');
+    }
+    onAutoTradeApprove(name, code, buy, target, stop, rr, score);
+  }
 
-  // Add telegram feed
-  addTelegram(`<span class="tg-tag signal">체결</span><strong>${name}</strong> — ${buy}원 매입 접수. 목표: ${target}원 · 손절: ${stop}원`, ts, 'S');
+  // 수익률 계산 (매도 시)
+  let pnlPct = null;
+  if (orderType === 'sell' && execPrice > 0) {
+    const buyP = parseInt((buy||'0').toString().replace(/,/g,'')) || execPrice;
+    pnlPct = ((execPrice - buyP) / buyP * 100).toFixed(2);
+  }
 
-  closeModal();
+  _addOrderHistory({ ts, code, name, type: orderType, price: execPrice, target, stop, pnlPct });
+  addLog(ts, `[${cfg.logTag}] ${name} ${execPrice.toLocaleString()}원 → 테스트 처리 완료`, cfg.logType);
+  addTelegram(
+    `<span class="tg-tag signal">${cfg.tgTag}</span><strong>${name}</strong> — ${execPrice.toLocaleString()}원` +
+    (pnlPct !== null ? ` · 수익률 <b style="color:${parseFloat(pnlPct)>=0?'var(--accent2)':'var(--accent3)'}">${parseFloat(pnlPct)>=0?'+':''}${pnlPct}%</b>` : ''),
+    ts, orderType === 'buy' ? 'S' : ''
+  );
+  closeOrderPopup();
 }
+
+// ── 주문내역 ────────────────────────────────────────────────────
+const _orderHistory = [];
+function _addOrderHistory(item) {
+  _orderHistory.unshift(item);
+  _renderOrderHistory();
+}
+function _renderOrderHistory() {
+  const list = document.getElementById('order-hist-list');
+  if (!list) return;
+  document.getElementById('hist-total-cnt').textContent = _orderHistory.length;
+  const pnlItems = _orderHistory.filter(o => o.pnlPct !== null && o.pnlPct !== undefined);
+  if (pnlItems.length) {
+    const avg = (pnlItems.reduce((s,o)=>s+parseFloat(o.pnlPct),0)/pnlItems.length).toFixed(2);
+    const tot = pnlItems.reduce((s,o)=>s+parseFloat(o.pnlPct),0).toFixed(2);
+    const ae = document.getElementById('hist-avg-pnl'), te = document.getElementById('hist-total-pnl');
+    ae.textContent = (avg>=0?'+':'')+avg+'%'; ae.style.color = avg>=0?'var(--accent2)':'var(--accent3)';
+    te.textContent = (tot>=0?'+':'')+tot+'%'; te.style.color = tot>=0?'var(--accent2)':'var(--accent3)';
+  }
+  const tl = {buy:'매입',sell:'매도',cancel:'취소',modify:'정정'};
+  const tc = {buy:'oht-buy',sell:'oht-sell',cancel:'oht-cancel',modify:'oht-modify'};
+  list.innerHTML = _orderHistory.map(o => {
+    const pnlHtml = o.pnlPct!=null
+      ? `<span class="${parseFloat(o.pnlPct)>=0?'oht-pnl-pos':'oht-pnl-neg'}">${parseFloat(o.pnlPct)>=0?'+':''}${o.pnlPct}%</span>` : '';
+    return `<div class="order-hist-item">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
+          <span class="oht ${tc[o.type]||''}">${tl[o.type]||o.type}</span>
+          <span style="color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.name}</span>
+          <span style="color:var(--text-dim);font-size:9px">(${o.code})</span>
+        </div>
+        <div style="color:var(--text-dim);font-size:9px">${o.ts} · ${(o.price||0).toLocaleString()}원</div>
+      </div>${pnlHtml}</div>`;
+  }).join('') || '<div style="font-family:\'Share Tech Mono\',monospace;font-size:11px;color:var(--text-dim);text-align:center;padding:18px">주문 내역 없음</div>';
+}
+function openOrderHist()  { document.getElementById('order-hist-panel').style.display='block'; _renderOrderHistory(); }
+function closeOrderHist() { document.getElementById('order-hist-panel').style.display='none'; }
 
 // ──────────────────────────────────────────────
 // LOG & TELEGRAM
@@ -4927,66 +5152,52 @@ async function fullRefresh() {
   topBtn.classList.add('spinning');
   if (sideBtn) { sideBtn.disabled = true; if(sideIcon) sideIcon.style.animation='spinIcon 0.7s linear infinite'; }
 
-  overlay.classList.add('show');
-  subEl.textContent = '데이터 초기화 중...';
-  setProgress(5, '[INIT] 시스템 초기화...');
-  await new Promise(r => setTimeout(r, 200));
+  // 오버레이 없이 백그라운드 처리 — 버튼 스피너만 표시
+  setProgress(10, '[INIT] 데이터 수집 중...');
 
-  // 1. 카드 재렌더 (KR + US 데모 카드)
-  setProgress(15, '[RENDER] 카드 재렌더링...');
-  subEl.textContent = '화면 재구성 중...';
-  await new Promise(r => setTimeout(r, 150));
-  renderCards();
-  renderUsCards();
-  setProgress(30, '[RENDER] 완료');
-  await new Promise(r => setTimeout(r, 200));
-
-  // 2. 시장 데이터 로드
-  setProgress(40, '[MKT] 시장 데이터 갱신...');
-  subEl.textContent = '시장 데이터 갱신 중...';
-  await new Promise(r => setTimeout(r, 150));
+  // 1. 시장 데이터 로드
+  setProgress(30, '[MKT] 시장 데이터 갱신...');
   loadMarket();
-  setProgress(50, '[MKT] 완료');
-  await new Promise(r => setTimeout(r, 200));
+  setProgress(45, '[MKT] 완료');
 
-  // 3. KIS API 연동 중이면 실시간 데이터도 재로드
+  // 2. KIS API 연동 중이면 실시간 데이터 재로드
   if (kisToken) {
     setProgress(55, '[KIS] 지수 갱신...');
-    subEl.textContent = 'KIS 실시간 데이터 재로드 중...';
     await fetchKisIndex();
     setProgress(65, '[KIS] 잔고 조회...');
-    await new Promise(r => setTimeout(r, 300));
     await fetchKisBalance();
     setProgress(75, '[KIS] 체결내역 조회...');
-    await new Promise(r => setTimeout(r, 300));
     await fetchKisOrders();
     setProgress(85, '[KIS] 현재가 갱신...');
-    await new Promise(r => setTimeout(r, 300));
     await refreshAllKrPrices();
-    setProgress(97, '[KIS] 실시간 갱신 완료');
+    setProgress(95, '[KIS] 완료');
   } else {
-    setProgress(75, '[YAHOO] Yahoo Finance 현재가 조회...');
-    subEl.textContent = 'Yahoo Finance 현재가 조회 중...';
+    setProgress(75, '[YAHOO] 현재가 조회...');
     await loadYahooPrices();
-    setProgress(92, '[YAHOO] 조회 완료');
+    setProgress(92, '[YAHOO] 완료');
   }
 
-  // 4. 포트폴리오 재렌더
-  setProgress(98, '[PF] 포트폴리오 갱신...');
+  // 3. 포트폴리오 재렌더
   pfRenderSummary();
   pfRenderHoldings();
+
+  // 4. 카드 페이드 교체 (화면 어두워짐 없이)
+  setProgress(98, '[RENDER] 카드 교체...');
+  const _grids = document.querySelectorAll('.cards-grid');
+  _grids.forEach(g => { g.style.transition='opacity 0.2s'; g.style.opacity='0'; });
   await new Promise(r => setTimeout(r, 200));
+  renderCards();
+  renderUsCards();
+  // 글로벌 자동매매 상태에 맞게 버튼 재표시
+  document.querySelectorAll('.action-btn-group').forEach(g => {
+    g.style.display = _globalAutoTradeOn ? 'flex' : 'none';
+  });
+  _grids.forEach(g => { g.style.opacity='1'; });
 
-  // 완료
-  setProgress(100, '✅ 새로고침 완료');
-  subEl.textContent = '완료!';
-
+  setProgress(100, '✅ 완료');
   const now = new Date();
   const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
   addLog(ts, '[SYS] 전체 새로고침 완료', 'ok');
-
-  await new Promise(r => setTimeout(r, 600));
-  overlay.classList.remove('show');
 
   // 버튼 복원
   topBtn.disabled = false;
@@ -5657,6 +5868,54 @@ setTimeout(function() {
   <div class="refresh-ov-sub" id="refresh-ov-sub">데이터 초기화 중...</div>
   <div class="refresh-ov-bar"><div class="refresh-ov-fill" id="refresh-ov-fill"></div></div>
   <div class="refresh-ov-step" id="refresh-ov-step"></div>
+</div>
+
+<!-- 클릭 위치 팝업 모달 -->
+<div id="order-popup" onclick="event.stopPropagation()">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div id="popup-title" style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--accent);letter-spacing:2px">주문 확인</div>
+    <button onclick="closeOrderPopup()" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;padding:0;line-height:1">✕</button>
+  </div>
+  <div id="popup-info" style="font-family:'Share Tech Mono',monospace;font-size:11px;margin-bottom:10px"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.12);border-radius:5px;margin-bottom:8px">
+    <div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#e2e8f0">⬡ K-자동매매</div>
+      <div id="popup-at-label" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent2);margin-top:1px">활성화됨</div>
+    </div>
+    <button id="popup-at-btn" onclick="toggleAutoTrade()" style="padding:4px 11px;font-family:'Share Tech Mono',monospace;font-size:10px;border-radius:4px;border:1px solid var(--accent2);background:rgba(57,255,20,0.12);color:var(--accent2);cursor:pointer;transition:all 0.2s">ON</button>
+  </div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent4);padding:5px 8px;background:rgba(255,165,0,0.06);border:1px solid rgba(255,165,0,0.2);border-radius:4px;margin-bottom:10px">
+    ⚠ 테스트 모드 — 실제 주문 전송 없음
+  </div>
+  <div style="display:flex;gap:6px">
+    <button onclick="closeOrderPopup()" style="flex:1;padding:7px;font-family:'Share Tech Mono',monospace;font-size:10px;border-radius:4px;border:1px solid var(--border);background:none;color:var(--text-dim);cursor:pointer">취소</button>
+    <button id="popup-confirm-btn" onclick="confirmPopupOrder()" style="flex:2;padding:7px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;border:1px solid var(--accent);background:rgba(0,212,255,0.12);color:var(--accent);cursor:pointer;transition:all 0.2s">✓ 실행</button>
+  </div>
+</div>
+
+<!-- 주문내역 패널 -->
+<div id="order-hist-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div style="font-family:'Orbitron',monospace;font-size:12px;color:var(--accent);letter-spacing:2px">📋 주문내역</div>
+    <button onclick="closeOrderHist()" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer">✕</button>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:10px">
+    <div style="flex:1;padding:8px;background:rgba(0,212,255,0.06);border:1px solid var(--border);border-radius:5px;text-align:center">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:3px">총 주문</div>
+      <div id="hist-total-cnt" style="font-family:'Orbitron',monospace;font-size:15px;color:#e2e8f0">0</div>
+    </div>
+    <div style="flex:1;padding:8px;background:rgba(0,255,136,0.06);border:1px solid var(--border);border-radius:5px;text-align:center">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:3px">평균수익률</div>
+      <div id="hist-avg-pnl" style="font-family:'Orbitron',monospace;font-size:15px;color:var(--accent2)">—</div>
+    </div>
+    <div style="flex:1;padding:8px;background:rgba(255,77,109,0.06);border:1px solid var(--border);border-radius:5px;text-align:center">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:3px">누적손익</div>
+      <div id="hist-total-pnl" style="font-family:'Orbitron',monospace;font-size:13px;color:var(--accent2)">—</div>
+    </div>
+  </div>
+  <div id="order-hist-list">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);text-align:center;padding:18px">주문 내역 없음</div>
+  </div>
 </div>
 
 <!-- 차트 링크 팝업 -->
