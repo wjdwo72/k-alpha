@@ -102,6 +102,9 @@ def _start_bg_scan_thread():
         if not tok: return
 
         kst_h = kst_now().hour  # 현재 KST 시각
+        now = time.time()
+        startup_elapsed = now - bg.get("_start_at", now)
+        all_enabled = ss.get("tg_all_enabled", True)
 
         rooms = [
             # (chat_id, interval_min, n, enabled, start_h, end_h)
@@ -117,15 +120,19 @@ def _start_bg_scan_thread():
             (ss.get("tg_group3_chat",""),    ss.get("tg_group3_iv_min",10),    ss.get("tg_send_count_g3",5), ss.get("tg_group3_en", False),
              ss.get("tg_send_start_g3",9), ss.get("tg_send_end_g3",15)),
         ]
-        now = time.time()
         for i, (chat, iv_min, n_cat, en, start_h, end_h) in enumerate(rooms):
-            if not en or not chat: continue
-            # 설정된 시간대 외에는 전송하지 않음
-            if not (start_h <= kst_h < end_h): continue
             bkt = int(now // (iv_min * 60))
             bkt_key = f"r{i}"
-            if bkt == bg["tg_bkt"].get(bkt_key, -1): continue  # 이미 전송됨
-            bg["tg_bkt"][bkt_key] = bkt
+            # 전송 여부와 무관하게 항상 버킷 갱신 (OFF→ON 전환 시 즉시발송 방지)
+            skip = (
+                not en or not chat or
+                not all_enabled or                        # 전체 발송 OFF
+                not (start_h <= kst_h < end_h) or        # 시간대 외
+                startup_elapsed < iv_min * 60 or          # 시작 직후 grace period
+                bkt == bg["tg_bkt"].get(bkt_key, -1)     # 이미 이 버킷에서 전송
+            )
+            bg["tg_bkt"][bkt_key] = bkt  # 항상 갱신
+            if skip: continue
 
             # 헤더
             ts = kst_strftime("%H:%M:%S")
@@ -3233,10 +3240,20 @@ if _gist_active or st.session_state.kis_token:
     _bg["kis_base_url"]     = st.session_state.get('kis_base_url','https://openapi.kis.or.kr')
     _bg["kis_ak"]           = st.session_state.get('kis_ak','')
     _bg["kis_sec"]          = st.session_state.get('kis_sec','')
-    _bg["tg_token"]         = st.session_state.get('tg_token','')
-    _bg["tg_chat"]          = st.session_state.get('tg_chat','')
-    _bg["tg_interval_min"]  = st.session_state.get('tg_interval_min', 10)
-    _bg["tg_send_count_p"]  = st.session_state.get('tg_send_count_p', 5)
+    _bg["tg_all_enabled"]    = st.session_state.get('tg_all_enabled', True)
+    _bg["tg_token"]          = st.session_state.get('tg_token','')
+    _bg["tg_chat"]           = st.session_state.get('tg_chat','')
+    _bg["tg_interval_min"]   = st.session_state.get('tg_interval_min', 10)
+    _bg["tg_send_count_p"]   = st.session_state.get('tg_send_count_p', 5)
+    # 송출 시간 범위 동기화 (누락 시 기본값 9-15로 오발송됨)
+    _bg["tg_send_start_p"]   = st.session_state.get('tg_send_start_p', 9)
+    _bg["tg_send_end_p"]     = st.session_state.get('tg_send_end_p', 15)
+    _bg["tg_send_start_g1"]  = st.session_state.get('tg_send_start_g1', 9)
+    _bg["tg_send_end_g1"]    = st.session_state.get('tg_send_end_g1', 15)
+    _bg["tg_send_start_g2"]  = st.session_state.get('tg_send_start_g2', 9)
+    _bg["tg_send_end_g2"]    = st.session_state.get('tg_send_end_g2', 15)
+    _bg["tg_send_start_g3"]  = st.session_state.get('tg_send_start_g3', 9)
+    _bg["tg_send_end_g3"]    = st.session_state.get('tg_send_end_g3', 15)
     for _gn, _gk in [('tg_grp','1'),('tg_grp2','2'),('tg_grp3','3')]:
         _gd = server_store.get(_gn,'')
         if _gd:
@@ -3279,11 +3296,14 @@ if _gist_active or st.session_state.kis_token:
                 f'<span style="color:#00ff88">{kst_strftime("%H:%M:%S")}</span></div>',
                 unsafe_allow_html=True)
 
-    # ── 1순위: GitHub Gist (즉시, 0초) — force_kis면 스킵 ──
+    # ── 1순위: server_store 메모리 캐시 (네트워크 없음, 즉시) ──
     _force_kis = server_store.get('force_kis', False)
     if _force_kis:
         server_store['force_kis'] = False   # 플래그 즉시 소비
-    gist_data = (fetch_gist_scan(GIST_ID) if GIST_ID else None) if not _force_kis else None
+    _mem_sr = server_store.get('scan_result') if not _force_kis else None
+    # ── 2순위: GitHub Gist (캐시 없을 때만, 최대 3초) ──
+    gist_data = _mem_sr if (_mem_sr and _mem_sr.get('updated_at')) else \
+                ((fetch_gist_scan(GIST_ID) if GIST_ID else None) if not _force_kis else None)
 
     if gist_data:
         # Gist 데이터로 즉시 표시
@@ -3339,27 +3359,23 @@ if _gist_active or st.session_state.kis_token:
         server_store['prices_json'] = prices_json
         server_store['balance_json'] = balance_json
 
-    # ── Gist/KIS 모두 없으면 백그라운드 스레드가 저장한 scan_result 복원 ──
-    if not scan_result.get('swing') and not scan_result.get('surge') and \
-       not scan_result.get('tomorrow') and not scan_result.get('smallmid'):
-        _bg_sr = get_server_store().get('scan_result')
-        if _bg_sr and (_bg_sr.get('swing') or _bg_sr.get('surge') or
-                       _bg_sr.get('tomorrow') or _bg_sr.get('smallmid')):
-            _ui_n_f = st.session_state.get('ui_n_per_cat', 10)
-            scan_result = {
-                **_bg_sr,
-                'swing':    _bg_sr.get('swing',   [])[:_ui_n_f],
-                'surge':    _bg_sr.get('surge',   [])[:_ui_n_f],
-                'tomorrow': _bg_sr.get('tomorrow',[])[:_ui_n_f],
-                'smallmid': _bg_sr.get('smallmid',[])[:_ui_n_f],
-            }
-            if not kospi_stocks: kospi_stocks = [{}] * _bg_sr.get('kospi_n', 0)
-            if not kosdaq_stocks: kosdaq_stocks = [{}] * _bg_sr.get('kosdaq_n', 0)
+    # ── Gist/메모리 모두 없으면 → Gist 모드는 대기 메시지, KIS 직접 모드는 스캔 ──
+    _no_data = (not scan_result.get('swing') and not scan_result.get('surge') and
+                not scan_result.get('tomorrow') and not scan_result.get('smallmid'))
+    if _no_data and GIST_ID and not _force_kis:
+        # Gist 설정됨 — 백그라운드 스레드 첫 스캔 대기 중
+        _wait_min = st.session_state.get('scan_refresh_min', 10)
+        st.markdown(
+            f'<div style="font-family:monospace;font-size:12px;color:#ffc800;'
+            f'padding:6px 10px;background:rgba(255,200,0,0.06);'
+            f'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
+            f'📡 백그라운드 스레드 첫 스캔 준비 중 — 약 {_wait_min}분 후 자동 표시<br>'
+            f'<span style="color:#64748b;font-size:11px">'
+            f'↻ 버튼으로 즉시 KIS 직접 스캔 가능</span></div>',
+            unsafe_allow_html=True)
 
-    elif st.session_state.kis_token:
-        # ── 2순위: 직접 KIS 스캔 (Gist 없을 때, KIS 연결됐을 때만) ──
-        # 장외(주말/공휴일/15:30 이후 8:00 이전)는 캐시 유지
-        # ↻ 수동 갱신 시에는 장외에도 스캔 허용 (장마감 시점 분석)
+    elif _no_data and st.session_state.kis_token and (not GIST_ID or _force_kis):
+        # ── 직접 KIS 스캔: Gist 없거나 ↻ 강제갱신 때만 — Gist 설정 시 백그라운드 스레드가 담당 ──
         _direct_mkt = is_market_open()
         _manual_refresh = server_store.get('scan_ts') == 0  # ↻ 버튼으로 초기화됐으면 True
         cache_stale = (time.time() - server_store.get('scan_ts', 0)) > scan_ref_min * 60
@@ -3581,109 +3597,6 @@ if _gist_active or st.session_state.kis_token:
             lines.append(f"━━━━━━━━━━━━━━━━\n📊 {total_n}종목 스캔 완료 · 다음 {iv_label_str} 후")
             return "\n\n".join(lines)
 
-    _tg_tok   = st.session_state.get('tg_token','')
-    _tg_chat  = st.session_state.get('tg_chat','')
-    _iv_p     = st.session_state.get('tg_interval_min', 10)
-    _iv_p_lbl = st.session_state.get('tg_interval_label','10분')
-    # server_store에서 그룹방 설정 복원 (매번 최신값 우선)
-    _tg_grp_ss = server_store.get('tg_grp','')
-    if _tg_grp_ss:
-        try:
-            _grp_ss = json.loads(base64.b64decode(_tg_grp_ss).decode())
-            st.session_state['tg_group_enabled']        = _grp_ss.get('en', False)
-            st.session_state['tg_group_chat']           = _grp_ss.get('c','')
-            st.session_state['tg_group_interval_min']   = _grp_ss.get('iv', 10)
-            st.session_state['tg_group_interval_label'] = _grp_ss.get('ivl','10분')
-        except: pass
-    _grp_en   = st.session_state.get('tg_group_enabled', False)
-    _grp_chat = st.session_state.get('tg_group_chat','')
-    _iv_g     = st.session_state.get('tg_group_interval_min', 10)
-    _iv_g_lbl = st.session_state.get('tg_group_interval_label','10분')
-    _now_ts   = kst_strftime('%H:%M:%S')
-    _k_n = len(kospi_stocks); _kd_n = len(kosdaq_stocks)
-
-    def _gist_ai_stocks(n):
-        return ((scan_result.get('swing',[]) + scan_result.get('surge',[]))[:n] +
-                (scan_result.get('tomorrow',[]) + scan_result.get('smallmid',[]))[:n])
-
-    # ── 스캔 데이터 유무 체크 (빈 결과면 bucket 선점 않음) ──
-    _has_data = bool(
-        scan_result.get('swing') or scan_result.get('surge') or
-        scan_result.get('tomorrow') or scan_result.get('smallmid')
-    )
-    # 디버그: 전송 조건 표시
-    _bkt_g_cur = int(time.time() // (_iv_g * 60))
-    _bkt_p_cur = int(time.time() // (_iv_p * 60))
-    st.caption(
-        f"🔍 전송상태 | 개인방: tok={'✅' if _tg_tok else '❌'} chat={'✅' if _tg_chat else '❌'} "
-        f"data={'✅' if _has_data else '❌'} bkt={_bkt_p_cur}(저장:{st.session_state.get('_tg_bkt_p','없음')}) | "
-        f"그룹1: en={'✅' if _grp_en else '❌'} chat={'✅' if _grp_chat else '❌'} "
-        f"iv={_iv_g}분 bkt={_bkt_g_cur}(저장:{st.session_state.get('_tg_bkt_g','없음')})"
-    )
-
-    # 개인방 — 독립 bucket
-    if not st.session_state.get('tg_all_enabled', True):
-        st.caption("⛔ 메시지 발송 비활성화 중")
-    else:
-        if _tg_tok and _tg_chat and _has_data:
-            _bkt_p = int(time.time() // (_iv_p * 60))
-            if _bkt_p != st.session_state.get('_tg_bkt_p', -1):
-                st.session_state['_tg_bkt_p'] = _bkt_p
-                _n_p = st.session_state.get('tg_send_count_p', 10)
-                _send_tg_by_cat(_tg_tok, _tg_chat, scan_result, _iv_p_lbl,
-                                _k_n, _kd_n, _now_ts, scan_count, n=_n_p,
-                                menu=st.session_state.get('tg_menu_p'))
-                st.toast(f"📱 개인방 전송 완료 ({_now_ts})", icon="✅")
-                if st.session_state.get('tg_ai_send_p', True):
-                    _send_tg_ai(_tg_tok, _tg_chat, _gist_ai_stocks(_n_p), _iv_p_lbl, _now_ts)
-
-    # 그룹방 1 — 독립 bucket
-    if _tg_tok and _grp_en and _grp_chat and _has_data:
-        _bkt_g = int(time.time() // (_iv_g * 60))
-        if _bkt_g != st.session_state.get('_tg_bkt_g', -1):
-            st.session_state['_tg_bkt_g'] = _bkt_g
-            _n_g1 = st.session_state.get('tg_send_count_g1', 10)
-            _send_tg_by_cat(_tg_tok, _grp_chat, scan_result, _iv_g_lbl,
-                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g1,
-                            menu=st.session_state.get('tg_menu_g1'))
-            st.toast(f"👥 그룹방 전송 완료 ({_now_ts})", icon="✅")
-            if st.session_state.get('tg_ai_send_g1', False):
-                _send_tg_ai(_tg_tok, _grp_chat, _gist_ai_stocks(_n_g1), _iv_g_lbl, _now_ts)
-
-    # 그룹방 2 — 독립 bucket
-    _grp2_en_g   = st.session_state.get('tg_group2_enabled', False)
-    _grp2_chat_g = st.session_state.get('tg_group2_chat','')
-    _iv_g2_g     = st.session_state.get('tg_group2_interval_min', 30)
-    _iv_g2_g_lbl = st.session_state.get('tg_group2_interval_label','30분')
-    if _tg_tok and _grp2_en_g and _grp2_chat_g and _has_data:
-        _bkt_g2g = int(time.time() // (_iv_g2_g * 60))
-        if _bkt_g2g != st.session_state.get('_tg_bkt_g2g', -1):
-            st.session_state['_tg_bkt_g2g'] = _bkt_g2g
-            _n_g2 = st.session_state.get('tg_send_count_g2', 10)
-            _send_tg_by_cat(_tg_tok, _grp2_chat_g, scan_result, _iv_g2_g_lbl,
-                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g2,
-                            menu=st.session_state.get('tg_menu_g2'))
-            st.toast(f"👥 그룹방 2 전송 완료 ({_now_ts})", icon="✅")
-            if st.session_state.get('tg_ai_send_g2', False):
-                _send_tg_ai(_tg_tok, _grp2_chat_g, _gist_ai_stocks(_n_g2), _iv_g2_g_lbl, _now_ts)
-
-    # 그룹방 3 — 독립 bucket
-    _grp3_en_g   = st.session_state.get('tg_group3_enabled', False)
-    _grp3_chat_g = st.session_state.get('tg_group3_chat','')
-    _iv_g3_g     = st.session_state.get('tg_group3_interval_min', 30)
-    _iv_g3_g_lbl = st.session_state.get('tg_group3_interval_label','30분')
-    if _tg_tok and _grp3_en_g and _grp3_chat_g and _has_data:
-        _bkt_g3g = int(time.time() // (_iv_g3_g * 60))
-        if _bkt_g3g != st.session_state.get('_tg_bkt_g3g', -1):
-            st.session_state['_tg_bkt_g3g'] = _bkt_g3g
-            _n_g3 = st.session_state.get('tg_send_count_g3', 10)
-            _send_tg_by_cat(_tg_tok, _grp3_chat_g, scan_result, _iv_g3_g_lbl,
-                            _k_n, _kd_n, _now_ts, scan_count, n=_n_g3,
-                            menu=st.session_state.get('tg_menu_g3'))
-            st.toast(f"👥 그룹방 3 전송 완료 ({_now_ts})", icon="✅")
-            if st.session_state.get('tg_ai_send_g3', False):
-                _send_tg_ai(_tg_tok, _grp3_chat_g, _gist_ai_stocks(_n_g3), _iv_g3_g_lbl, _now_ts)
-
     # 스캔 결과 분류 — 직접 KIS 스캔 경로만 실행 (Gist/캐시 경로는 이미 세팅됨)
     if not _scan_json_ready and all_stocks:
         _ui_n = st.session_state.get('ui_n_per_cat', 10)
@@ -3805,254 +3718,6 @@ if _gist_active or st.session_state.kis_token:
 📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl}<br>
 🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
 </div>""", unsafe_allow_html=True)
-
-    # ── 텔레그램 자동 알림 (개인방 + 그룹방 각자 간격 독립) ──
-    _tg_tok2   = st.session_state.get('tg_token','')
-    _tg_chat2  = st.session_state.get('tg_chat','')
-    _iv_p2     = st.session_state.get('tg_interval_min', 10)
-    _iv_p2_lbl = st.session_state.get('tg_interval_label','10분')
-    _grp_en2   = st.session_state.get('tg_group_enabled', False)
-    _grp_chat2 = st.session_state.get('tg_group_chat','')
-    _iv_g2     = st.session_state.get('tg_group_interval_min', 30)
-    _iv_g2_lbl = st.session_state.get('tg_group_interval_label','30분')
-    _now2      = kst_strftime('%H:%M:%S')
-    _kn2  = len(kospi_stocks); _kdn2 = len(kosdaq_stocks)
-
-    def _compact_ai2(s, card):
-        """원시 stock dict + card dict → K 분석 사유 포함 멀티라인"""
-        score = s.get('score', 70); grade = s.get('grade', 'B')
-        rsi   = s.get('rsiApprox', 50) or 50
-        rr    = 1.0
-        try: rr = float(str(card.get('rr','1.0')).replace(',',''))
-        except: pass
-        chg = s.get('changePct', 0) or 0
-        risks = []
-        if rsi > 72:   risks.append(f'RSI{rsi:.0f}과매수')
-        if chg >= 7:   risks.append(f'+{chg:.0f}%급등주의')
-        elif chg >= 4: risks.append(f'+{chg:.0f}%눌림대기')
-        if rr < 1.5:   risks.append(f'RR{rr}낮음')
-        risk_str = '·'.join(risks) if risks else '없음'
-        lines = [f"   🛡 {score}점({grade}) | ⚠ {risk_str}"]
-        for r in card.get('reasons', []):
-            text = r.get('text', '')
-            if '[기본적 분석]' in text:
-                lines.append(f"   🏢 {text.replace('[기본적 분석] ','')[:80]}")
-            elif '[외부요인]' in text:
-                lines.append(f"   🌐 {text.replace('[외부요인] ','')[:80]}")
-            else:
-                lines.append(f"   ▸ {text[:80]}")
-        return '\n'.join(lines)
-
-    def _fmt2(s, cat):
-        pct = s.get('changePct',0); sign = '+' if pct>=0 else ''
-        card = build_card(s, cat); icon = '🔴' if s.get('grade')=='S' else '🟡'
-        _pr = s.get('price',0)
-        try: _pr = int(_pr)
-        except: pass
-        return (f"{icon} {s['name']} ({s['code']})\n"
-                f"   💰 현재가: {_pr:,}원 {sign}{pct:.2f}% | 거래대금 {s.get('trAmt',0):,}억\n"
-                f"   📈 매입가: {card['buy']}원 | 손절: {card['stop']}원 | RR {card['rr']}\n"
-                f"{_compact_ai2(s, card)}")
-
-    def _mk_msg2(iv_lbl, all_s, k_n, kd_n, ts_str, n=None):
-        is_mkt = 9 <= int(kst_strftime('%H')) <= 15
-        mkt_lbl = '🟢장중' if is_mkt else '🔴장마감'
-        _n2 = n if n is not None else 10
-        # UI와 동일한 scan_result 데이터 사용 (cats는 라이브 스캔 결과라 다를 수 있음)
-        def _fmt_card(c):
-                """UI 카드 완전 동일 포맷"""
-                try: p = int(str(c.get('price','0')).replace(',',''))
-                except: p = 0
-                def _toi(v, fb):
-                    try: return int(str(v).replace(',',''))
-                    except: return fb
-                buy  = _toi(c.get('buy'),  int(p*0.995))
-                stop = _toi(c.get('stop'), int(p*0.97))
-                tgt  = _toi(c.get('target'), int(p*1.10))
-                try: rr = float(str(c.get('rr','')).replace(',',''))
-                except: rr = 0
-                if not rr: rr = round((tgt-p)/(p-stop+1),1) if p>0 else 3.3
-                vol   = c.get('vol',0)
-                try: vol = int(vol)
-                except: pass
-                pct   = c.get('change','0%')
-                score = c.get('score',70); grade = c.get('grade','B')
-                rsi   = c.get('rsiApprox',50) or 50
-                mkt   = str(c.get('mkt','KOSPI')).upper()
-                chg   = 0.0
-                try: chg = float(str(pct).replace('%','').replace('+',''))
-                except: pass
-                if grade=='S':   g_icon='🔴'
-                elif grade=='A': g_icon='🟠'
-                elif grade=='B': g_icon='🟡'
-                else:            g_icon='⚪'
-                if chg>=7:      risk_lbl=f'⚠ +{chg:.0f}% 급등 — 추격매수 주의'
-                elif chg>=4:    risk_lbl=f'📌 +{chg:.0f}% 눌림 — 단기 조정 가능'
-                elif rr<1.5:    risk_lbl='⚠ RR 낮음 — 손절폭 재검토 필요'
-                elif rsi>72:    risk_lbl=f'⚠ RSI {rsi:.0f} — 과매수 구간'
-                else:           risk_lbl='✅ 리스크 정상'
-                lines = [
-                    '━'*18,
-                    f"{g_icon} <b>{c.get('name','')} ({c.get('code','')})</b>  [{mkt}]",
-                    f"💰 <b>{p:,}원</b>  {pct}  |  거래대금 <b>{vol:,}억</b>",
-                    f"📊 RSI {rsi:.0f}  |  K점수 <b>{score}점({grade})</b>  |  RR <b>{rr}</b>",
-                    f"📈 매입가 {buy:,}원  →  목표 {tgt:,}원  |  손절 {stop:,}원",
-                    risk_lbl,
-                ]
-                reasons = _rebuild_reasons(c)
-                if reasons:
-                    lines.append('')
-                    lines.append('📋 <b>K 분석 사유</b>')
-                    for r in reasons:
-                        txt = r.get('text','') if isinstance(r,dict) else str(r)
-                        lines.append(f"  ▸ {txt}")
-                return '\n'.join(lines)
-
-        swing_list    = scan_result.get('swing',[])[:_n2]
-        surge_list    = scan_result.get('surge',[])[:_n2]
-        tomorrow_list = scan_result.get('tomorrow',[])[:_n2]
-        smallmid_list = scan_result.get('smallmid',[])[:_n2]
-        ls = [f"📡 <b>K-ALPHA {iv_lbl} 스캔</b> [{ts_str}] {mkt_lbl}\n"
-              f"KOSPI {k_n}+KOSDAQ {kd_n}종목\n━━━━━━━━━━━━━━━━"]
-        if swing_list:
-            ls.append(f"🔥 <b>[실시간 스윙 TOP{len(swing_list)}]</b>")
-            for c in swing_list: ls.append(_fmt_card(c))
-        if surge_list:
-            ls.append(f"\n⚡ <b>[급등전야 TOP{len(surge_list)}]</b>")
-            for c in surge_list: ls.append(_fmt_card(c))
-        if tomorrow_list:
-            ls.append(f"\n🌙 <b>[내일관심 TOP{len(tomorrow_list)}]</b>")
-            for c in tomorrow_list: ls.append(_fmt_card(c))
-        if smallmid_list:
-            ls.append(f"\n📦 <b>[중소형주 TOP{len(smallmid_list)}]</b>")
-            for c in smallmid_list: ls.append(_fmt_card(c))
-        if not any([swing_list, surge_list, tomorrow_list, smallmid_list]):
-            ls.append("📊 스캔 결과 없음 — 필터 조건 미달")
-        ls.append(f"━━━━━━━━━━━━━━━━\n📊 {len(all_s)}종목 스캔 완료 · 다음 알림 {iv_lbl} 후")
-        return "\n\n".join(ls)
-
-    def _kis_ai_stocks(n):
-        return ((scan_result.get('swing',[]) + scan_result.get('surge',[]))[:n] +
-                (scan_result.get('tomorrow',[]) + scan_result.get('smallmid',[]))[:n])
-
-    # scan_result 데이터 유무 (Gist 모드에서 all_stocks=[]이어도 전송 가능)
-    _has_sr2 = bool(
-        scan_result.get('swing') or scan_result.get('surge') or
-        scan_result.get('tomorrow') or scan_result.get('smallmid')
-    )
-    # 종목 수 표시용 (Gist 모드에선 scan_result.total 사용)
-    _all_for_count = all_stocks if all_stocks else [None] * scan_result.get('total', 0)
-
-    # ── 송출 시간 범위 체크 헬퍼 ──
-    def _in_time_window(start_h, end_h):
-        """현재 KST 시각이 [start_h:00 ~ end_h:59] 범위이면 True"""
-        h = kst_now().hour
-        if start_h <= end_h:
-            return start_h <= h <= end_h
-        else:  # 자정 넘는 경우 (예: 22~06)
-            return h >= start_h or h <= end_h
-
-    # 전체 발송 ON/OFF 체크
-    if not st.session_state.get('tg_all_enabled', True):
-        st.caption("⛔ 메시지 발송 비활성화 중")
-    else:
-        # 개인방 — 독립 bucket (카테고리별 분할 전송)
-        _has_sr_p = bool(scan_result.get('swing') or scan_result.get('surge') or
-                         scan_result.get('tomorrow') or scan_result.get('smallmid'))
-        if _tg_tok2 and _tg_chat2 and (all_stocks or _has_sr_p):
-            _bkt_p2 = int(time.time() // (_iv_p2 * 60))
-            if _bkt_p2 != st.session_state.get('_tg_bkt_p', -1):
-                st.session_state['_tg_bkt_p'] = _bkt_p2
-                _p_start = st.session_state.get('tg_send_start_p', 9)
-                _p_end   = st.session_state.get('tg_send_end_p', 15)
-                if _in_time_window(_p_start, _p_end):
-                    try:
-                        _n_kp = st.session_state.get('tg_send_count_p', 10)
-                        _send_tg_by_cat(_tg_tok2, _tg_chat2, scan_result,
-                                        _iv_p2_lbl, _kn2, _kdn2, _now2,
-                                        scan_result.get('total', len(all_stocks)), n=_n_kp,
-                                        menu=st.session_state.get('tg_menu_p'))
-                        st.toast(f"📱 개인방 전송 완료 ({_now2})", icon="✅")
-                        if st.session_state.get('tg_ai_send_p', True):
-                            _send_tg_ai(_tg_tok2, _tg_chat2, _kis_ai_stocks(_n_kp), _iv_p2_lbl, _now2)
-                    except Exception as e:
-                        st.caption(f"개인방 텔레그램 오류: {e}")
-                else:
-                    st.caption(f"⏸ 개인방 — 송출 시간 외 ({_p_start:02d}:00~{_p_end:02d}:59 KST)")
-
-        # 그룹방 — 독립 bucket
-        if _tg_tok2 and _grp_en2 and _grp_chat2 and (all_stocks or _has_sr2):
-            _bkt_g2 = int(time.time() // (_iv_g2 * 60))
-            if _bkt_g2 != st.session_state.get('_tg_bkt_g2_b', -1):
-                st.session_state['_tg_bkt_g2_b'] = _bkt_g2
-                _g1_start = st.session_state.get('tg_send_start_g1', 9)
-                _g1_end   = st.session_state.get('tg_send_end_g1', 15)
-                if _in_time_window(_g1_start, _g1_end):
-                    try:
-                        _n_kg1 = st.session_state.get('tg_send_count_g1', 10)
-                        msg2g = _mk_msg2(_iv_g2_lbl, _all_for_count, _kn2, _kdn2, _now2, n=_n_kg1)
-                        r2g = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
-                            json={"chat_id":_grp_chat2,"text":msg2g,"parse_mode":"HTML"}, timeout=10)
-                        if r2g.json().get('ok'):
-                            st.toast(f"👥 그룹방 전송 완료 ({_now2})", icon="✅")
-                            if st.session_state.get('tg_ai_send_g1', False):
-                                _send_tg_ai(_tg_tok2, _grp_chat2, _kis_ai_stocks(_n_kg1), _iv_g2_lbl, _now2)
-                    except Exception as e:
-                        st.caption(f"그룹방 텔레그램 오류: {e}")
-                else:
-                    st.caption(f"⏸ 그룹방 1 — 송출 시간 외 ({_g1_start:02d}:00~{_g1_end:02d}:59 KST)")
-
-        # 그룹방 2 — 독립 bucket
-        _grp2_en2   = st.session_state.get('tg_group2_enabled', False)
-        _grp2_chat2 = st.session_state.get('tg_group2_chat','')
-        _iv_g2b     = st.session_state.get('tg_group2_interval_min', 30)
-        _iv_g2b_lbl = st.session_state.get('tg_group2_interval_label','30분')
-        if _tg_tok2 and _grp2_en2 and _grp2_chat2 and (all_stocks or _has_sr2):
-            _bkt_g2b = int(time.time() // (_iv_g2b * 60))
-            if _bkt_g2b != st.session_state.get('_tg_bkt_g2b', -1):
-                st.session_state['_tg_bkt_g2b'] = _bkt_g2b
-                _g2_start = st.session_state.get('tg_send_start_g2', 9)
-                _g2_end   = st.session_state.get('tg_send_end_g2', 15)
-                if _in_time_window(_g2_start, _g2_end):
-                    try:
-                        _n_kg2 = st.session_state.get('tg_send_count_g2', 10)
-                        msg2g2 = _mk_msg2(_iv_g2b_lbl, _all_for_count, _kn2, _kdn2, _now2, n=_n_kg2)
-                        r2g2 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
-                            json={"chat_id":_grp2_chat2,"text":msg2g2,"parse_mode":"HTML"}, timeout=10)
-                        if r2g2.json().get('ok'):
-                            st.toast(f"👥 그룹방 2 전송 완료 ({_now2})", icon="✅")
-                            if st.session_state.get('tg_ai_send_g2', False):
-                                _send_tg_ai(_tg_tok2, _grp2_chat2, _kis_ai_stocks(_n_kg2), _iv_g2b_lbl, _now2)
-                    except Exception as e:
-                        st.caption(f"그룹방 2 텔레그램 오류: {e}")
-                else:
-                    st.caption(f"⏸ 그룹방 2 — 송출 시간 외 ({_g2_start:02d}:00~{_g2_end:02d}:59 KST)")
-
-        # 그룹방 3 — 독립 bucket
-        _grp3_en2   = st.session_state.get('tg_group3_enabled', False)
-        _grp3_chat2 = st.session_state.get('tg_group3_chat','')
-        _iv_g3b     = st.session_state.get('tg_group3_interval_min', 30)
-        _iv_g3b_lbl = st.session_state.get('tg_group3_interval_label','30분')
-        if _tg_tok2 and _grp3_en2 and _grp3_chat2 and (all_stocks or _has_sr2):
-            _bkt_g3b = int(time.time() // (_iv_g3b * 60))
-            if _bkt_g3b != st.session_state.get('_tg_bkt_g3b', -1):
-                st.session_state['_tg_bkt_g3b'] = _bkt_g3b
-                _g3_start = st.session_state.get('tg_send_start_g3', 9)
-                _g3_end   = st.session_state.get('tg_send_end_g3', 15)
-                if _in_time_window(_g3_start, _g3_end):
-                    try:
-                        _n_kg3 = st.session_state.get('tg_send_count_g3', 10)
-                        msg2g3 = _mk_msg2(_iv_g3b_lbl, all_stocks, _kn2, _kdn2, _now2, n=_n_kg3)
-                        r2g3 = requests.post(f"https://api.telegram.org/bot{_tg_tok2}/sendMessage",
-                            json={"chat_id":_grp3_chat2,"text":msg2g3,"parse_mode":"HTML"}, timeout=10)
-                        if r2g3.json().get('ok'):
-                            st.toast(f"👥 그룹방 3 전송 완료 ({_now2})", icon="✅")
-                            if st.session_state.get('tg_ai_send_g3', False):
-                                _send_tg_ai(_tg_tok2, _grp3_chat2, _kis_ai_stocks(_n_kg3), _iv_g3b_lbl, _now2)
-                    except Exception as e:
-                        st.caption(f"그룹방 3 텔레그램 오류: {e}")
-                else:
-                    st.caption(f"⏸ 그룹방 3 — 송출 시간 외 ({_g3_start:02d}:00~{_g3_end:02d}:59 KST)")
 
 # ════ 6. HTML 터미널 ════
 if not os.path.exists("app.html"):
