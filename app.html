@@ -6224,7 +6224,7 @@ function convertScanCards(cards, cat) {
     return {
       name: resolvedName,
       code: c.code, score: c.score || 70, grade: c.grade || 'B',
-      price: c.price, change: c.change || '0%', up: c.up != null ? c.up : true,
+      price: c.price, change: c.change || '0%', up: c.up != null ? c.up : (parseFloat(c.change) >= 0),
       buy: c.buy || c.price, target: c.target || c.price, stop: c.stop || c.price,
       rr: c.rr || '1.0', vol: c.vol || 0,
       reasons: reasons, inds: c.inds || [],
