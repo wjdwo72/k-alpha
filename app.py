@@ -3347,70 +3347,108 @@ if _gist_active or st.session_state.kis_token:
                 kospi_stocks=[]; kosdaq_stocks=[]; all_stocks=[]; balance={}
                 price_ts = kst_strftime("%H:%M:%S")
             else:
-                # 장중 스캔 또는 장외 수동 갱신(↻)
+                # 장중 스캔 또는 장외 수동 갱신(↻) → 백그라운드 스레드로 실행 (iframe 유지)
                 _is_afterhours_scan = not _direct_mkt
-                if _is_afterhours_scan:
-                    st.markdown(
-                        '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
-                        'padding:8px 12px;background:rgba(255,200,0,0.08);'
-                        'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
-                        '🔴 장마감 후 수동 스캔 중... 종가·거래대금 기준으로 분석합니다.<br>'
-                        '<span style="color:#64748b;font-size:11px">'
-                        '장마감 이후에는 실시간 체결이 없으므로 종가 기준 분류됩니다.</span>'
-                        '</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(
-                        '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
-                        'padding:8px 12px;background:rgba(255,200,0,0.08);'
-                        'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
-                        '📡 KIS 직접 스캔 중... KOSPI 200 + KOSDAQ 100 병렬 조회 중입니다.<br>'
-                        '<span style="color:#64748b;font-size:11px">'
-                        'Gist 미설정 시 첫 로드에 30~60초 소요됩니다. GIST_ID 환경변수 설정을 권장합니다.</span>'
-                        '</div>', unsafe_allow_html=True)
-                _scan_t0 = time.time()
-                with st.status("📡 KIS 스캔 중...", expanded=True) as _scan_status:
-                    st.write("🔄 KOSPI + KOSDAQ 병렬 조회 중...")
-                    _t1 = time.time()
+
+                def _do_bg_scan(kt, kb, ka, ks, acc, is_afh):
+                    """백그라운드 스레드: 스캔 → server_store에 저장"""
                     import concurrent.futures as _cf
-                    # session_state는 스레드 안전하지 않으므로 미리 추출
+                    _ss = get_server_store()
+                    _ss['bg_scan_running'] = True
+                    _ss['bg_scan_done']    = False
+                    try:
+                        _t0 = time.time()
+                        with _cf.ThreadPoolExecutor(max_workers=2) as _ex:
+                            _fkp = _ex.submit(fetch_volume_ranking, kt, kb, ka, ks, 'J', 200)
+                            _fkd = _ex.submit(fetch_volume_ranking, kt, kb, ka, ks, 'Q', 100)
+                            _kp = _fkp.result(); _kd = _fkd.result()
+                        _bal = fetch_balance(kt, kb, ka, ks, acc)
+                        _ts  = kst_strftime("%H:%M:%S")
+                        _ss['scan_data'] = {
+                            'kospi': _kp, 'kosdaq': _kd, 'all': _kp+_kd,
+                            'balance': _bal, 'is_afterhours': is_afh, 'afterhours_ts': _ts,
+                        }
+                        _ss['scan_ts']       = time.time()
+                        _ss['scan_str']      = _ts
+                        _ss['bg_scan_total'] = round(time.time()-_t0, 1)
+                        _ss['bg_scan_kp']    = len(_kp)
+                        _ss['bg_scan_kd']    = len(_kd)
+                    except Exception as _e:
+                        _ss['bg_scan_err'] = str(_e)
+                    finally:
+                        _ss['bg_scan_running'] = False
+                        _ss['bg_scan_done']    = True
+
+                # 이미 백그라운드 스캔이 완료됐으면 결과 사용
+                if server_store.get('bg_scan_done') and server_store.get('scan_data'):
+                    _cached2 = server_store['scan_data']
+                    kospi_stocks  = _cached2.get('kospi', [])
+                    kosdaq_stocks = _cached2.get('kosdaq', [])
+                    balance       = _cached2.get('balance', {})
+                    price_ts      = server_store.get('scan_str', kst_strftime("%H:%M:%S"))
+                    all_stocks    = kospi_stocks + kosdaq_stocks
+                    server_store['bg_scan_done'] = False  # 사용 후 리셋
+                    _bg_total = server_store.get('bg_scan_total', 0)
+                    _bkp = server_store.get('bg_scan_kp', len(kospi_stocks))
+                    _bkd = server_store.get('bg_scan_kd', len(kosdaq_stocks))
+                    st.markdown(
+                        f'<div style="font-family:monospace;font-size:12px;color:#00ff88;'
+                        f'padding:6px 10px;background:rgba(0,255,136,0.06);'
+                        f'border:1px solid rgba(0,255,136,0.2);border-radius:6px;margin:4px 0">'
+                        f'✅ 스캔 완료 — 총 {_bg_total}초 소요 '
+                        f'(KOSPI {_bkp} + KOSDAQ {_bkd}종목)</div>', unsafe_allow_html=True)
+                elif server_store.get('bg_scan_running'):
+                    # 스캔 진행 중 → 기존 캐시 데이터로 계속 표시
+                    st.markdown(
+                        '<div style="font-family:monospace;font-size:12px;color:#ffc800;'
+                        'padding:6px 10px;background:rgba(255,200,0,0.06);'
+                        'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
+                        '📡 KIS 직접 스캔 중 (백그라운드)... KOSPI 200 + KOSDAQ 100 조회 중</div>',
+                        unsafe_allow_html=True)
+                    # 캐시 있으면 그걸로 표시
+                    _prev = server_store.get('scan_data')
+                    if _prev:
+                        kospi_stocks  = _prev.get('kospi', [])
+                        kosdaq_stocks = _prev.get('kosdaq', [])
+                        balance       = _prev.get('balance', {})
+                        price_ts      = server_store.get('scan_str', kst_strftime("%H:%M:%S"))
+                        all_stocks    = kospi_stocks + kosdaq_stocks
+                    # 3초 후 rerun으로 완료 체크
+                    time.sleep(3)
+                    st.rerun()
+                else:
+                    # 스캔 시작 → 백그라운드 스레드 실행 후 즉시 계속
                     _kt = st.session_state.kis_token
                     _kb = st.session_state.kis_base_url
                     _ka = st.session_state.kis_ak
                     _ks = st.session_state.kis_sec
-                    with _cf.ThreadPoolExecutor(max_workers=2) as _ex:
-                        _f_kp = _ex.submit(fetch_volume_ranking, _kt, _kb, _ka, _ks, 'J', 200)
-                        _f_kd = _ex.submit(fetch_volume_ranking, _kt, _kb, _ka, _ks, 'Q', 100)
-                        kospi_stocks  = _f_kp.result()
-                        kosdaq_stocks = _f_kd.result()
-                    _e1 = round(time.time() - _t1, 1)
-                    st.write(f"✅ KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 완료 ({_e1}초)")
-                    _e2 = 0  # 병렬이라 별도 측정 불필요
-
-                    st.write("🔄 STEP 3/3 — 잔고 조회 중...")
-                    _t3 = time.time()
-                    balance = fetch_balance(
-                        st.session_state.kis_token, st.session_state.kis_base_url,
-                        st.session_state.kis_ak, st.session_state.kis_sec, st.session_state.kis_acc)
-                    _e3 = round(time.time() - _t3, 1)
-                    _total = round(time.time() - _scan_t0, 1)
-                    st.write(f"✅ STEP 3/3 — 잔고 조회 완료 ({_e3}초)")
-                    _scan_status.update(
-                        label=f"✅ 스캔 완료 — 총 {_total}초 소요 "
-                              f"(KOSPI {len(kospi_stocks)} + KOSDAQ {len(kosdaq_stocks)}종목)",
-                        state="complete", expanded=False)
-                all_stocks = kospi_stocks + kosdaq_stocks
-                price_ts   = kst_strftime("%H:%M:%S")
-                server_store['scan_data'] = {
-                    'kospi': kospi_stocks, 'kosdaq': kosdaq_stocks,
-                    'all': all_stocks, 'balance': balance,
-                    'is_afterhours': _is_afterhours_scan,
-                    'afterhours_ts': price_ts,
-                }
-                server_store['scan_ts']  = time.time()
-                server_store['scan_str'] = price_ts
-                # scan_result는 categorize 후 아래에서 server_store에 저장됨
-                if _is_afterhours_scan:
-                    st.success(f"✅ 장마감 시점 분석 완료 — {price_ts} 기준 종가 데이터")
+                    _acc = st.session_state.kis_acc
+                    import threading as _thr
+                    _t = _thr.Thread(target=_do_bg_scan,
+                                     args=(_kt, _kb, _ka, _ks, _acc, _is_afterhours_scan),
+                                     daemon=True)
+                    _t.start()
+                    server_store['bg_scan_running'] = True
+                    _lbl = '장마감 후 분석' if _is_afterhours_scan else 'KIS 직접 스캔'
+                    st.markdown(
+                        f'<div style="font-family:monospace;font-size:12px;color:#ffc800;'
+                        f'padding:6px 10px;background:rgba(255,200,0,0.06);'
+                        f'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
+                        f'📡 {_lbl} 시작... KOSPI 200 + KOSDAQ 100 백그라운드 조회 중<br>'
+                        f'<span style="color:#64748b;font-size:11px">'
+                        f'종목 카드는 스캔 완료 후 자동으로 업데이트됩니다</span></div>',
+                        unsafe_allow_html=True)
+                    # 이전 캐시 있으면 그걸로 표시 (처음이면 비어있음)
+                    _prev = server_store.get('scan_data')
+                    if _prev:
+                        kospi_stocks  = _prev.get('kospi', [])
+                        kosdaq_stocks = _prev.get('kosdaq', [])
+                        balance       = _prev.get('balance', {})
+                        price_ts      = server_store.get('scan_str', kst_strftime("%H:%M:%S"))
+                        all_stocks    = kospi_stocks + kosdaq_stocks
+                    # 3초 후 rerun으로 진행 상황 체크
+                    time.sleep(3)
+                    st.rerun()
 
         st.markdown(f'<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0">'
                     f'📊 KOSPI {len(kospi_stocks)}+KOSDAQ {len(kosdaq_stocks)}종목 · {price_ts}</div>',
