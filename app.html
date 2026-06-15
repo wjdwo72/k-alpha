@@ -4444,20 +4444,24 @@ function openTabStockList(event, tab) {
       const name   = nameEl   ? nameEl.textContent.trim()   : '—';
       const price  = priceEl  ? priceEl.textContent.trim()  : '—';
       const chgRaw = changeEl ? changeEl.textContent.trim() : '';
-      // 등락 색상: .up / .dn 클래스로 판단
+      // up/dn 클래스로 방향 결정 (부호·색상 강제 적용)
       const isUp  = changeEl && changeEl.classList.contains('up');
       const isDn  = changeEl && changeEl.classList.contains('dn');
-      const chgColor = isUp ? '#ff4d6d' : isDn ? '#4fa3e0' : '#94a3b8';
-      // 전일대비 금액 / 등락률 분리: "+3,200 (+1.94%)" 또는 "+3,200(+1.94%)"
+      const chgColor = isUp ? '#ff3b5c' : isDn ? '#4fa3e0' : '#94a3b8';
+      // 전일대비 금액 / 등락률 분리
       const sepIdx = chgRaw.indexOf('(');
-      const chgAmt = sepIdx > 0 ? chgRaw.substring(0, sepIdx).trim() : chgRaw;
-      const chgPct = sepIdx > 0 ? chgRaw.substring(sepIdx).trim() : '';
+      let chgAmt = (sepIdx > 0 ? chgRaw.substring(0, sepIdx).trim() : chgRaw).replace(/^[+-]/,'');
+      let chgPct = sepIdx > 0 ? chgRaw.substring(sepIdx).replace(/[()]/g,'').trim() : '';
+      // 부호 강제: up→+, dn→-
+      const forceSign = isUp ? '+' : isDn ? '-' : '';
+      if (chgAmt) chgAmt = forceSign + chgAmt;
+      if (chgPct) chgPct = '(' + forceSign + chgPct.replace(/^[+-]/,'') + ')';
       return '<div onclick="scrollToCard(\'' + code + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s" onmouseover="this.style.background=\'rgba(0,212,255,0.07)\'" onmouseout="this.style.background=\'none\'">' +
         '<div><div style="font-size:12px;color:#e2e8f0;font-weight:600">' + name + '</div>' +
         '<div style="font-size:10px;color:var(--text-dim)">' + code + '</div></div>' +
         '<div style="text-align:right">' +
-        '<div style="font-size:12px;color:' + cfg.color + ';font-weight:700">' + price + '</div>' +
-        '<div style="font-size:10px;color:' + chgColor + ';font-weight:600;white-space:nowrap">' + chgAmt + (chgPct ? ' <span style="opacity:0.75;font-size:9px">' + chgPct + '</span>' : '') + '</div>' +
+        '<div style="font-size:13px;color:#e2e8f0;font-weight:700">' + price + '</div>' +
+        '<div style="font-size:11px;color:' + chgColor + ';font-weight:700;white-space:nowrap">' + chgAmt + (chgPct ? ' ' + chgPct : '') + '</div>' +
         '</div></div>';
     }).join('');
   }

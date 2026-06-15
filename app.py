@@ -72,7 +72,9 @@ SESSION_SHORT = {
 # ────────────────────────────────────────────────────────────────
 @st.cache_resource
 def _get_bg_state():
-    return {"started": False, "last_scan": 0, "tg_bkt": {}}
+    # last_scan=현재시각: 시작 직후 스캔/텔레그램 전송 방지 (첫 전송은 iv_min분 후)
+    now = time.time()
+    return {"started": False, "last_scan": now, "tg_bkt": {}, "_start_at": now}
 
 def _start_bg_scan_thread():
     import threading, requests as _req, json as _jn
