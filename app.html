@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -364,33 +364,42 @@
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
-    color: var(--text-dim);
+    color: #b0bec5;
     font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: -1px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
   }
+  .tab-btn:hover { color: #e2e8f0; }
 
-  .tab-btn.active { color: var(--text-bright); border-bottom-color: var(--accent); }
-  .tab-btn[data-tab="surge"].active { border-bottom-color: var(--surge); }
-  .tab-btn[data-tab="tomorrow"].active { border-bottom-color: var(--tomorrow); }
-  .tab-btn[data-tab="per"].active { color: #f0c040 !important; border-bottom-color: #f0c040; }
+  .tab-btn.active { color: #ffffff; border-bottom-color: var(--accent); text-shadow: 0 0 8px rgba(0,212,255,0.4); }
+  .tab-btn[data-tab="surge"].active { border-bottom-color: var(--surge); color:#ffb347; text-shadow:0 0 8px rgba(255,165,0,0.4); }
+  .tab-btn[data-tab="tomorrow"].active { border-bottom-color: var(--tomorrow); color:#00ff88; text-shadow:0 0 8px rgba(0,255,136,0.4); }
+  .tab-btn[data-tab="per"].active { color: #f0c040 !important; border-bottom-color: #f0c040; text-shadow:0 0 8px rgba(240,192,64,0.4); }
   .tab-btn[data-tab="per"].active .tab-badge { background: rgba(240,192,64,0.2); color: #f0c040; }
+  .tab-btn[data-tab="smallmid"] { color: #c084fc !important; }
+  .tab-btn[data-tab="smallmid"].active { color: #d8b4fe !important; text-shadow:0 0 8px rgba(192,132,252,0.4); border-bottom-color:#c084fc; }
 
   .tab-badge {
-    padding: 1px 7px;
+    padding: 2px 8px;
     border-radius: 10px;
-    font-size: 10px;
+    font-size: 11px;
     font-family: 'Share Tech Mono', monospace;
+    font-weight: 700;
+    background: rgba(255,255,255,0.08);
+    color: #cbd5e1;
+    cursor: pointer;
   }
-  .tab-btn.active .tab-badge { background: rgba(0,212,255,0.2); color: var(--accent); }
-  .tab-btn[data-tab="surge"].active .tab-badge { background: rgba(255,165,0,0.2); color: var(--surge); }
-  .tab-btn[data-tab="tomorrow"].active .tab-badge { background: rgba(0,255,136,0.2); color: var(--tomorrow); }
+  .tab-badge:hover { background: rgba(0,212,255,0.25) !important; color: var(--accent) !important; }
+  .tab-btn.active .tab-badge { background: rgba(0,212,255,0.25); color: var(--accent); }
+  .tab-btn[data-tab="surge"].active .tab-badge { background: rgba(255,165,0,0.25); color: var(--surge); }
+  .tab-btn[data-tab="tomorrow"].active .tab-badge { background: rgba(0,255,136,0.25); color: var(--tomorrow); }
 
   /* ── STOCK CARDS ── */
   .cards-grid { display: flex; flex-direction: column; gap: 12px; }
@@ -1570,23 +1579,31 @@
 
       <div class="tabs" id="tabs-kr">
         <button class="tab-btn active" data-tab="swing" onclick="switchTab('swing',this,'kr')">
-          ⬡ 실시간 스윙주 <span class="tab-badge">5</span>
+          ⬡ 실시간 스윙주 <span class="tab-badge" onclick="event.stopPropagation();openTabStockList(event,'swing')">5</span>
         </button>
         <button class="tab-btn" data-tab="surge" onclick="switchTab('surge',this,'kr')">
-          ◈ 급등 전야 <span class="tab-badge">5</span>
+          ◈ 급등 전야 <span class="tab-badge" onclick="event.stopPropagation();openTabStockList(event,'surge')">5</span>
         </button>
         <button class="tab-btn" data-tab="tomorrow" onclick="switchTab('tomorrow',this,'kr')">
-          ◉ 내일 관심주 <span class="tab-badge">5</span>
+          ◉ 내일 관심주 <span class="tab-badge" onclick="event.stopPropagation();openTabStockList(event,'tomorrow')">5</span>
         </button>
-        <button class="tab-btn" data-tab="smallmid" onclick="switchTab('smallmid',this,'kr')" style="color:#c084fc;border-bottom-color:transparent">
-          ⬟ 내일의 중소형주 <span class="tab-badge" style="background:rgba(192,132,252,.15);color:#c084fc">10</span>
+        <button class="tab-btn" data-tab="smallmid" onclick="switchTab('smallmid',this,'kr')">
+          ⬟ 내일의 중소형주 <span class="tab-badge" style="background:rgba(192,132,252,.15);color:#c084fc" onclick="event.stopPropagation();openTabStockList(event,'smallmid')">10</span>
         </button>
-        <button class="tab-btn" data-tab="per" onclick="switchTab('per',this,'kr')" style="color:#f0c040;border-bottom-color:transparent">
-          💎 PER저평가 <span class="tab-badge" id="badge-per" style="background:rgba(240,192,64,.15);color:#f0c040">0</span>
+        <button class="tab-btn" data-tab="per" onclick="switchTab('per',this,'kr')">
+          💎 PER저평가 <span class="tab-badge" id="badge-per" style="background:rgba(240,192,64,.15);color:#f0c040" onclick="event.stopPropagation();openTabStockList(event,'per')">0</span>
         </button>
         <button class="tab-btn" data-tab="portfolio" onclick="switchTab('portfolio',this,'kr')" id="tab-btn-portfolio-kr">
           💼 내 포트폴리오
         </button>
+      </div>
+      <!-- 탭 종목 드롭다운 -->
+      <div id="tab-stock-dropdown" style="display:none;position:fixed;z-index:9999;background:#111827;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.7);min-width:260px;max-width:320px;max-height:340px;overflow-y:auto;font-family:'Share Tech Mono',monospace">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#111827">
+          <span id="tab-stock-dropdown-title" style="font-size:12px;font-weight:700;color:var(--accent)">종목 목록</span>
+          <button onclick="closeTabStockList()" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;line-height:1">✕</button>
+        </div>
+        <div id="tab-stock-dropdown-list" style="padding:6px 0"></div>
       </div>
 
       <div id="tab-swing" class="tab-panel active"><div class="cards-grid" id="cards-swing"></div></div>
@@ -1613,6 +1630,31 @@
             <div class="pf-sum-label">💰 총 예수금 (D+2 결제예정)</div>
             <div class="pf-sum-val" id="pf-cash" style="font-size:clamp(18px,4vw,28px)">조회 중...</div>
             <div class="pf-sum-sub" id="pf-cash-sub">KIS 실시간 연동</div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+              <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">🧪 테스트 가상예수금</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span id="pf-virtual-cash-val" style="font-family:'Share Tech Mono',monospace;font-size:15px;font-weight:700;color:var(--accent2)">10,000,000 원</span>
+                <button onclick="openVirtualCashEdit()" style="padding:2px 10px;font-size:10px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:var(--accent);cursor:pointer;font-family:'Share Tech Mono',monospace">수정</button>
+              </div>
+            </div>
+          </div>
+          <!-- 가상예수금 수정 팝업 -->
+          <div id="virtual-cash-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;align-items:center;justify-content:center">
+            <div style="background:#0d1117;border:1px solid var(--border);border-radius:12px;padding:24px;min-width:280px;font-family:'Share Tech Mono',monospace">
+              <div style="font-size:14px;color:var(--accent);font-weight:700;margin-bottom:16px">🧪 가상예수금 수정</div>
+              <div style="margin-bottom:12px">
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">비밀번호 (4545)</div>
+                <input id="vcash-pw" type="password" maxlength="4" placeholder="****" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#1a2333;border:1px solid var(--border);border-radius:6px;color:#e2e8f0;font-family:'Share Tech Mono',monospace;font-size:14px" oninput="vcashPwCheck()">
+              </div>
+              <div id="vcash-amount-row" style="display:none;margin-bottom:12px">
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">금액 (원)</div>
+                <input id="vcash-amount" type="number" placeholder="10000000" style="width:100%;box-sizing:border-box;padding:8px 10px;background:#1a2333;border:1px solid var(--border);border-radius:6px;color:#e2e8f0;font-family:'Share Tech Mono',monospace;font-size:14px">
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end">
+                <button onclick="closeVirtualCashEdit()" style="padding:7px 16px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-dim);cursor:pointer;font-size:12px">취소</button>
+                <button id="vcash-save-btn" onclick="saveVirtualCash()" style="display:none;padding:7px 16px;background:rgba(0,212,255,0.15);border:1px solid var(--accent);border-radius:6px;color:var(--accent);cursor:pointer;font-size:12px;font-weight:700">저장</button>
+              </div>
+            </div>
           </div>
           <div class="pf-sum-card">
             <div class="pf-sum-label">📊 평가금액 합계</div>
@@ -4298,6 +4340,140 @@ function _renderOrderHistory() {
 
 function openOrderHist()  { document.getElementById('order-hist-panel').style.display='block'; _renderOrderHistory(); }
 function closeOrderHist() { document.getElementById('order-hist-panel').style.display='none'; }
+
+// ── 탭 종목 드롭다운 ──────────────────────────────────────────────
+const _TAB_CATEGORY_MAP = {
+  swing:    { label:'⬡ 실시간 스윙주', color:'var(--accent)',   grid:'cards-swing' },
+  surge:    { label:'◈ 급등 전야',     color:'var(--surge)',    grid:'cards-surge' },
+  tomorrow: { label:'◉ 내일 관심주',   color:'var(--tomorrow)', grid:'cards-tomorrow' },
+  smallmid: { label:'⬟ 중소형주',      color:'#c084fc',         grid:'cards-smallmid' },
+  per:      { label:'💎 PER저평가',    color:'#f0c040',         grid:'cards-per' },
+};
+
+function openTabStockList(event, tab) {
+  const dd = document.getElementById('tab-stock-dropdown');
+  const cfg = _TAB_CATEGORY_MAP[tab];
+  if (!cfg) return;
+
+  const titleEl = document.getElementById('tab-stock-dropdown-title');
+  const listEl  = document.getElementById('tab-stock-dropdown-list');
+  if (titleEl) { titleEl.textContent = cfg.label; titleEl.style.color = cfg.color; }
+
+  // 해당 탭 grid의 카드에서 종목 추출
+  const grid = document.getElementById(cfg.grid);
+  const cards = grid ? grid.querySelectorAll('.card') : [];
+  if (!cards.length) {
+    listEl.innerHTML = '<div style="padding:12px 14px;font-size:11px;color:var(--text-dim)">스캔 결과 없음</div>';
+  } else {
+    listEl.innerHTML = Array.from(cards).map(function(card) {
+      const nameEl  = card.querySelector('.card-name');
+      const priceEl = card.querySelector('.price-current');
+      const code    = card.dataset.stockCode || card.dataset.code || card.id || '';
+      const name    = nameEl  ? nameEl.textContent.trim()  : '—';
+      const price   = priceEl ? priceEl.textContent.trim() : '—';
+      return '<div onclick="scrollToCard(\'' + code + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s" onmouseover="this.style.background=\'rgba(0,212,255,0.07)\'" onmouseout="this.style.background=\'none\'">' +
+        '<div><div style="font-size:12px;color:#e2e8f0;font-weight:600">' + name + '</div>' +
+        '<div style="font-size:10px;color:var(--text-dim)">' + code + '</div></div>' +
+        '<div style="font-size:12px;color:' + cfg.color + ';font-weight:700">' + price + '</div></div>';
+    }).join('');
+  }
+
+  dd.style.display = 'block';
+  const rect = event.target.getBoundingClientRect();
+  let x = rect.left, y = rect.bottom + 6;
+  const dw = dd.offsetWidth || 280;
+  if (x + dw > window.innerWidth - 10) x = window.innerWidth - dw - 10;
+  dd.style.left = x + 'px';
+  dd.style.top  = y + 'px';
+}
+
+function closeTabStockList() {
+  document.getElementById('tab-stock-dropdown').style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('tab-stock-dropdown');
+  if (dd && !dd.contains(e.target) && !e.target.classList.contains('tab-badge')) closeTabStockList();
+});
+
+function scrollToCard(code) {
+  closeTabStockList();
+  // 먼저 해당 탭을 활성화
+  let found = false;
+  Object.keys(_TAB_CATEGORY_MAP).forEach(function(tab) {
+    const grid = document.getElementById(_TAB_CATEGORY_MAP[tab].grid);
+    if (!grid) return;
+    const card = grid.querySelector('[data-stock-code="' + code + '"]') || grid.querySelector('[data-code="' + code + '"]') || grid.querySelector('#card-' + code);
+    if (card) {
+      found = true;
+      // 탭 전환
+      const tabBtn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+      if (tabBtn) switchTab(tab, tabBtn, 'kr');
+      setTimeout(function() {
+        card.scrollIntoView({ behavior:'smooth', block:'center' });
+        card.style.outline = '2px solid var(--accent)';
+        setTimeout(function() { card.style.outline = 'none'; }, 1800);
+      }, 120);
+    }
+  });
+}
+
+// ── 가상예수금 ────────────────────────────────────────────────────
+const _VCASH_KEY = 'k_virtual_cash_v1';
+
+function _loadVirtualCash() {
+  try { return parseInt(localStorage.getItem(_VCASH_KEY) || '10000000') || 10000000; } catch(e) { return 10000000; }
+}
+function _saveVirtualCash(amt) {
+  try { localStorage.setItem(_VCASH_KEY, String(amt)); } catch(e) {}
+}
+function _renderVirtualCash() {
+  const el = document.getElementById('pf-virtual-cash-val');
+  if (el) el.textContent = _loadVirtualCash().toLocaleString() + ' 원';
+}
+
+function openVirtualCashEdit() {
+  const pw = document.getElementById('vcash-pw');
+  const amtRow = document.getElementById('vcash-amount-row');
+  const saveBtn = document.getElementById('vcash-save-btn');
+  if (pw) pw.value = '';
+  if (amtRow) amtRow.style.display = 'none';
+  if (saveBtn) saveBtn.style.display = 'none';
+  const m = document.getElementById('virtual-cash-modal');
+  if (m) { m.style.display = 'flex'; setTimeout(function(){ if(pw) pw.focus(); }, 80); }
+}
+function closeVirtualCashEdit() {
+  const m = document.getElementById('virtual-cash-modal');
+  if (m) m.style.display = 'none';
+}
+function vcashPwCheck() {
+  const pw = document.getElementById('vcash-pw').value;
+  const amtRow = document.getElementById('vcash-amount-row');
+  const saveBtn = document.getElementById('vcash-save-btn');
+  const cur = _loadVirtualCash();
+  if (pw === '4545') {
+    if (amtRow) amtRow.style.display = 'block';
+    if (saveBtn) saveBtn.style.display = 'inline-block';
+    const inp = document.getElementById('vcash-amount');
+    if (inp && !inp.value) inp.value = cur;
+  } else {
+    if (amtRow) amtRow.style.display = 'none';
+    if (saveBtn) saveBtn.style.display = 'none';
+  }
+}
+function saveVirtualCash() {
+  const pw = document.getElementById('vcash-pw').value;
+  if (pw !== '4545') { alert('비밀번호가 틀립니다.'); return; }
+  const amt = parseInt(document.getElementById('vcash-amount').value) || 0;
+  if (amt <= 0) { alert('올바른 금액을 입력하세요.'); return; }
+  _saveVirtualCash(amt);
+  _renderVirtualCash();
+  closeVirtualCashEdit();
+  // 팝업 매입가능금액도 갱신
+  const cashEl = document.getElementById('popup-avail-cash');
+  if (cashEl) cashEl.textContent = amt.toLocaleString() + ' 원';
+}
+// 초기 렌더
+_renderVirtualCash();
 
 
 // ──────────────────────────────────────────────
