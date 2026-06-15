@@ -160,8 +160,8 @@
   }
 
   .market-pill .val { font-weight: 700; }
-  .market-pill .pos { color: var(--accent2); }
-  .market-pill .neg { color: var(--accent3); }
+  .market-pill .pos { color: var(--accent3); }   /* 한국 관례: 상승=빨간 */
+  .market-pill .neg { color: #4fa3e0; }           /* 한국 관례: 하락=파란 */
 
   .dot { width: 6px; height: 6px; border-radius: 50%; }
   .dot.live { background: var(--accent2); animation: pulse 1.5s infinite; }
@@ -737,8 +737,8 @@
   .oht-sell   { background:rgba(255,77,109,0.15); color:var(--accent3); }
   .oht-cancel { background:rgba(255,165,0,0.15); color:var(--accent4); }
   .oht-modify { background:rgba(130,100,255,0.15); color:#a78bfa; }
-  .oht-pnl-pos { color:var(--accent2); }
-  .oht-pnl-neg { color:var(--accent3); }
+  .oht-pnl-pos { color:var(--accent3); }   /* 수익=빨간 */
+  .oht-pnl-neg { color:#4fa3e0; }          /* 손실=파란 */
   /* ── 자동매매 글로벌 토글 버튼 (탑바) ── */
   #global-at-topbar {
     padding: 4px 12px; font-family:'Share Tech Mono',monospace; font-size:10px;
@@ -4361,7 +4361,7 @@ function confirmPopupOrder() {
   }
 
   addLog(ts, '['+cfg.logTag+'] '+name+' '+userBuyPrice.toLocaleString()+'원 × '+record.qty+'주 → 테스트 기록', cfg.logType);
-  const pnlColor = parseFloat(pnlPct)>=0 ? 'var(--accent2)' : 'var(--accent3)';
+  const pnlColor = parseFloat(pnlPct)>=0 ? 'var(--accent3)' : '#4fa3e0';
   const pnlStr = pnlPct!==null ? ' · 수익률 <b style="color:'+pnlColor+'">'+(parseFloat(pnlPct)>=0?'+':'')+pnlPct+'%</b>' : '';
   addTelegram('<span class="tg-tag signal">'+cfg.tgTag+'</span><strong>'+name+'</strong> — '+userBuyPrice.toLocaleString()+'원 × '+record.qty+'주'+pnlStr, ts, orderType==='buy'?'S':'');
   _renderOrderHistory();
@@ -4672,12 +4672,12 @@ function _renderVpf() {
         const pnlAmt  = eval_ - cost;
         const pnlPct  = cost > 0 ? (pnlAmt / cost * 100).toFixed(2) : '0.00';
         const weight  = grandTotal > 0 ? (cost / grandTotal * 100).toFixed(1) : '0.0';
-        const pnlCls  = pnlAmt >= 0 ? 'color:var(--accent2)' : 'color:var(--accent3)';
+        const pnlCls  = pnlAmt >= 0 ? 'color:var(--accent3)' : 'color:#4fa3e0';
         return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">' +
           '<td style="padding:6px 6px;font-size:10px;color:var(--text-dim)">' + (o.buyDate||'').slice(5) + '</td>' +
           '<td style="padding:6px 6px"><div style="font-weight:600;color:#e2e8f0">' + o.name + '</div><div style="font-size:9px;color:var(--text-dim)">' + o.code + '</div></td>' +
           '<td style="padding:6px 6px;text-align:right;color:var(--accent)">' + o.avgPrice.toLocaleString() + '</td>' +
-          '<td style="padding:6px 6px;text-align:right;color:' + (cur > o.avgPrice ? 'var(--accent2)' : cur < o.avgPrice ? 'var(--accent3)' : '#e2e8f0') + '">' + cur.toLocaleString() + '</td>' +
+          '<td style="padding:6px 6px;text-align:right;color:' + (cur > o.avgPrice ? 'var(--accent3)' : cur < o.avgPrice ? '#4fa3e0' : '#e2e8f0') + '">' + cur.toLocaleString() + '</td>' +
           '<td style="padding:6px 6px;text-align:right;color:#e2e8f0">' + o.qty + '주</td>' +
           '<td style="padding:6px 6px;text-align:right;' + pnlCls + '">' + (pnlAmt >= 0 ? '+' : '') + Math.round(pnlAmt).toLocaleString() + '</td>' +
           '<td style="padding:6px 6px;text-align:right;' + pnlCls + '">' + (parseFloat(pnlPct) >= 0 ? '+' : '') + pnlPct + '%</td>' +
@@ -4690,7 +4690,7 @@ function _renderVpf() {
     // 요약 업데이트
     const pnlAll  = totalEvalAll - totalCostAll;
     const pctAll  = totalCostAll > 0 ? (pnlAll / totalCostAll * 100).toFixed(2) : '0.00';
-    const pnlClr  = pnlAll >= 0 ? 'var(--accent2)' : 'var(--accent3)';
+    const pnlClr  = pnlAll >= 0 ? 'var(--accent3)' : '#4fa3e0';
     const cntEl   = document.getElementById('vpf-cnt');
     const costEl  = document.getElementById('vpf-cost');
     const pnlEl   = document.getElementById('vpf-pnl');
@@ -4718,7 +4718,7 @@ function _renderVpf() {
         const rows = byDate[date].map(function(h) {
           const isBuy = h.type === '매입';
           const pnlHtml = (!isBuy && h.pnlPct != null)
-            ? ' <span style="color:' + (parseFloat(h.pnlPct) >= 0 ? 'var(--accent2)' : 'var(--accent3)') + ';font-weight:700">' + (parseFloat(h.pnlPct) >= 0 ? '+' : '') + h.pnlPct + '%</span>'
+            ? ' <span style="color:' + (parseFloat(h.pnlPct) >= 0 ? 'var(--accent3)' : '#4fa3e0') + ';font-weight:700">' + (parseFloat(h.pnlPct) >= 0 ? '+' : '') + h.pnlPct + '%</span>'
             : '';
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:10px">' +
             '<div style="display:flex;align-items:center;gap:5px">' +
