@@ -4972,13 +4972,13 @@ async function fetchKisPrice(code) {
     const data = await res.json();
     const o = data?.output;
     if (!o || !o.stck_prpr) return null;
-    // prdy_vrss_sign: '1'=상한 '2'=상승 '3'=보합 '4'=하한 '5'=하락
-    // prdy_vrss (등락액) / prdy_ctrt (등락률) 은 항상 양수 → sign으로 부호 결정
+    // prdy_vrss_sign: '1'=상한 '2'=상승 '3'=보합 '4'=하락 '5'=하한
+    // prdy_vrss / prdy_ctrt 는 KIS에서 이미 부호 포함 반환 → abs() 후 sign으로 결정
     const sign = o.prdy_vrss_sign || '3';
     const isUp   = ['1','2'].includes(sign);
     const isDown = ['4','5'].includes(sign);
-    const changeAbs    = parseInt(o.prdy_vrss || 0);
-    const changePctAbs = parseFloat(o.prdy_ctrt || 0);
+    const changeAbs    = Math.abs(parseInt(o.prdy_vrss || 0));
+    const changePctAbs = Math.abs(parseFloat(o.prdy_ctrt || 0));
     return {
       price:     parseInt(o.stck_prpr),
       change:    isDown ? -changeAbs    : changeAbs,
