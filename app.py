@@ -713,10 +713,12 @@ def fetch_volume_ranking(token, base_url, ak, secret, mkt_code='J', top_n=100):
                 chg_pct = float(item.get('prdy_ctrt','0') or 0)
                 tr_amt  = int(item.get('acml_tr_pbmn','0') or 0) // 100000000
                 if price <= 0: continue
+                is_down = sign in ['4','5']
                 stocks.append({'code':code,'name':name,'price':price,
-                    'change':change,'sign':sign,
-                    'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
-                    'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
+                    'change': -abs(change) if is_down else abs(change),
+                    'sign':sign,
+                    'changePct': -abs(chg_pct) if is_down else abs(chg_pct),
+                    'up': not is_down,'vol':0,'trAmt':tr_amt,
                     'mkt':'kospi' if mkt_code=='J' else 'kosdaq'})
             except: continue
     except: pass
@@ -758,10 +760,12 @@ def fetch_volume_ranking(token, base_url, ak, secret, mkt_code='J', top_n=100):
                 chg_pct = float(o.get('prdy_ctrt','0') or 0)
                 tr_amt  = int(o.get('acml_tr_pbmn','0') or 0) // 100000000
                 if price <= 0: continue
+                is_down = sign in ['4','5']
                 stocks.append({'code':code,'name':name,'price':price,
-                    'change':change,'sign':sign,
-                    'changePct':-chg_pct if sign in ['4','5'] else chg_pct,
-                    'up':sign in ['1','2'],'vol':0,'trAmt':tr_amt,
+                    'change': -abs(change) if is_down else abs(change),
+                    'sign':sign,
+                    'changePct': -abs(chg_pct) if is_down else abs(chg_pct),
+                    'up': not is_down,'vol':0,'trAmt':tr_amt,
                     'mkt':'kospi' if mkt_code=='J' else 'kosdaq'})
                 time.sleep(0.04)
             except: continue
@@ -1130,7 +1134,7 @@ def fetch_per_stocks(token, base_url, ak, secret, per_max, per_min, pbr_max, roe
                 tr_amt  = tr_raw / 1e8
                 sign_cd = o.get('prdy_vrss_sign', '3')
                 chg_raw = float(o.get('prdy_ctrt', 0) or 0)
-                chg_pct = -chg_raw if sign_cd in ['4', '5'] else chg_raw
+                chg_pct = -abs(chg_raw) if sign_cd in ['4', '5'] else abs(chg_raw)
 
                 # 이름 — 여러 필드 시도 후 없으면 종목정보 API 추가 조회
                 name_raw = (o.get('hts_kor_isnm') or o.get('prdt_abrv_name') or
