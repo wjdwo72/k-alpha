@@ -74,7 +74,12 @@ SESSION_SHORT = {
 def _get_bg_state():
     # last_scan=현재시각: 시작 직후 스캔/텔레그램 전송 방지 (첫 전송은 iv_min분 후)
     now = time.time()
-    return {"started": False, "last_scan": now, "tg_bkt": {}, "_start_at": now}
+    # 현재 버킷으로 초기화 → 재시작 직후 "아직 보내지 않은 버킷"으로 판단해 보내는 것 방지
+    default_iv = 10  # 기본 10분 버킷
+    cur_bkt = int(now // (default_iv * 60))
+    return {"started": False, "last_scan": now,
+            "tg_bkt": {f"r{i}": cur_bkt for i in range(4)},
+            "_start_at": now}
 
 def _start_bg_scan_thread():
     import threading, requests as _req, json as _jn
@@ -92,23 +97,31 @@ def _start_bg_scan_thread():
         except: pass
 
     def _do_tg_send(ss, sr, label):
-        """scan_result → 카테고리별 분할 전송"""
+        """scan_result → 카테고리별 분할 전송 (설정 시간대만)"""
         tok  = ss.get("tg_token", "")
         if not tok: return
 
+        kst_h = kst_now().hour  # 현재 KST 시각
+
         rooms = [
-            # (chat_id, interval_min, n, enabled)
-            (ss.get("tg_chat",""),           ss.get("tg_interval_min",10),     ss.get("tg_send_count_p",5),  True),
+            # (chat_id, interval_min, n, enabled, start_h, end_h)
+            (ss.get("tg_chat",""),           ss.get("tg_interval_min",10),     ss.get("tg_send_count_p",5),  True,
+             ss.get("tg_send_start_p",9),  ss.get("tg_send_end_p",15)),
             (ss.get("tg_group1_chat","") or ss.get("tg_group_chat",""),
              ss.get("tg_group1_iv_min",10) or ss.get("tg_group_iv_min",10),
              ss.get("tg_send_count_g1",5),
-             ss.get("tg_group1_en", False) or ss.get("tg_group_en", False)),
-            (ss.get("tg_group2_chat",""),    ss.get("tg_group2_iv_min",10),    ss.get("tg_send_count_g2",5), ss.get("tg_group2_en", False)),
-            (ss.get("tg_group3_chat",""),    ss.get("tg_group3_iv_min",10),    ss.get("tg_send_count_g3",5), ss.get("tg_group3_en", False)),
+             ss.get("tg_group1_en", False) or ss.get("tg_group_en", False),
+             ss.get("tg_send_start_g1",9), ss.get("tg_send_end_g1",15)),
+            (ss.get("tg_group2_chat",""),    ss.get("tg_group2_iv_min",10),    ss.get("tg_send_count_g2",5), ss.get("tg_group2_en", False),
+             ss.get("tg_send_start_g2",9), ss.get("tg_send_end_g2",15)),
+            (ss.get("tg_group3_chat",""),    ss.get("tg_group3_iv_min",10),    ss.get("tg_send_count_g3",5), ss.get("tg_group3_en", False),
+             ss.get("tg_send_start_g3",9), ss.get("tg_send_end_g3",15)),
         ]
         now = time.time()
-        for i, (chat, iv_min, n_cat, en) in enumerate(rooms):
+        for i, (chat, iv_min, n_cat, en, start_h, end_h) in enumerate(rooms):
             if not en or not chat: continue
+            # 설정된 시간대 외에는 전송하지 않음
+            if not (start_h <= kst_h < end_h): continue
             bkt = int(now // (iv_min * 60))
             bkt_key = f"r{i}"
             if bkt == bg["tg_bkt"].get(bkt_key, -1): continue  # 이미 전송됨
@@ -658,7 +671,7 @@ def fetch_gist_scan(gist_id):
         r = requests.get(
             f"https://api.github.com/gists/{gist_id}",
             headers={'Accept':'application/vnd.github.v3+json'},
-            timeout=5)
+            timeout=3)   # 3초 이내 응답 없으면 포기 (빠른 시작 우선)
         if r.status_code != 200: return None
         content = r.json().get('files',{}).get('kalpha_scan.json',{}).get('content','')
         return json.loads(content) if content else None
