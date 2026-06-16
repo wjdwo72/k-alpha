@@ -346,6 +346,17 @@ input[type=text] { border-radius: 8px !important; }
 # ── 로그인 페이지 ──────────────────────────────────────────────
 TELEGRAM_JOIN_URL = "https://t.me/your_channel"  # 실제 텔레그램 링크로 교체
 
+def _get_bg_base64():
+    import base64, os
+    path = os.path.join(os.path.dirname(__file__), "bg.png")
+    if not os.path.exists(path):
+        path = os.path.join(os.path.dirname(__file__), "이미지2.png")
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except:
+        return ""
+
 def page_login():
     gurl = google_auth_url() if GOOGLE_CLIENT_ID else "#"
     kurl = kakao_auth_url()  if KAKAO_CLIENT_ID  else "#"
@@ -378,14 +389,22 @@ def page_login():
   네이버로 계속하기
 </div></a>""" if NAVER_CLIENT_ID else ""
 
+    bg64 = _get_bg_base64()
+    bg_style = (
+        f"background:url('data:image/png;base64,{bg64}') center center/cover no-repeat fixed;"
+        if bg64 else
+        "background:linear-gradient(160deg,#050810 0%,#0d1526 50%,#050810 100%);"
+    )
     st.markdown(f"""
 <style>
   .stApp {{ background: #0a0e1a; }}
   #MainMenu, footer, header {{ visibility: hidden; }}
 </style>
-<div style="min-height:100vh;background:linear-gradient(160deg,#050810 0%,#0d1526 50%,#050810 100%);
-  display:flex;align-items:center;justify-content:center;padding:40px 16px;box-sizing:border-box;">
-<div style="width:100%;max-width:420px;text-align:center;">
+<div style="min-height:100vh;{bg_style}
+  display:flex;align-items:center;justify-content:center;padding:40px 16px;box-sizing:border-box;
+  position:relative;">
+<div style="position:absolute;inset:0;background:rgba(5,8,16,0.55);pointer-events:none"></div>
+<div style="width:100%;max-width:420px;text-align:center;position:relative;z-index:1;">
 
   <!-- 헤드라인 -->
   <div style="font-size:26px;font-weight:800;color:#c9a84c;line-height:1.35;margin-bottom:24px;
@@ -719,6 +738,74 @@ def page_main(user, sub):
         ("중소형주",     "smallmid", "📦"),
         ("PER저평가",    "per",      "💎"),
     ]
+
+    # 팝업 열기 상태
+    popup_key = st.session_state.get("popup_cat", None)
+
+    # 팝업이 열려 있으면 전체화면 오버레이로 종목 리스트 표시
+    if popup_key:
+        cat_info = {k: (n, icon) for n, k, icon in categories}
+        if popup_key in cat_info:
+            popup_name, popup_icon = cat_info[popup_key]
+            popup_stocks = data.get(popup_key, [])
+            col_title, col_close = st.columns([5,1])
+            with col_title:
+                st.markdown(f"""
+<div style="font-size:20px;font-weight:800;color:#e2e8f0;padding:8px 0">
+  {popup_icon} {popup_name}
+  <span style="font-size:14px;color:#64748b;margin-left:8px">{len(popup_stocks)}종목</span>
+</div>""", unsafe_allow_html=True)
+            with col_close:
+                if st.button("✕ 닫기", key="popup_close"):
+                    st.session_state.pop("popup_cat", None)
+                    st.rerun()
+            # 종목 요약 리스트 (팝업 스타일)
+            st.markdown("""
+<div style="background:#0d1520;border:1px solid #1e3a5f;border-radius:14px;padding:12px 16px;margin-bottom:16px">
+""", unsafe_allow_html=True)
+            for s in popup_stocks:
+                n = s.get("name",""); c = s.get("code","")
+                pr = s.get("price",""); ch = s.get("change","")
+                up = s.get("up", True)
+                chg_c = "#ff3b5c" if up else "#4fa3e0"
+                sc = s.get("score",0); gr = s.get("grade","B")
+                grade_colors = {"S":"#ff3b5c","A":"#ff9900","B":"#ffc800","C":"#94a3b8"}
+                gc = grade_colors.get(gr,"#94a3b8")
+                st.markdown(f"""
+<div style="display:flex;justify-content:space-between;align-items:center;
+  padding:10px 0;border-bottom:1px solid #1a2a3a">
+  <div>
+    <span style="font-size:15px;font-weight:700;color:#e2e8f0">{n}</span>
+    <span style="font-size:11px;color:#64748b;margin-left:6px">{c}</span>
+  </div>
+  <div style="text-align:right">
+    <span style="font-size:14px;font-weight:600;color:#e2e8f0">{pr}원</span>
+    <span style="font-size:12px;color:{chg_c};margin-left:6px">{ch}</span>
+    <span style="font-size:11px;color:{gc};background:{gc}22;
+      padding:2px 8px;border-radius:10px;margin-left:8px">{sc}점 {gr}</span>
+  </div>
+</div>""", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            return  # 팝업 보여주는 동안 탭 숨김
+
+    # 카테고리 요약 카드 (갯수 클릭 → 팝업)
+    st.markdown('<div style="margin-bottom:16px">', unsafe_allow_html=True)
+    cols = st.columns(5)
+    for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
+        cnt = len(data.get(cat_key, []))
+        with cols[i]:
+            st.markdown(f"""
+<div style="background:linear-gradient(135deg,#0d1520,#1a2744);border:1px solid #1e3a5f;
+  border-radius:12px;padding:14px 10px;text-align:center;margin-bottom:8px">
+  <div style="font-size:20px">{cat_icon}</div>
+  <div style="font-size:11px;color:#94a3b8;margin:4px 0">{cat_name}</div>
+  <div style="font-size:26px;font-weight:900;color:#00d4ff">{cnt}</div>
+</div>""", unsafe_allow_html=True)
+            if st.button(f"목록 보기", key=f"popup_btn_{cat_key}"):
+                st.session_state["popup_cat"] = cat_key
+                st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
     tab_names = [f"{icon} {name} {len(data.get(key,[]))}" for name, key, icon in categories]
     tabs = st.tabs(tab_names)
 
@@ -732,7 +819,7 @@ def page_main(user, sub):
             _render_stock_list(stocks)
 
 def _render_stock_list(stocks):
-    for s in stocks:
+    for i, s in enumerate(stocks):
         name  = s.get("name","")
         code  = s.get("code","")
         price = s.get("price","")
@@ -746,41 +833,69 @@ def _render_stock_list(stocks):
         stop  = s.get("stop","")
         rr    = s.get("rr","")
         mkt   = s.get("mkt","").upper()
+        vol   = s.get("vol", 0)
+        reasons = s.get("reasons", [])
 
         chg_color = "#ff3b5c" if up else "#4fa3e0"
         grade_colors = {"S":"#ff3b5c","A":"#ff9900","B":"#ffc800","C":"#94a3b8"}
         grade_color = grade_colors.get(grade,"#94a3b8")
-        reasons = s.get("reasons",[])
 
-        reasons_html = ""
-        if reasons:
-            items = "".join(f'<li style="margin:2px 0">{r.get("text","") if isinstance(r,dict) else str(r)}</li>' for r in reasons[:3])
-            reasons_html = f'<ul style="margin:8px 0 0;padding-left:18px;color:#64748b;font-size:12px;line-height:1.8">{items}</ul>'
+        # reasons 분류
+        tech_items, basic_text, ext_text = [], "", ""
+        for r in reasons:
+            txt = r.get("text","") if isinstance(r,dict) else str(r)
+            if "[기본적 분석]" in txt:
+                basic_text = txt.replace("[기본적 분석] ","")
+            elif "[외부요인]" in txt:
+                ext_text = txt.replace("[외부요인] ","")
+            else:
+                tech_items.append(txt)
+
+        tech_html = "".join(f'<li style="margin:3px 0;color:#94a3b8">{t}</li>' for t in tech_items[:3])
+        basic_html = f'<li style="margin:3px 0;color:#60a5fa">▶ [기본적 분석] {basic_text}</li>' if basic_text else ""
+        ext_html   = f'<li style="margin:3px 0;color:#a78bfa">▶ [외부요인] {ext_text}</li>' if ext_text else ""
+        reasons_html = f'<ul style="margin:10px 0 0;padding-left:16px;font-size:12px;line-height:1.9">{tech_html}{basic_html}{ext_html}</ul>' if (tech_html or basic_html or ext_html) else ""
+
+        # 거래대금 배지
+        vol_str = f"{vol:,}억" if vol else ""
 
         st.markdown(f"""
-<div class="stock-card">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+<div class="stock-card" style="margin-bottom:16px;padding:18px 20px;">
+  <!-- 상단: 종목명 + K점수 + 가격 -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
     <div>
-      <span style="font-size:16px;font-weight:700;color:#e2e8f0">{name}</span>
+      <span style="font-size:17px;font-weight:800;color:#e2e8f0">{name}</span>
       <span style="font-size:11px;color:#64748b;margin-left:8px">{code}</span>
-      <span style="font-size:10px;color:#475569;background:#1e2a3a;padding:2px 6px;border-radius:4px;margin-left:6px">{mkt}</span>
+      <span style="font-size:10px;color:#475569;background:#1e2a3a;padding:2px 7px;border-radius:4px;margin-left:6px">{mkt}</span>
     </div>
     <div style="text-align:right">
-      <span style="font-size:20px;font-weight:800;color:#e2e8f0">{price}원</span>
-      <span style="font-size:13px;color:{chg_color};margin-left:6px">{chg}</span>
+      <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
     </div>
   </div>
-  <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">
-    <span style="font-size:12px;color:#94a3b8">K점수 <b style="color:{grade_color}">{score}점({grade})</b></span>
-    <span style="font-size:12px;color:#94a3b8">RSI <b style="color:#e2e8f0">{rsi:.0f}</b></span>
-    <span style="font-size:12px;color:#94a3b8">RR <b style="color:#e2e8f0">{rr}</b></span>
+  <!-- 가격 -->
+  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+    <span style="font-size:28px;font-weight:900;color:#e2e8f0">{price}원</span>
+    <span style="font-size:15px;font-weight:700;color:{chg_color}">{chg}</span>
   </div>
-  <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
-    <span style="font-size:12px;color:#64748b">매입 <b style="color:#e2e8f0">{buy}원</b></span>
-    <span style="font-size:12px;color:#64748b">목표 <b style="color:#ff3b5c">{tgt}원</b></span>
-    <span style="font-size:12px;color:#64748b">손절 <b style="color:#4fa3e0">{stop}원</b></span>
+  <!-- 매입/목표/손절 -->
+  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+    <span style="font-size:13px;color:#64748b">매입가 <b style="color:#e2e8f0">{buy}원</b></span>
+    <span style="color:#334155">·</span>
+    <span style="font-size:13px;color:#64748b">목표가 <b style="color:#ff3b5c">{tgt}원</b></span>
+    <span style="color:#334155">·</span>
+    <span style="font-size:13px;color:#64748b">손절가 <b style="color:#4fa3e0">{stop}원</b></span>
+    <span style="color:#334155">·</span>
+    <span style="font-size:13px;color:#64748b">손익비 <b style="color:#e2e8f0">{rr}</b></span>
   </div>
-  {reasons_html}
+  <!-- 배지 -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <span style="font-size:11px;background:#0f4c35;color:#00ff88;padding:3px 10px;border-radius:12px">{mkt}</span>
+    <span style="font-size:11px;background:#1a2744;color:#60a5fa;padding:3px 10px;border-radius:12px">RR {rr}</span>
+    {"" if not vol_str else f'<span style="font-size:11px;background:#2a1f0a;color:#fb923c;padding:3px 10px;border-radius:12px">거래대금 {vol_str}</span>'}
+    <span style="font-size:11px;background:#1a2744;color:#94a3b8;padding:3px 10px;border-radius:12px">RSI {rsi:.0f}</span>
+  </div>
+  <!-- K 분석 사유 -->
+  {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
 </div>
 """, unsafe_allow_html=True)
 
