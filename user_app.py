@@ -533,26 +533,75 @@ def page_login():
 </div>
 """, unsafe_allow_html=True)
 
+    # 법적고지 전체보기 토글
+    if st.session_state.get("show_legal"):
+        st.markdown("""
+<div style="background:rgba(10,14,26,0.95);border:1px solid #c9a84c44;border-radius:12px;
+  padding:20px;margin-bottom:12px;max-height:320px;overflow-y:auto;text-align:left;">
+<div style="color:#c9a84c;font-size:14px;font-weight:700;margin-bottom:12px;">📋 법적고지 및 이용약관</div>
+
+<div style="color:#8899bb;font-size:12px;line-height:1.9;">
+
+<b style="color:#e2e8f0;">제1조 (서비스 성격)</b><br>
+케이알파(K-ALPHA)는 국내 주식 종목에 대한 <b>투자 참고용 정보</b>를 제공하는 서비스입니다.
+본 서비스의 모든 정보는 투자 권유가 아니며, 단순 참고 자료로만 활용하시기 바랍니다.<br><br>
+
+<b style="color:#e2e8f0;">제2조 (투자 책임)</b><br>
+본 서비스에서 제공하는 종목 분석, 스코어, 매수/목표/손절 가격 등 모든 정보는
+<b style="color:#f87171;">투자 손익에 대한 법적 책임을 지지 않습니다.</b>
+모든 투자 결정과 그에 따른 손익은 전적으로 이용자 본인의 책임입니다.<br><br>
+
+<b style="color:#e2e8f0;">제3조 (유사투자자문업)</b><br>
+본 서비스는 자본시장과 금융투자업에 관한 법률에 따른 투자자문업자가 아닙니다.
+제공되는 정보는 알고리즘 기반 데이터 분석 결과이며, 개인별 맞춤 투자자문이 아닙니다.<br><br>
+
+<b style="color:#e2e8f0;">제4조 (개인정보처리)</b><br>
+회원가입 시 수집되는 이메일, 이름 등의 개인정보는 서비스 제공 목적으로만 사용되며,
+제3자에게 제공되지 않습니다. 회원 탈퇴 시 모든 개인정보는 즉시 삭제됩니다.<br><br>
+
+<b style="color:#e2e8f0;">제5조 (서비스 변경 및 중단)</b><br>
+운영자는 서비스 내용, 가격, 제공 방식 등을 사전 고지 후 변경할 수 있으며,
+불가피한 사유 발생 시 서비스를 일시 중단 또는 종료할 수 있습니다.<br><br>
+
+<b style="color:#e2e8f0;">제6조 (면책조항)</b><br>
+시장 데이터 오류, 시스템 장애, 천재지변 등 불가항력적 사유로 인한 손해에 대해
+운영자는 책임을 지지 않습니다.
+
+</div>
+</div>""", unsafe_allow_html=True)
+        if st.button("▲ 법적고지 닫기", key="hide_legal", use_container_width=True):
+            st.session_state["show_legal"] = False
+            st.rerun()
+    else:
+        if st.button("📋 법적고지 전체 보기", key="show_legal_btn", use_container_width=True):
+            st.session_state["show_legal"] = True
+            st.rerun()
+
     # 법적고지 동의 체크박스
     st.markdown("""<style>
-div[data-testid="stCheckbox"] label p {font-size:12px !important; color:#aabbcc !important;}
-div[data-testid="stCheckbox"] {background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);
-  border-radius:8px;padding:10px 14px;margin-bottom:10px;}
+div[data-testid="stCheckbox"] { margin-bottom:10px; }
+div[data-testid="stCheckbox"] label {
+  background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);
+  border-radius:10px;padding:12px 16px;display:flex;gap:10px;align-items:flex-start; }
+div[data-testid="stCheckbox"] label p {
+  font-size:13px !important; color:#e2e8f0 !important; line-height:1.6 !important; }
+div[data-testid="stCheckbox"] input[type=checkbox] { width:18px;height:18px;accent-color:#c9a84c; }
 </style>""", unsafe_allow_html=True)
 
     agreed = st.checkbox(
-        "**이용약관** 및 **개인정보처리방침**에 동의합니다.  \n"
-        ":gray[본 서비스는 투자 참고용 정보 제공 서비스로, 투자 결과에 대한 책임은 본인에게 있습니다.]",
+        "위 법적고지를 확인하였으며, **이용약관** 및 **개인정보처리방침**에 동의합니다.\n\n"
+        ":gray[투자 결과에 대한 책임은 본인에게 있음을 인지합니다.]",
         key="legal_agree"
     )
 
     if agreed:
         st.markdown(google_btn + kakao_btn + naver_btn, unsafe_allow_html=True)
     else:
-        st.markdown("""<div style="opacity:0.35;pointer-events:none;filter:grayscale(0.5);">"""
+        st.markdown(
+            '<div style="opacity:0.3;pointer-events:none;">'
             + google_btn + kakao_btn + naver_btn +
-            """</div><div style="text-align:center;font-size:12px;color:#64748b;margin-top:6px;">
-            ↑ 위 약관에 동의 후 로그인 가능합니다</div>""",
+            '</div><div style="text-align:center;font-size:12px;color:#64748b;margin-top:8px;">'
+            '위 법적고지 확인 후 체크박스에 동의하면 로그인 가능합니다</div>',
             unsafe_allow_html=True)
 
 # ── 구독/결제 페이지 ──────────────────────────────────────────
