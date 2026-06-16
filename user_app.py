@@ -59,6 +59,7 @@ def _sb(method, path, body=None, params=None):
     url = f"{SUPABASE_URL}/rest/v1/{path}"
     try:
         r = getattr(requests, method)(url, headers=headers, json=body, params=params, timeout=10)
+        if r.status_code == 204: return []          # DELETE 성공 (빈 응답)
         if r.status_code in (200, 201): return r.json()
         st.warning(f"Supabase 오류 [{r.status_code}]: {r.text[:200]}")
         return None
@@ -952,9 +953,23 @@ def admin_panel():
             })
 
         if table:
+            import io
             df = pd.DataFrame(table)
-            st.dataframe(df.drop(columns=["_id"]), use_container_width=True, hide_index=True)
+            display_df = df.drop(columns=["_id"])
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
             st.caption(f"총 {len(df)}명")
+
+            # 엑셀 내보내기
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                display_df.to_excel(writer, index=False, sheet_name="회원목록")
+            st.download_button(
+                "📥 엑셀로 저장",
+                data=buf.getvalue(),
+                file_name=f"kalpha_members_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_members_excel",
+            )
 
             st.markdown("---")
             col_a, col_b = st.columns(2)
@@ -964,16 +979,27 @@ def admin_panel():
                     sb_check_expiry_notify()
                     st.success("알림 발송 완료")
             with col_b:
-                st.markdown("**데이터 초기화 (주의)**")
-                del_pw = st.text_input("삭제 확인 비번", type="password", key="del_pw")
+                st.markdown("**회원 삭제 (주의)**")
+                del_pw   = st.text_input("삭제 확인 비번", type="password", key="del_pw")
                 del_email = st.text_input("삭제할 이메일", key="del_email")
                 if st.button("🗑️ 회원 삭제", key="btn_del_user", type="primary"):
-                    if del_pw == "4545" and del_email:
-                        _sb("delete", f"users?email=eq.{del_email}")
-                        st.success(f"{del_email} 삭제 완료")
-                        st.rerun()
+                    if del_pw != "4545":
+                        st.error("비번 오류")
+                    elif not del_email.strip():
+                        st.error("이메일 미입력")
                     else:
-                        st.error("비번 오류 또는 이메일 미입력")
+                        target = [r for r in table if r["이메일"] == del_email.strip()]
+                        if not target:
+                            st.error("해당 이메일 회원 없음")
+                        else:
+                            uid = target[0]["_id"]
+                            # ON DELETE CASCADE로 subscriptions/payments/tg_join_requests 자동 삭제
+                            result = _sb("delete", "users", params={"id": f"eq.{uid}"})
+                            if result is not None:
+                                st.success(f"✅ {del_email} 삭제 완료")
+                                st.rerun()
+                            else:
+                                st.error("삭제 실패 — Supabase 오류")
         else:
             st.info("회원이 없습니다")
 
@@ -1001,19 +1027,26 @@ def admin_panel():
 
         st.markdown("---")
         st.markdown("**발급된 쿠폰 목록**")
-        crows = _sb("get", "coupons", params={"order":"created_at.desc","limit":"50"})
+        crows = _sb("get", "coupons", params={"order":"created_at.desc","limit":"200"})
         if crows:
-            import pandas as pd
+            import pandas as pd, io
             df_c = pd.DataFrame(crows)[["code","duration_days","max_uses","use_count","created_at","note"]]
             df_c.columns = ["쿠폰코드","기간(일)","최대사용","사용횟수","발급일","메모"]
             df_c["발급일"] = pd.to_datetime(df_c["발급일"]).dt.strftime("%Y-%m-%d")
             st.dataframe(df_c, use_container_width=True, hide_index=True)
+            buf_c = io.BytesIO()
+            with pd.ExcelWriter(buf_c, engine="openpyxl") as w:
+                df_c.to_excel(w, index=False, sheet_name="쿠폰목록")
+            st.download_button("📥 쿠폰 엑셀 저장", data=buf_c.getvalue(),
+                file_name=f"kalpha_coupons_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_coupons_excel")
 
     with tab_payments:
         prows = _sb("get", "payments", params={"order":"created_at.desc","limit":"100",
                     "select":"order_id,amount,plan,status,paid_at,user_id"})
         if prows:
-            import pandas as pd
+            import pandas as pd, io
             df_p = pd.DataFrame(prows)[["order_id","amount","plan","status","paid_at"]]
             df_p.columns = ["주문번호","금액","플랜","상태","결제일"]
             df_p["금액"] = df_p["금액"].apply(lambda x: f"{x:,}원" if x else "")
@@ -1021,6 +1054,13 @@ def admin_panel():
             st.dataframe(df_p, use_container_width=True, hide_index=True)
             done = df_p[df_p["상태"]=="done"]
             st.caption(f"완료 {len(done)}건")
+            buf_p = io.BytesIO()
+            with pd.ExcelWriter(buf_p, engine="openpyxl") as w:
+                df_p.to_excel(w, index=False, sheet_name="결제내역")
+            st.download_button("📥 결제내역 엑셀 저장", data=buf_p.getvalue(),
+                file_name=f"kalpha_payments_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_payments_excel")
         else:
             st.info("결제 내역이 없습니다")
 
