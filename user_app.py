@@ -32,6 +32,7 @@ TG_GROUP2_INVITE  = _s("TG_GROUP2_INVITE")                        # VIP 방2 초
 TG_PERSONAL_CHAT  = _s("TG_PERSONAL_CHAT")                        # 관리자 개인 채팅방
 TG_ADMIN_CHAT     = TG_GROUP1_CHAT
 GIST_ID           = _s("GIST_ID")
+GH_TOKEN          = _s("GH_TOKEN")
 TOSS_CLIENT_KEY   = _s("TOSS_CLIENT_KEY")         # 토스 테스트 클라이언트 키
 TOSS_SECRET_KEY   = _s("TOSS_SECRET_KEY")         # 토스 테스트 시크릿 키
 GOOGLE_CLIENT_ID  = _s("GOOGLE_CLIENT_ID")
@@ -322,8 +323,10 @@ def load_market_data():
 def load_scan_data():
     if not GIST_ID: return None
     try:
+        hdrs = {"Accept": "application/vnd.github.v3+json"}
+        if GH_TOKEN: hdrs["Authorization"] = f"token {GH_TOKEN}"
         r = requests.get(f"https://api.github.com/gists/{GIST_ID}",
-                         headers={"Accept": "application/vnd.github.v3+json"}, timeout=5)
+                         headers=hdrs, timeout=8)
         content = r.json().get("files", {}).get("kalpha_scan.json", {}).get("content", "")
         return json.loads(content) if content else None
     except: return None
