@@ -1156,8 +1156,20 @@ def admin_panel():
                 if _test_id:
                     from datetime import datetime as _dtt, timezone as _tzz, timedelta as _tdd
                     _kst = _dtt.now(_tzz(_tdd(hours=9))).strftime("%Y-%m-%d %H:%M")
-                    _send_tg(_test_id, f"✅ <b>K-ALPHA 관리 알림방 연결 완료</b>\n⏰ {_kst}\n📋 가입·결제·승인·문의 알림이 이 방으로 전송됩니다.")
-                    st.success("테스트 메시지 발송 완료")
+                    try:
+                        _tr = requests.post(
+                            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+                            json={"chat_id": _test_id, "text": f"✅ <b>K-ALPHA 관리 알림방 연결 완료</b>\n⏰ {_kst}", "parse_mode": "HTML"},
+                            timeout=8,
+                        )
+                        _tj = _tr.json()
+                        if _tj.get("ok"):
+                            st.success("✅ 테스트 메시지 발송 완료")
+                        else:
+                            st.error(f"❌ Telegram 오류: {_tj.get('description','알 수 없음')} (code {_tj.get('error_code','')})")
+                            st.caption(f"BOT_TOKEN 앞 10자: {TG_BOT_TOKEN[:10] if TG_BOT_TOKEN else '없음'} | Chat ID: {_test_id}")
+                    except Exception as _te:
+                        st.error(f"❌ 요청 오류: {_te}")
                 else:
                     st.error("Chat ID를 먼저 입력하세요")
         st.caption("시크릿에 TG_MGMT_CHAT을 설정하면 앱 재시작 후에도 유지됩니다.")
