@@ -310,10 +310,42 @@ def inject_css():
 body, .stApp { background: #0a0e1a; color: #e2e8f0; }
 .stApp > header { display: none; }
 [data-testid="stSidebar"] { display: none; }
-/* 버튼 */
+/* 버튼 — 기본 */
 .stButton > button {
-    border-radius: 10px; font-weight: 600; transition: all .2s;
-    border: none; cursor: pointer;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    color: #e2e8f0 !important;
+    background: linear-gradient(135deg, #1e3a5f, #0f2a4a) !important;
+    border: 1px solid #2563a8 !important;
+    padding: 10px 20px;
+    letter-spacing: 0.3px;
+    transition: background .15s, transform .1s, box-shadow .15s !important;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,100,200,.18);
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, #2563a8, #1a4a8a) !important;
+    border-color: #3b82f6 !important;
+    color: #fff !important;
+    box-shadow: 0 4px 18px rgba(37,99,200,.35) !important;
+    transform: translateY(-1px);
+}
+.stButton > button:active {
+    background: linear-gradient(135deg, #00d4ff, #0099cc) !important;
+    color: #0a0e1a !important;
+    border-color: #00d4ff !important;
+    transform: translateY(0px) scale(0.97);
+    box-shadow: 0 0 14px rgba(0,212,255,.5) !important;
+}
+/* primary 버튼 */
+.stButton > button[kind="primary"],
+.stButton > button[data-baseweb="button"] {
+    background: linear-gradient(135deg, #0099cc, #007aaa) !important;
+    border-color: #00d4ff !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #00d4ff, #0099cc) !important;
 }
 /* 소셜 버튼 */
 .social-btn {
