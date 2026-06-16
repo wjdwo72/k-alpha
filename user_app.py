@@ -30,6 +30,7 @@ TG_BOT_TOKEN      = _s("TG_BOT_TOKEN")
 TG_GROUP1_CHAT    = _s("TG_GROUP1_CHAT") or _s("TG_ADMIN_CHAT")  # 관리자 승인 그룹방1
 TG_GROUP2_INVITE  = _s("TG_GROUP2_INVITE")                        # VIP 방2 초대링크 (승인불요)
 TG_PERSONAL_CHAT  = _s("TG_PERSONAL_CHAT")                        # 관리자 개인 채팅방
+TG_MGMT_CHAT      = _s("TG_MGMT_CHAT")                            # 전담 관리 그룹방 (가입/결제/문의/승인)
 TG_ADMIN_CHAT     = TG_GROUP1_CHAT
 GIST_ID           = _s("GIST_ID")
 GH_TOKEN          = _s("GH_TOKEN")
@@ -84,7 +85,7 @@ def sb_upsert_user(email, name, provider, provider_id, avatar=""):
     })
     if res:
         kst = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
-        send_tg_personal(
+        send_tg_mgmt(
             f"🆕 <b>신규 회원가입</b>\n"
             f"👤 {name or '(이름없음)'}\n"
             f"📧 {email}\n"
@@ -152,7 +153,7 @@ def sb_check_expiry_notify():
     for r in rows:
         u = (_sb("get", "users", params={"id": f"eq.{r['user_id']}", "select": "email,name", "limit": "1"}) or [{}])[0]
         exp = r.get("expires_at","")[:10]
-        send_tg_admin(
+        send_tg_mgmt(
             f"⚠️ <b>구독 만료 2일 전 알림</b>\n"
             f"👤 {u.get('name','')} ({u.get('email','')})\n"
             f"📅 만료일: {exp}\n"
@@ -178,12 +179,20 @@ def _send_tg(chat_id, text):
         )
     except: pass
 
+def _get_mgmt_chat():
+    """전담 관리방 ID — 런타임 session_state 설정 우선, 없으면 시크릿"""
+    return st.session_state.get("tg_mgmt_chat_rt") or TG_MGMT_CHAT or TG_PERSONAL_CHAT or TG_ADMIN_CHAT
+
+def send_tg_mgmt(text):
+    """전담 관리 그룹방 발송 (가입/결제/승인/문의)"""
+    _send_tg(_get_mgmt_chat(), text)
+
 def send_tg_admin(text):
-    """그룹방1 + 개인채팅방 동시 발송"""
+    """그룹방1 발송 (하위호환)"""
     _send_tg(TG_ADMIN_CHAT, text)
 
 def send_tg_personal(text):
-    """관리자 개인채팅방 발송 (회원가입·신청 알림)"""
+    """관리자 개인채팅방 발송"""
     _send_tg(TG_PERSONAL_CHAT or TG_ADMIN_CHAT, text)
 
 def sb_save_payment(user_id, order_id, amount, plan, payment_key=None, status="pending", raw=None):
@@ -1124,6 +1133,33 @@ def admin_panel():
                 st.error("비밀번호가 틀렸습니다")
         return
 
+    # ── 전담 관리방 설정 ──────────────────────────────────────────
+    with st.expander("📣 전담 관리 알림방 설정 (가입/결제/승인/문의)", expanded=False):
+        _cur_mgmt = st.session_state.get("tg_mgmt_chat_rt") or TG_MGMT_CHAT or ""
+        _new_mgmt = st.text_input(
+            "텔레그램 관리 그룹방 Chat ID",
+            value=_cur_mgmt,
+            placeholder="-100xxxxxxxxxx",
+            key="inp_mgmt_chat",
+            help="그룹방 ID (- 포함). 새 가입·결제·VIP승인·만료알림이 이 방으로 전송됩니다."
+        )
+        col_sv, col_ts = st.columns([2, 1])
+        with col_sv:
+            if st.button("💾 저장", key="btn_mgmt_save"):
+                st.session_state["tg_mgmt_chat_rt"] = _new_mgmt.strip()
+                st.success(f"저장 완료: {_new_mgmt.strip()}")
+        with col_ts:
+            if st.button("📨 테스트 발송", key="btn_mgmt_test"):
+                _test_id = _new_mgmt.strip() or _get_mgmt_chat()
+                if _test_id:
+                    from datetime import datetime as _dtt, timezone as _tzz, timedelta as _tdd
+                    _kst = _dtt.now(_tzz(_tdd(hours=9))).strftime("%Y-%m-%d %H:%M")
+                    _send_tg(_test_id, f"✅ <b>K-ALPHA 관리 알림방 연결 완료</b>\n⏰ {_kst}\n📋 가입·결제·승인·문의 알림이 이 방으로 전송됩니다.")
+                    st.success("테스트 메시지 발송 완료")
+                else:
+                    st.error("Chat ID를 먼저 입력하세요")
+        st.caption("시크릿에 TG_MGMT_CHAT을 설정하면 앱 재시작 후에도 유지됩니다.")
+
     tab_users, tab_coupons, tab_payments, tab_vip = st.tabs(["회원목록", "쿠폰발급", "결제내역", "VIP텔레그램"])
 
     with tab_users:
@@ -1306,7 +1342,7 @@ def admin_panel():
                                 "status": "approved",
                                 "approved_at": datetime.now(timezone.utc).isoformat()
                             })
-                            send_tg_admin(
+                            send_tg_mgmt(
                                 f"✅ <b>VIP 텔레그램 승인 완료</b>\n"
                                 f"👤 {name} ({email})\n"
                                 f"🎉 VIP 방에 초대해주세요!"
