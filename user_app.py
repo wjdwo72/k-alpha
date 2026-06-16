@@ -516,7 +516,7 @@ async function pay(){{
 </script></body></html>"""
             st.markdown("---")
             st.markdown(f"**{order_name}** 결제를 진행합니다")
-            components.html(toss_html, height=100, scrolling=False)
+            components.html(toss_html, height=600, scrolling=True)
 
             if st.button("← 취소", key="btn_cancel_pay"):
                 del st.session_state["pending_plan"]
