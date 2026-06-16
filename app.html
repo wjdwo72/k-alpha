@@ -6105,12 +6105,13 @@ function applyRealScanData() {
   var scanTs = document.getElementById('scan-ts');
   if (scanTs) scanTs.textContent = scan.ts;
 
-  // DEMO 데이터를 실시간 데이터로 교체 (null 방어)
-  var sw = convertScanCards(scan.swing,    'swing');
-  var su = convertScanCards(scan.surge,    'surge');
-  var tm = convertScanCards(scan.tomorrow, 'tomorrow');
-  var sm = convertScanCards(scan.smallmid, 'smallmid');
-  var pr = convertScanCards(scan.per,      'per');
+  // DEMO 데이터를 실시간 데이터로 교체 — UI_N_CAT 기준으로 슬라이스
+  var _uiN = (window.__UI_N_CAT__ || scan.ui_n_per_cat || 30);
+  var sw = convertScanCards((scan.swing    || []).slice(0, _uiN), 'swing');
+  var su = convertScanCards((scan.surge    || []).slice(0, _uiN), 'surge');
+  var tm = convertScanCards((scan.tomorrow || []).slice(0, _uiN), 'tomorrow');
+  var sm = convertScanCards((scan.smallmid || []).slice(0, _uiN), 'smallmid');
+  var pr = convertScanCards((scan.per      || []).slice(0, _uiN), 'per');
   if (sw.length > 0) DEMO.swing    = sw;
   if (su.length > 0) DEMO.surge    = su;
   if (tm.length > 0) DEMO.tomorrow = tm;
