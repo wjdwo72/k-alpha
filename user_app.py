@@ -26,8 +26,10 @@ def _s(key, default=""):
 
 SUPABASE_URL      = _s("SUPABASE_URL")
 SUPABASE_KEY      = _s("SUPABASE_SERVICE_KEY")   # service_role key (백엔드 전용)
-TG_BOT_TOKEN      = _s("TG_BOT_TOKEN")            # 텔레그램 봇 토큰
-TG_ADMIN_CHAT     = _s("TG_ADMIN_CHAT")           # 관리자 그룹 chat_id
+TG_BOT_TOKEN      = _s("TG_BOT_TOKEN")
+TG_GROUP1_CHAT    = _s("TG_GROUP1_CHAT") or _s("TG_ADMIN_CHAT")  # 관리자 승인 그룹방1
+TG_GROUP2_INVITE  = _s("TG_GROUP2_INVITE")                        # VIP 방2 초대링크
+TG_ADMIN_CHAT     = TG_GROUP1_CHAT
 GIST_ID           = _s("GIST_ID")
 TOSS_CLIENT_KEY   = _s("TOSS_CLIENT_KEY")         # 토스 테스트 클라이언트 키
 TOSS_SECRET_KEY   = _s("TOSS_SECRET_KEY")         # 토스 테스트 시크릿 키
@@ -124,6 +126,26 @@ def sb_use_coupon(code, user_id):
         "use_count": c.get("use_count", 0) + 1,
     })
     return c.get("duration_days", 7), None
+
+def sb_check_expiry_notify():
+    """만료 2일 전 유저 조회 → 관리자 그룹1에 알림"""
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(days=2)).isoformat()
+    tomorrow = (now + timedelta(days=3)).isoformat()
+    rows = _sb("get", "subscriptions", params={
+        "status": "eq.active",
+        "expires_at": f"lt.{soon}",
+        "select": "user_id,expires_at",
+    }) or []
+    for r in rows:
+        u = (_sb("get", "users", params={"id": f"eq.{r['user_id']}", "select": "email,name", "limit": "1"}) or [{}])[0]
+        exp = r.get("expires_at","")[:10]
+        send_tg_admin(
+            f"⚠️ <b>구독 만료 2일 전 알림</b>\n"
+            f"👤 {u.get('name','')} ({u.get('email','')})\n"
+            f"📅 만료일: {exp}\n"
+            f"💡 갱신 안내 필요"
+        )
 
 def sb_get_tg_request(user_id):
     rows = _sb("get", "tg_join_requests", params={"user_id": f"eq.{user_id}", "limit": "1"})
@@ -661,6 +683,13 @@ def page_main(user, sub):
             st.rerun()
     elif tg_req.get("status") == "approved":
         st.success("✅ VIP 텔레그램 참가 승인 완료", icon="✅")
+        if TG_GROUP2_INVITE:
+            st.markdown(f"""
+<a href="{TG_GROUP2_INVITE}" target="_blank" style="text-decoration:none">
+<div style="background:linear-gradient(135deg,#1a2744,#243357);border:1px solid #2a4080;
+  border-radius:10px;padding:14px 20px;text-align:center;color:#fff;font-weight:600;font-size:15px;cursor:pointer;">
+  ✈️ VIP 텔레그램 방 입장하기
+</div></a>""", unsafe_allow_html=True)
     else:
         st.info("⏳ VIP 텔레그램 참가 신청 검토 중입니다.", icon="📨")
 
@@ -763,18 +792,74 @@ def admin_panel():
         st.error("SUPABASE_URL / SUPABASE_SERVICE_KEY 설정 필요")
         return
 
+    # 관리자 비번 확인
+    if not st.session_state.get("admin_auth"):
+        pw = st.text_input("관리자 비밀번호", type="password", key="admin_pw_input")
+        if st.button("확인", key="admin_pw_btn"):
+            if pw == "4545":
+                st.session_state["admin_auth"] = True
+                st.rerun()
+            else:
+                st.error("비밀번호가 틀렸습니다")
+        return
+
     tab_users, tab_coupons, tab_payments, tab_vip = st.tabs(["회원목록", "쿠폰발급", "결제내역", "VIP텔레그램"])
 
     with tab_users:
-        rows = _sb("get", "users", params={"select":"id,email,name,provider,created_at,last_login","order":"created_at.desc","limit":"100"})
-        if rows:
-            import pandas as pd
-            df = pd.DataFrame(rows)[["email","name","provider","created_at","last_login"]]
-            df["created_at"] = pd.to_datetime(df["created_at"]).dt.strftime("%Y-%m-%d %H:%M")
-            df["last_login"] = pd.to_datetime(df["last_login"]).dt.strftime("%Y-%m-%d %H:%M")
-            df.columns = ["이메일","이름","가입방법","가입일","최근접속"]
-            st.dataframe(df, use_container_width=True, hide_index=True)
+        import pandas as pd
+        rows = _sb("get", "users", params={"select":"id,email,name,provider,created_at,last_login","order":"created_at.desc","limit":"100"}) or []
+        subs = _sb("get", "subscriptions", params={"select":"user_id,starts_at,expires_at,status","order":"expires_at.desc","limit":"500"}) or []
+        sub_map = {}
+        for s in subs:
+            uid = s["user_id"]
+            if uid not in sub_map:
+                sub_map[uid] = s
+
+        now = datetime.now(timezone.utc)
+        table = []
+        for u in rows:
+            s = sub_map.get(u["id"], {})
+            exp_str = s.get("expires_at","")[:10] if s else ""
+            start_str = s.get("starts_at","")[:10] if s else ""
+            active = False
+            if exp_str:
+                try:
+                    active = datetime.fromisoformat(s["expires_at"].replace("Z","+00:00")) > now
+                except: pass
+            table.append({
+                "이름": u.get("name",""),
+                "이메일": u.get("email",""),
+                "가입방법": u.get("provider",""),
+                "서비스시작": start_str,
+                "서비스종료": exp_str,
+                "상태": "✅활성" if active else ("⏰만료" if exp_str else "❌없음"),
+                "최근접속": (u.get("last_login","") or "")[:16].replace("T"," "),
+                "_id": u["id"],
+            })
+
+        if table:
+            df = pd.DataFrame(table)
+            st.dataframe(df.drop(columns=["_id"]), use_container_width=True, hide_index=True)
             st.caption(f"총 {len(df)}명")
+
+            st.markdown("---")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown("**만료 2일 전 알림 발송**")
+                if st.button("📢 만료임박 알림 발송", key="btn_notify_expiry"):
+                    sb_check_expiry_notify()
+                    st.success("알림 발송 완료")
+            with col_b:
+                st.markdown("**데이터 초기화 (주의)**")
+                del_pw = st.text_input("삭제 확인 비번", type="password", key="del_pw")
+                del_email = st.text_input("삭제할 이메일", key="del_email")
+                if st.button("🗑️ 회원 삭제", key="btn_del_user", type="primary"):
+                    if del_pw == "4545" and del_email:
+                        _sb("delete", f"users?email=eq.{del_email}")
+                        st.success(f"{del_email} 삭제 완료")
+                        st.rerun()
+                    else:
+                        st.error("비번 오류 또는 이메일 미입력")
         else:
             st.info("회원이 없습니다")
 
@@ -961,6 +1046,16 @@ else:
         if not sub:
             page_subscribe(user)
         else:
+            # 만료 체크
+            try:
+                exp_dt = datetime.fromisoformat(sub["expires_at"].replace("Z","+00:00"))
+                if exp_dt < datetime.now(timezone.utc):
+                    st.session_state.pop("sub", None)
+                    st.warning("구독이 만료되었습니다. 다시 구독해주세요.")
+                    page_subscribe(user)
+                    st.stop()
+            except: pass
+
             # 법적 동의 확인
             if legal is None:
                 legal = sb_check_legal(user["id"])
