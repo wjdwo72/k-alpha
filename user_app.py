@@ -667,13 +667,14 @@ def page_subscribe(user):
         if st.session_state.get("pending_plan"):
             plan   = st.session_state["pending_plan"]
             amount = st.session_state["pending_amount"]
-            order_id = f"kalpha-{user_id[:8]}-{int(time.time())}"
+            # order_id를 세션에 저장해 재렌더링시 중복 생성 방지
+            if "pending_order_id" not in st.session_state:
+                st.session_state["pending_order_id"] = f"kalpha-{user_id[:8]}-{int(time.time())}"
+                sb_save_payment(user_id, st.session_state["pending_order_id"], amount, plan)
+            order_id = st.session_state["pending_order_id"]
             order_name = PLAN_LABEL[plan]
             success_url = f"{APP_URL}?pay_ok=1&plan={plan}"
             fail_url    = f"{APP_URL}?pay_fail=1"
-
-            # DB에 pending 결제 기록
-            sb_save_payment(user_id, order_id, amount, plan)
 
             toss_html = f"""
 <!DOCTYPE html><html><head>
@@ -709,8 +710,9 @@ async function pay(){{
             components.html(toss_html, height=600, scrolling=True)
 
             if st.button("← 취소", key="btn_cancel_pay"):
-                del st.session_state["pending_plan"]
-                del st.session_state["pending_amount"]
+                st.session_state.pop("pending_plan", None)
+                st.session_state.pop("pending_amount", None)
+                st.session_state.pop("pending_order_id", None)
                 st.rerun()
 
     # ── 쿠폰 탭 ──
