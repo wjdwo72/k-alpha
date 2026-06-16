@@ -809,22 +809,25 @@ def page_main(user, sub):
 </div>
 """, unsafe_allow_html=True)
 
-    # ── 스캔 요약 바 ──────────────────────────────────────────
-    cat_raw = {k: len(data.get(k,[])) for k in ["swing","surge","tomorrow","smallmid","per"]}
-    ui_n    = min(int(data.get("ui_n_per_cat", 30)), 30)
+    # ── 스캔 요약 바 (cat_stocks 기준으로 통일) ──────────────────
+    n_sw  = len(cat_stocks.get("swing", []))
+    n_su  = len(cat_stocks.get("surge", []))
+    n_tm  = len(cat_stocks.get("tomorrow", []))
+    n_sm  = len(cat_stocks.get("smallmid", []))
+    n_per = len(cat_stocks.get("per", []))
     st.markdown(f"""
 <div style="font-size:12px;color:#64748b;padding:4px 0 10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
   <span>📡 KOSPI <b style="color:#e2e8f0">{kospi}</b> + KOSDAQ <b style="color:#e2e8f0">{kosdaq}</b>종목 스캔</span>
   <span style="color:#1e3a5f">|</span>
   <span style="color:#00ff88">{ts} 업데이트</span>
   <span style="color:#1e3a5f">|</span>
-  <span>🔴 스윙 <b style="color:#00d4ff">{cat_raw['swing']}</b>
-   ⚡ 급등 <b style="color:#00d4ff">{cat_raw['surge']}</b>
-   🌙 내일 <b style="color:#00d4ff">{cat_raw['tomorrow']}</b>
-   📦 중소형 <b style="color:#00d4ff">{cat_raw['smallmid']}</b>
-   💎 PER <b style="color:#00d4ff">{cat_raw['per']}</b>
+  <span>🔴 스윙 <b style="color:#00d4ff">{n_sw}</b>
+   ⚡ 급등 <b style="color:#00d4ff">{n_su}</b>
+   🌙 내일 <b style="color:#00d4ff">{n_tm}</b>
+   📦 중소형 <b style="color:#00d4ff">{n_sm}</b>
+   💎 PER <b style="color:#00d4ff">{n_per}</b>
   </span>
-  <span style="color:#475569;font-size:11px">· UI표시 {ui_n}개</span>
+  <span style="color:#475569;font-size:11px">· UI표시 최대 {MAX_DISPLAY}개</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -838,7 +841,9 @@ def page_main(user, sub):
     ]
     # 관리자 앱 설정값 우선, 없으면 30 고정
     MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 30)), 30)
-    cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for _, key, _ in categories}
+    # 카테고리별 슬라이스 — per 포함 전체
+    _all_keys = ["swing", "surge", "tomorrow", "smallmid", "per"]
+    cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
 
     # ── 종목 상세 뷰 (팝업 목록에서 클릭 시) ───────────────────
     if st.session_state.get("selected_stock"):
