@@ -521,53 +521,39 @@ def page_login():
     </div></a>
   </div>
 
-  <!-- 로그인 박스 -->
   <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.2);
     border-radius:14px;padding:20px;">
     <div style="font-size:13px;color:#c9a84c;font-weight:600;margin-bottom:4px;">
       당신의 특별한 접근 권한 - 멤버십 인증 후 입장
     </div>
-    <div style="font-size:12px;color:#667788;margin-bottom:16px;">멤버십 가입 및 로그인으로 엑세스</div>
-
-    <!-- 법적고지 동의 -->
-    <div style="margin-bottom:14px;padding:12px;background:rgba(0,0,0,0.2);
-      border-radius:8px;border:1px solid rgba(255,255,255,0.08);">
-      <label id="legal-label" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-align:left;">
-        <input type="checkbox" id="legal-chk" onchange="toggleLogin(this.checked)"
-          style="width:18px;height:18px;margin-top:2px;accent-color:#c9a84c;cursor:pointer;flex-shrink:0;">
-        <span style="font-size:12px;color:#aabbcc;line-height:1.6;">
-          <a href="https://kalpha.notion.site" target="_blank"
-            style="color:#c9a84c;text-decoration:underline;">이용약관</a> 및
-          <a href="https://kalpha.notion.site" target="_blank"
-            style="color:#c9a84c;text-decoration:underline;">개인정보처리방침</a>에 동의합니다.<br>
-          <span style="color:#64748b;font-size:11px;">본 서비스는 투자 참고용 정보 제공 서비스로
-          투자 결과에 대한 책임은 본인에게 있습니다.</span>
-        </span>
-      </label>
-    </div>
-
-    <div id="login-btns" style="opacity:0.3;pointer-events:none;transition:all 0.3s;">
-      {google_btn}
-      {kakao_btn}
-      {naver_btn}
-    </div>
+    <div style="font-size:12px;color:#667788;margin-bottom:14px;">멤버십 가입 및 로그인으로 엑세스</div>
   </div>
 
 </div>
 </div>
-<script>
-function toggleLogin(checked) {{
-  var el = document.getElementById('login-btns');
-  if (checked) {{
-    el.style.opacity = '1';
-    el.style.pointerEvents = 'auto';
-  }} else {{
-    el.style.opacity = '0.3';
-    el.style.pointerEvents = 'none';
-  }}
-}}
-</script>
 """, unsafe_allow_html=True)
+
+    # 법적고지 동의 체크박스
+    st.markdown("""<style>
+div[data-testid="stCheckbox"] label p {font-size:12px !important; color:#aabbcc !important;}
+div[data-testid="stCheckbox"] {background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);
+  border-radius:8px;padding:10px 14px;margin-bottom:10px;}
+</style>""", unsafe_allow_html=True)
+
+    agreed = st.checkbox(
+        "**이용약관** 및 **개인정보처리방침**에 동의합니다.  \n"
+        ":gray[본 서비스는 투자 참고용 정보 제공 서비스로, 투자 결과에 대한 책임은 본인에게 있습니다.]",
+        key="legal_agree"
+    )
+
+    if agreed:
+        st.markdown(google_btn + kakao_btn + naver_btn, unsafe_allow_html=True)
+    else:
+        st.markdown("""<div style="opacity:0.35;pointer-events:none;filter:grayscale(0.5);">"""
+            + google_btn + kakao_btn + naver_btn +
+            """</div><div style="text-align:center;font-size:12px;color:#64748b;margin-top:6px;">
+            ↑ 위 약관에 동의 후 로그인 가능합니다</div>""",
+            unsafe_allow_html=True)
 
 # ── 구독/결제 페이지 ──────────────────────────────────────────
 def page_subscribe(user):
