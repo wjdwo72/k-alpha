@@ -293,55 +293,100 @@ input[type=text] { border-radius: 8px !important; }
 """, unsafe_allow_html=True)
 
 # ── 로그인 페이지 ──────────────────────────────────────────────
+TELEGRAM_JOIN_URL = "https://t.me/your_channel"  # 실제 텔레그램 링크로 교체
+
 def page_login():
-    st.markdown("""
-<div style="max-width:420px;margin:60px auto 0;text-align:center">
-<div style="font-size:42px;font-weight:900;letter-spacing:-1px;margin-bottom:4px">
-  <span style="color:#00d4ff">K</span>·<span style="color:#fff">ALPHA</span>
+    gurl = google_auth_url() if GOOGLE_CLIENT_ID else "#"
+    kurl = kakao_auth_url()  if KAKAO_CLIENT_ID  else "#"
+    nurl = naver_auth_url()  if NAVER_CLIENT_ID   else "#"
+
+    google_btn = f"""
+<a href="{gurl}" style="text-decoration:none;display:block;margin-top:10px">
+<div style="display:flex;align-items:center;justify-content:center;gap:12px;
+  background:#fff;color:#3c4043;border-radius:8px;padding:14px 20px;
+  font-size:16px;font-weight:600;cursor:pointer;border:none;width:100%;box-sizing:border-box;">
+  <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.86L38.53 6C34.46 2.29 29.52 0 24 0 14.62 0 6.51 5.56 2.69 13.65l7.37 5.72C11.95 13.02 17.51 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.48 0-11.97-4.37-13.93-10.26l-7.98 6.19C6.51 42.44 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+  Google로 계속하기
+</div></a>""" if GOOGLE_CLIENT_ID else ""
+
+    kakao_btn = f"""
+<a href="{kurl}" style="text-decoration:none;display:block;margin-top:10px">
+<div style="display:flex;align-items:center;justify-content:center;gap:12px;
+  background:#FEE500;color:#3A1D1D;border-radius:8px;padding:14px 20px;
+  font-size:16px;font-weight:600;cursor:pointer;width:100%;box-sizing:border-box;">
+  <svg width="22" height="22" viewBox="0 0 24 24"><path fill="#3A1D1D" d="M12 3C6.48 3 2 6.58 2 11c0 2.79 1.65 5.24 4.13 6.76L5.25 21l4.05-2.16c.88.21 1.77.16 2.7.16 5.52 0 10-3.58 10-8S17.52 3 12 3z"/></svg>
+  카카오로 계속하기
+</div></a>""" if KAKAO_CLIENT_ID else ""
+
+    naver_btn = f"""
+<a href="{nurl}" style="text-decoration:none;display:block;margin-top:10px">
+<div style="display:flex;align-items:center;justify-content:center;gap:12px;
+  background:#03C75A;color:#fff;border-radius:8px;padding:14px 20px;
+  font-size:16px;font-weight:600;cursor:pointer;width:100%;box-sizing:border-box;">
+  <span style="font-size:20px;font-weight:900;line-height:1">N</span>
+  네이버로 계속하기
+</div></a>""" if NAVER_CLIENT_ID else ""
+
+    st.markdown(f"""
+<style>
+  .stApp {{ background: #0a0e1a; }}
+  #MainMenu, footer, header {{ visibility: hidden; }}
+</style>
+<div style="min-height:100vh;background:linear-gradient(160deg,#050810 0%,#0d1526 50%,#050810 100%);
+  display:flex;align-items:center;justify-content:center;padding:40px 16px;box-sizing:border-box;">
+<div style="width:100%;max-width:420px;text-align:center;">
+
+  <!-- 헤드라인 -->
+  <div style="font-size:26px;font-weight:800;color:#c9a84c;line-height:1.35;margin-bottom:24px;
+    text-shadow:0 0 20px rgba(201,168,76,0.4);">
+    단 한 번의 투자로<br>1%의 엘리트에 합류하세요.
+  </div>
+
+  <!-- 로고 -->
+  <div style="margin-bottom:6px;">
+    <span style="font-size:32px;font-weight:900;letter-spacing:2px;
+      background:linear-gradient(135deg,#c9a84c,#f5d98b,#c9a84c);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+      케이·알파
+    </span>
+  </div>
+  <div style="font-size:15px;font-weight:700;color:#8899bb;letter-spacing:4px;margin-bottom:4px;">K-ALPHA</div>
+  <div style="display:inline-block;border:1px solid #c9a84c44;border-radius:20px;
+    padding:3px 14px;font-size:12px;color:#c9a84c;margin-bottom:28px;">국내 주식 공유</div>
+
+  <!-- 텔레그램 박스 -->
+  <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.25);
+    border-radius:14px;padding:20px;margin-bottom:20px;">
+    <div style="font-size:14px;color:#aabbcc;line-height:1.6;margin-bottom:16px;">
+      최신 정보 및 특별 혜택을 위한<br>
+      <span style="color:#f5d98b;font-weight:600;">텔레그램 프리미엄 공유방</span>에 참여하세요
+    </div>
+    <a href="{TELEGRAM_JOIN_URL}" target="_blank" style="text-decoration:none;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;
+      background:linear-gradient(135deg,#1a2744,#243357);
+      border:1px solid #2a4080;border-radius:10px;padding:14px;cursor:pointer;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="#29B6F6">
+        <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+      </svg>
+      <span style="color:#fff;font-size:15px;font-weight:600;">참여 신청</span>
+    </div></a>
+  </div>
+
+  <!-- 로그인 박스 -->
+  <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.2);
+    border-radius:14px;padding:20px;">
+    <div style="font-size:13px;color:#c9a84c;font-weight:600;margin-bottom:4px;">
+      당신의 특별한 접근 권한 - 멤버십 인증 후 입장
+    </div>
+    <div style="font-size:12px;color:#667788;margin-bottom:16px;">멤버십 가입 및 로그인으로 엑세스</div>
+    {google_btn}
+    {kakao_btn}
+    {naver_btn}
+  </div>
+
 </div>
-<div style="color:#64748b;font-size:14px;margin-bottom:40px">국내 실시간 주식 스캐너</div>
 </div>
 """, unsafe_allow_html=True)
-
-    col = st.columns([1, 2, 1])[1]
-    with col:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<p style="text-align:center;font-size:16px;font-weight:600;margin-bottom:20px">로그인 / 회원가입</p>', unsafe_allow_html=True)
-
-        # Google
-        if GOOGLE_CLIENT_ID:
-            gurl = google_auth_url()
-            st.markdown(f"""
-<a href="{gurl}" style="text-decoration:none">
-<div class="social-btn btn-google">
-  <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.86L38.53 6C34.46 2.29 29.52 0 24 0 14.62 0 6.51 5.56 2.69 13.65l7.37 5.72C11.95 13.02 17.51 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.48 0-11.97-4.37-13.93-10.26l-7.98 6.19C6.51 42.44 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
-  Google로 계속하기
-</div></a>""", unsafe_allow_html=True)
-
-        # 카카오
-        if KAKAO_CLIENT_ID:
-            kurl = kakao_auth_url()
-            st.markdown(f"""
-<a href="{kurl}" style="text-decoration:none">
-<div class="social-btn btn-kakao">
-  <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#3A1D1D" d="M12 3C6.48 3 2 6.58 2 11c0 2.79 1.65 5.24 4.13 6.76L5.25 21l4.05-2.16c.88.21 1.77.16 2.7.16 5.52 0 10-3.58 10-8S17.52 3 12 3z"/></svg>
-  카카오로 계속하기
-</div></a>""", unsafe_allow_html=True)
-
-        # 네이버
-        if NAVER_CLIENT_ID:
-            nurl = naver_auth_url()
-            st.markdown(f"""
-<a href="{nurl}" style="text-decoration:none">
-<div class="social-btn btn-naver">
-  <span style="font-size:18px;font-weight:900">N</span>
-  네이버로 계속하기
-</div></a>""", unsafe_allow_html=True)
-
-        if not any([GOOGLE_CLIENT_ID, KAKAO_CLIENT_ID, NAVER_CLIENT_ID]):
-            st.info("OAuth 설정이 필요합니다. Streamlit secrets에 클라이언트 키를 입력하세요.", icon="⚙️")
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ── 구독/결제 페이지 ──────────────────────────────────────────
 def page_subscribe(user):
