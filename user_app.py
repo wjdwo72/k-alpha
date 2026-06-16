@@ -58,8 +58,11 @@ def _sb(method, path, body=None, params=None):
     try:
         r = getattr(requests, method)(url, headers=headers, json=body, params=params, timeout=10)
         if r.status_code in (200, 201): return r.json()
+        st.warning(f"Supabase 오류 [{r.status_code}]: {r.text[:200]}")
         return None
-    except: return None
+    except Exception as e:
+        st.warning(f"Supabase 예외: {e}")
+        return None
 
 def sb_upsert_user(email, name, provider, provider_id, avatar=""):
     """유저 없으면 생성, 있으면 last_login 갱신"""
