@@ -290,6 +290,33 @@ def toss_confirm(payment_key, order_id, amount):
     )
     return r.json()
 
+# ── 시장 지표 (야후 파이낸스 무료) ────────────────────────────
+@st.cache_data(ttl=180, show_spinner=False)
+def load_market_data():
+    """KOSPI, NASDAQ, USD/KRW, S&P500, VIX 등 무료 API로 가져오기"""
+    tickers = {
+        "KOSPI":  "^KS11",
+        "NASDAQ": "^IXIC",
+        "S&P500": "^GSPC",
+        "VIX":    "^VIX",
+        "USD/KRW":"KRW=X",
+        "WTI":    "CL=F",
+    }
+    result = {}
+    for label, sym in tickers.items():
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=2d"
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4)
+            meta = r.json()["chart"]["result"][0]["meta"]
+            price  = meta.get("regularMarketPrice", 0)
+            prev   = meta.get("chartPreviousClose") or meta.get("previousClose", price)
+            change = price - prev
+            pct    = (change / prev * 100) if prev else 0
+            result[label] = {"price": price, "change": change, "pct": pct}
+        except:
+            result[label] = {"price": 0, "change": 0, "pct": 0}
+    return result
+
 # ── Gist 스캔 데이터 ───────────────────────────────────────────
 @st.cache_data(ttl=120, show_spinner=False)
 def load_scan_data():
@@ -756,10 +783,48 @@ def page_main(user, sub):
     kospi  = data.get("kospi_n", 0)
     kosdaq = data.get("kosdaq_n", 0)
 
+    # ── 시장 지표 바 ──────────────────────────────────────────
+    mkt = load_market_data()
+    def _mfmt(label, d, fmt="{:.2f}", prefix="", suffix=""):
+        p = d.get("price", 0); pc = d.get("pct", 0)
+        col = "#ff3b5c" if pc >= 0 else "#4fa3e0"
+        sign = "+" if pc >= 0 else ""
+        ps = fmt.format(p)
+        return (f'<span style="color:#94a3b8;font-size:11px">{label}</span> '
+                f'<b style="color:#e2e8f0">{prefix}{ps}{suffix}</b> '
+                f'<span style="color:{col};font-size:11px">{sign}{pc:.2f}%</span>')
+
+    mkt_html = " &nbsp;·&nbsp; ".join([
+        _mfmt("KOSPI",  mkt.get("KOSPI",{}),  "{:,.1f}"),
+        _mfmt("NASDAQ", mkt.get("NASDAQ",{}), "{:,.0f}"),
+        _mfmt("S&P500", mkt.get("S&P500",{}), "{:,.1f}"),
+        _mfmt("VIX",    mkt.get("VIX",{}),    "{:.1f}"),
+        _mfmt("USD/KRW",mkt.get("USD/KRW",{}),"{:,.1f}", suffix="원"),
+        _mfmt("WTI",    mkt.get("WTI",{}),    "{:.1f}", prefix="$"),
+    ])
     st.markdown(f"""
-<div style="font-size:12px;color:#64748b;padding:4px 0 12px">
-  📡 KOSPI {kospi} + KOSDAQ {kosdaq}종목 스캔 ·
+<div style="background:#0d1520;border:1px solid #1e2a3a;border-radius:10px;
+  padding:10px 16px;margin-bottom:10px;overflow-x:auto;white-space:nowrap;font-size:13px">
+  {mkt_html}
+</div>
+""", unsafe_allow_html=True)
+
+    # ── 스캔 요약 바 ──────────────────────────────────────────
+    cat_raw = {k: len(data.get(k,[])) for k in ["swing","surge","tomorrow","smallmid","per"]}
+    ui_n    = min(int(data.get("ui_n_per_cat", 30)), 30)
+    st.markdown(f"""
+<div style="font-size:12px;color:#64748b;padding:4px 0 10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+  <span>📡 KOSPI <b style="color:#e2e8f0">{kospi}</b> + KOSDAQ <b style="color:#e2e8f0">{kosdaq}</b>종목 스캔</span>
+  <span style="color:#1e3a5f">|</span>
   <span style="color:#00ff88">{ts} 업데이트</span>
+  <span style="color:#1e3a5f">|</span>
+  <span>🔴 스윙 <b style="color:#00d4ff">{cat_raw['swing']}</b>
+   ⚡ 급등 <b style="color:#00d4ff">{cat_raw['surge']}</b>
+   🌙 내일 <b style="color:#00d4ff">{cat_raw['tomorrow']}</b>
+   📦 중소형 <b style="color:#00d4ff">{cat_raw['smallmid']}</b>
+   💎 PER <b style="color:#00d4ff">{cat_raw['per']}</b>
+  </span>
+  <span style="color:#475569;font-size:11px">· UI표시 {ui_n}개</span>
 </div>
 """, unsafe_allow_html=True)
 

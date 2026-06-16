@@ -3023,7 +3023,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
         _ui_n = st.slider("📊 UI 카테고리당 종목 수", min_value=1, max_value=20,
             value=st.session_state.get('ui_n_per_cat', 10), key="sl_ui_n")
         st.session_state['ui_n_per_cat'] = _ui_n
-        st.caption(f"현재 설정: 카테고리당 {_ui_n}개 표시 (실시간 스윙 / 급등전야 / 내일관심 / 중소형주)")
+        st.caption(f"현재 설정: 카테고리당 {_ui_n}개 표시 (실시간 스윙 / 급등전야 / 내일관심 / 중소형주 / 💎PER저평가)")
 
     # ── 🤖 Google AI Studio (Gemini) ──────────────────────────────
     with st.expander("🤖 Google AI 분석 설정 (Gemini)", expanded=False):
@@ -3353,7 +3353,7 @@ if _gist_active or st.session_state.kis_token:
         _all_cards = (gist_data.get('swing',[]) + gist_data.get('surge',[]) +
                       gist_data.get('smallmid',[]) + gist_data.get('tomorrow',[]))
         all_stocks = []   # Gist 모드에서는 개별 종목 리스트 없음 — 카드 데이터를 직접 사용
-        cats       = {k: gist_data.get(k, []) for k in ['swing','surge','tomorrow','smallmid']}
+        cats       = {k: gist_data.get(k, []) for k in ['swing','surge','tomorrow','smallmid','per']}
         kospi_stocks  = [{}] * kospi_n   # 개수만 표시용
         kosdaq_stocks = [{}] * kosdaq_n
         # ── Gist 경로 scan_json 세팅 (NULL 버그 수정) ──
