@@ -26,6 +26,8 @@ def _s(key, default=""):
 
 SUPABASE_URL      = _s("SUPABASE_URL")
 SUPABASE_KEY      = _s("SUPABASE_SERVICE_KEY")   # service_role key (백엔드 전용)
+TG_BOT_TOKEN      = _s("TG_BOT_TOKEN")            # 텔레그램 봇 토큰
+TG_ADMIN_CHAT     = _s("TG_ADMIN_CHAT")           # 관리자 그룹 chat_id
 GIST_ID           = _s("GIST_ID")
 TOSS_CLIENT_KEY   = _s("TOSS_CLIENT_KEY")         # 토스 테스트 클라이언트 키
 TOSS_SECRET_KEY   = _s("TOSS_SECRET_KEY")         # 토스 테스트 시크릿 키
@@ -119,6 +121,27 @@ def sb_use_coupon(code, user_id):
         "use_count": c.get("use_count", 0) + 1,
     })
     return c.get("duration_days", 7), None
+
+def sb_get_tg_request(user_id):
+    rows = _sb("get", "tg_join_requests", params={"user_id": f"eq.{user_id}", "limit": "1"})
+    return rows[0] if rows else None
+
+def sb_create_tg_request(user_id):
+    return _sb("post", "tg_join_requests", body={
+        "user_id": str(user_id), "status": "pending",
+        "requested_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+def send_tg_admin(text):
+    if not TG_BOT_TOKEN or not TG_ADMIN_CHAT:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+            json={"chat_id": TG_ADMIN_CHAT, "text": text, "parse_mode": "HTML"},
+            timeout=5,
+        )
+    except: pass
 
 def sb_save_payment(user_id, order_id, amount, plan, payment_key=None, status="pending", raw=None):
     if status == "done":
@@ -609,6 +632,35 @@ def page_main(user, sub):
             for k in ["user","sub","legal"]:
                 st.session_state.pop(k, None)
             st.rerun()
+
+    # VIP 텔레그램 참가 신청
+    tg_req = sb_get_tg_request(user["id"])
+    if not tg_req:
+        st.markdown("""
+<div style="background:linear-gradient(135deg,#1a2744,#243357);border:1px solid #2a4080;
+  border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;
+  align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div>
+    <div style="color:#f5d98b;font-weight:700;font-size:15px;">📢 VIP 텔레그램 공유방</div>
+    <div style="color:#8899bb;font-size:13px;margin-top:2px;">실시간 종목 알림 · 프리미엄 정보 공유</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+        if st.button("✈️ VIP 텔레그램 참가 신청", key="btn_tg_join", type="primary"):
+            sb_create_tg_request(user["id"])
+            send_tg_admin(
+                f"🔔 <b>VIP 텔레그램 참가 신청</b>\n"
+                f"👤 이름: {user.get('name','(없음)')}\n"
+                f"📧 이메일: {user.get('email','')}\n"
+                f"📦 플랜: {sub.get('plan','')}\n"
+                f"⏰ 신청 시각: {datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M')}"
+            )
+            st.success("신청 완료! 관리자 확인 후 초대 링크를 보내드립니다.")
+            st.rerun()
+    elif tg_req.get("status") == "approved":
+        st.success("✅ VIP 텔레그램 참가 승인 완료", icon="✅")
+    else:
+        st.info("⏳ VIP 텔레그램 참가 신청 검토 중입니다.", icon="📨")
 
     # 스캔 데이터 로드
     data = load_scan_data()
