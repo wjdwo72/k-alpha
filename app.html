@@ -6118,11 +6118,11 @@ function applyRealScanData() {
   if (pr.length > 0) DEMO.per      = pr;
   else if (!DEMO.per) DEMO.per     = [];
 
-  // 배지 직접 업데이트
-  var _smBadge = document.querySelector('#tabs-kr [data-tab="smallmid"] .tab-badge');
-  if (_smBadge) _smBadge.textContent = DEMO.smallmid.length;
-  var _perBadge = document.getElementById('badge-per');
-  if (_perBadge) _perBadge.textContent = (DEMO.per || []).length;
+  // 배지 직접 업데이트 — 전체 카테고리
+  ['swing','surge','tomorrow','smallmid','per'].forEach(function(cat) {
+    var el = document.querySelector('#tabs-kr [data-tab="' + cat + '"] .tab-badge');
+    if (el) el.textContent = (DEMO[cat] || []).length;
+  });
 
   renderCards();
 

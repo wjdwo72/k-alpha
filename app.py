@@ -3725,7 +3725,7 @@ if _gist_active or st.session_state.kis_token:
     scan_result['session_label'] = SESSION_SHORT.get(_dm_sess, '')
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
 📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl}<br>
-🔍 실시간스윙 {len(cats['swing'])}개 · 급등전야 {len(cats['surge'])}개 · 내일관심 {len(cats['tomorrow'])}개 · 중소형주 {len(cats['smallmid'])}개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
+🔍 실시간스윙 {len(scan_result.get('swing',[]))}개 · 급등전야 {len(scan_result.get('surge',[]))}개 · 내일관심 {len(scan_result.get('tomorrow',[]))}개 · 중소형주 {len(scan_result.get('smallmid',[]))}개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
 </div>""", unsafe_allow_html=True)
 
 # ════ 6. HTML 터미널 ════
