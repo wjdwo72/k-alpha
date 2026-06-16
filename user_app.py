@@ -861,7 +861,7 @@ if provider and code:
                 st.query_params.clear()
                 st.rerun()
             else:
-                st.error("계정 생성 실패. 잠시 후 다시 시도해주세요.")
+                st.error(f"계정 생성 실패. URL={SUPABASE_URL[:30] if SUPABASE_URL else '없음'} KEY={'있음' if SUPABASE_KEY else '없음'}")
         else:
             st.error("소셜 계정 정보를 가져올 수 없습니다.")
 
