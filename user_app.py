@@ -783,6 +783,11 @@ def page_main(user, sub):
     kospi  = data.get("kospi_n", 0)
     kosdaq = data.get("kosdaq_n", 0)
 
+    # cat_stocks / MAX_DISPLAY — 시장 지표보다 먼저 정의
+    _all_keys = ["swing", "surge", "tomorrow", "smallmid", "per"]
+    MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 30)), 30)
+    cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
+
     # ── 시장 지표 바 ──────────────────────────────────────────
     mkt = load_market_data()
     def _mfmt(label, d, fmt="{:.2f}", prefix="", suffix=""):
@@ -839,12 +844,6 @@ def page_main(user, sub):
         ("중소형주",     "smallmid", "📦"),
         ("PER저평가",    "per",      "💎"),
     ]
-    # 관리자 앱 설정값 우선, 없으면 30 고정
-    MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 30)), 30)
-    # 카테고리별 슬라이스 — per 포함 전체
-    _all_keys = ["swing", "surge", "tomorrow", "smallmid", "per"]
-    cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
-
     # ── 종목 상세 뷰 (팝업 목록에서 클릭 시) ───────────────────
     if st.session_state.get("selected_stock"):
         sel = st.session_state["selected_stock"]
