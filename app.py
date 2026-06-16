@@ -3020,10 +3020,47 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
 
         st.divider()
         st.markdown("**🖥️ UI 화면 카테고리당 표시 종목 수**")
-        _ui_n = st.slider("📊 UI 카테고리당 종목 수", min_value=1, max_value=20,
+        _ui_n = st.slider("📊 UI 카테고리당 종목 수", min_value=1, max_value=30,
             value=st.session_state.get('ui_n_per_cat', 10), key="sl_ui_n")
         st.session_state['ui_n_per_cat'] = _ui_n
         st.caption(f"현재 설정: 카테고리당 {_ui_n}개 표시 (실시간 스윙 / 급등전야 / 내일관심 / 중소형주 / 💎PER저평가)")
+
+        # 설정값 즉시 Gist 반영 버튼
+        if st.button("💾 Gist에 설정 저장 (유저앱 즉시 반영)", key="btn_save_ui_n"):
+            _gid_ui = _get_secret('GIST_ID')
+            _ght_ui = _get_secret('GH_TOKEN')
+            if not _gid_ui or not _ght_ui:
+                st.error("GIST_ID 또는 GH_TOKEN 시크릿 없음")
+            else:
+                try:
+                    # 현재 Gist 데이터 읽기
+                    _gr = requests.get(
+                        f"https://api.github.com/gists/{_gid_ui}",
+                        headers={'Authorization': f'token {_ght_ui}',
+                                 'Accept': 'application/vnd.github.v3+json'}, timeout=8)
+                    _cur = {}
+                    if _gr.status_code == 200:
+                        _raw = _gr.json().get("files",{}).get("kalpha_scan.json",{}).get("content","")
+                        if _raw:
+                            _cur = json.loads(_raw)
+                    # ui_n_per_cat 업데이트 + 각 카테고리 슬라이스
+                    _cur['ui_n_per_cat'] = _ui_n
+                    for _k in ['swing','surge','tomorrow','smallmid','per']:
+                        if _k in _cur:
+                            _cur[_k] = _cur[_k][:_ui_n]
+                    _pw = requests.patch(
+                        f"https://api.github.com/gists/{_gid_ui}",
+                        headers={'Authorization': f'token {_ght_ui}',
+                                 'Accept': 'application/vnd.github.v3+json'},
+                        json={"files": {"kalpha_scan.json": {"content": json.dumps(_cur, ensure_ascii=False)}}},
+                        timeout=10)
+                    if _pw.status_code == 200:
+                        fetch_gist_scan.clear()
+                        st.success(f"✅ Gist 저장 완료 — 카테고리당 {_ui_n}개 설정 반영")
+                    else:
+                        st.error(f"Gist 저장 실패: {_pw.status_code}")
+                except Exception as _e:
+                    st.error(f"오류: {_e}")
 
     # ── 🤖 Google AI Studio (Gemini) ──────────────────────────────
     with st.expander("🤖 Google AI 분석 설정 (Gemini)", expanded=False):

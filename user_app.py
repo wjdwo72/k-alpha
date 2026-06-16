@@ -785,7 +785,7 @@ def page_main(user, sub):
 
     # cat_stocks / MAX_DISPLAY — 시장 지표보다 먼저 정의
     _all_keys = ["swing", "surge", "tomorrow", "smallmid", "per"]
-    MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 30)), 30)
+    MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 10)), 30)
     cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
 
     # ── 시장 지표 바 ──────────────────────────────────────────
