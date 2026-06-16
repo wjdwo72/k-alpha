@@ -684,12 +684,13 @@ def page_main(user, sub):
 
     # 카테고리 탭
     categories = [
-        ("○ 실시간 스윙주", "swing",    "🔴"),
-        ("◆ 급등 전야",    "surge",    "⚡"),
-        ("● 내일 관심주",  "tomorrow", "🌙"),
-        ("♦ 중소형주",     "smallmid", "📦"),
+        ("실시간 스윙주", "swing",    "🔴"),
+        ("급등 전야",    "surge",    "⚡"),
+        ("내일 관심주",  "tomorrow", "🌙"),
+        ("중소형주",     "smallmid", "📦"),
+        ("PER저평가",    "per",      "💎"),
     ]
-    tab_names = [f"{icon} {name}  {len(data.get(key,[]))}" for name, key, icon in categories]
+    tab_names = [f"{icon} {name} {len(data.get(key,[]))}" for name, key, icon in categories]
     tabs = st.tabs(tab_names)
 
     for idx, (tab, (cat_name, cat_key, cat_icon)) in enumerate(zip(tabs, categories)):
@@ -762,7 +763,7 @@ def admin_panel():
         st.error("SUPABASE_URL / SUPABASE_SERVICE_KEY 설정 필요")
         return
 
-    tab_users, tab_coupons, tab_payments = st.tabs(["회원목록", "쿠폰발급", "결제내역"])
+    tab_users, tab_coupons, tab_payments, tab_vip = st.tabs(["회원목록", "쿠폰발급", "결제내역", "VIP텔레그램"])
 
     with tab_users:
         rows = _sb("get", "users", params={"select":"id,email,name,provider,created_at,last_login","order":"created_at.desc","limit":"100"})
@@ -823,6 +824,54 @@ def admin_panel():
             st.caption(f"완료 {len(done)}건")
         else:
             st.info("결제 내역이 없습니다")
+
+    with tab_vip:
+        st.markdown("**VIP 텔레그램 참가 신청 목록**")
+        vrows = _sb("get", "tg_join_requests", params={
+            "select": "id,user_id,status,requested_at",
+            "order": "requested_at.desc", "limit": "100"
+        })
+        if not vrows:
+            st.info("신청 내역이 없습니다")
+        else:
+            import pandas as pd
+            # 유저 이메일 조회
+            user_ids = [r["user_id"] for r in vrows]
+            urows = _sb("get", "users", params={"select": "id,email,name", "limit": "200"}) or []
+            uid_map = {u["id"]: u for u in urows}
+
+            for r in vrows:
+                u = uid_map.get(r["user_id"], {})
+                email = u.get("email", r["user_id"][:8])
+                name  = u.get("name", "")
+                status = r.get("status", "pending")
+                req_at = r.get("requested_at", "")[:16].replace("T", " ")
+                status_badge = "✅ 승인됨" if status == "approved" else "⏳ 대기중"
+
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.markdown(f"**{name}** `{email}`  \n신청: {req_at}")
+                with col2:
+                    st.markdown(status_badge)
+                with col3:
+                    if status == "pending":
+                        if st.button("✅ 승인", key=f"vip_approve_{r['id']}"):
+                            _sb("patch", f"tg_join_requests?id=eq.{r['id']}", body={
+                                "status": "approved",
+                                "approved_at": datetime.now(timezone.utc).isoformat()
+                            })
+                            send_tg_admin(
+                                f"✅ <b>VIP 텔레그램 승인 완료</b>\n"
+                                f"👤 {name} ({email})\n"
+                                f"🎉 VIP 방에 초대해주세요!"
+                            )
+                            st.success(f"{email} 승인 완료")
+                            st.rerun()
+                    else:
+                        if st.button("❌ 취소", key=f"vip_revoke_{r['id']}"):
+                            _sb("patch", f"tg_join_requests?id=eq.{r['id']}", body={"status": "pending"})
+                            st.rerun()
+                st.divider()
 
 # ── 메인 실행 ──────────────────────────────────────────────────
 inject_css()
