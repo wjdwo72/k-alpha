@@ -487,40 +487,36 @@ def page_subscribe(user):
 
             toss_html = f"""
 <!DOCTYPE html><html><head>
-<script src="https://js.tosspayments.com/v2/standard"></script>
-</head><body style="margin:0;background:#0a0e1a">
-<div id="payment-method"></div>
-<div id="agreement"></div>
-<button id="pay-btn" onclick="pay()" style="
-  width:100%;padding:16px;margin-top:16px;
-  background:#00d4ff;color:#0a0e1a;border:none;border-radius:10px;
-  font-size:16px;font-weight:700;cursor:pointer">
-  {amount:,}원 결제하기
+<script src="https://js.tosspayments.com/v1/payment"></script>
+</head><body style="margin:0;padding:16px;background:#0a0e1a;font-family:sans-serif">
+<button onclick="pay()" style="
+  width:100%;padding:18px;
+  background:linear-gradient(135deg,#00d4ff,#0099cc);
+  color:#0a0e1a;border:none;border-radius:12px;
+  font-size:18px;font-weight:800;cursor:pointer;letter-spacing:-0.5px">
+  💳 {amount:,}원 결제하기
 </button>
 <script>
 const tossPayments = TossPayments('{TOSS_CLIENT_KEY}');
-const widgets = tossPayments.widgets({{ customerKey: '{user_id}' }});
-(async()=>{{
-  await widgets.setAmount({{ currency:'KRW', value:{amount} }});
-  await Promise.all([
-    widgets.renderPaymentMethods({{ selector:'#payment-method', variantKey:'DEFAULT' }}),
-    widgets.renderAgreement({{ selector:'#agreement', variantKey:'AGREEMENT' }})
-  ]);
-}})();
 async function pay(){{
-  await widgets.requestPayment({{
-    orderId: '{order_id}',
-    orderName: '{order_name}',
-    successUrl: '{success_url}&orderId={order_id}&amount={amount}',
-    failUrl: '{fail_url}',
-    customerEmail: '{email}',
-    customerName: '{name or "고객"}',
-  }});
+  try{{
+    await tossPayments.requestPayment('카드', {{
+      amount: {amount},
+      orderId: '{order_id}',
+      orderName: '{order_name}',
+      successUrl: '{success_url}&orderId={order_id}&amount={amount}',
+      failUrl: '{fail_url}',
+      customerEmail: '{email}',
+      customerName: '{name or "고객"}',
+    }});
+  }} catch(e) {{
+    alert('결제 오류: ' + e.message);
+  }}
 }}
 </script></body></html>"""
             st.markdown("---")
             st.markdown(f"**{order_name}** 결제를 진행합니다")
-            components.html(toss_html, height=520, scrolling=True)
+            components.html(toss_html, height=100, scrolling=False)
 
             if st.button("← 취소", key="btn_cancel_pay"):
                 del st.session_state["pending_plan"]
