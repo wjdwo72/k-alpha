@@ -859,18 +859,22 @@ def _render_stock_list(stocks):
         # 거래대금 배지
         vol_str = f"{vol:,}억" if vol else ""
 
+        # 네이버 금융 차트 URL (6자리 코드 필요)
+        code6 = code.zfill(6) if code else ""
+        chart_3m  = f"https://ssl.pstatic.net/imgfinance/chart/item/area/month3/{code6}.png"
+        chart_day = f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{code6}.png"
+        naver_url = f"https://finance.naver.com/item/fchart.naver?code={code6}"
+
         st.markdown(f"""
 <div class="stock-card" style="margin-bottom:16px;padding:18px 20px;">
-  <!-- 상단: 종목명 + K점수 + 가격 -->
+  <!-- 상단: 종목명 + K점수 -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
     <div>
       <span style="font-size:17px;font-weight:800;color:#e2e8f0">{name}</span>
       <span style="font-size:11px;color:#64748b;margin-left:8px">{code}</span>
       <span style="font-size:10px;color:#475569;background:#1e2a3a;padding:2px 7px;border-radius:4px;margin-left:6px">{mkt}</span>
     </div>
-    <div style="text-align:right">
-      <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
-    </div>
+    <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
   <!-- 가격 -->
   <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
@@ -878,7 +882,7 @@ def _render_stock_list(stocks):
     <span style="font-size:15px;font-weight:700;color:{chg_color}">{chg}</span>
   </div>
   <!-- 매입/목표/손절 -->
-  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <span style="font-size:13px;color:#64748b">매입가 <b style="color:#e2e8f0">{buy}원</b></span>
     <span style="color:#334155">·</span>
     <span style="font-size:13px;color:#64748b">목표가 <b style="color:#ff3b5c">{tgt}원</b></span>
@@ -887,12 +891,36 @@ def _render_stock_list(stocks):
     <span style="color:#334155">·</span>
     <span style="font-size:13px;color:#64748b">손익비 <b style="color:#e2e8f0">{rr}</b></span>
   </div>
+  <!-- 차트 2개 나란히 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div style="background:#0a0e1a;border-radius:8px;overflow:hidden;position:relative">
+      <div style="font-size:10px;color:#64748b;padding:4px 8px;background:#111827">📈 3개월 일봉</div>
+      <a href="{naver_url}" target="_blank">
+        <img src="{chart_3m}" style="width:100%;display:block;min-height:90px;object-fit:cover"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+          alt="3개월 차트">
+        <div style="display:none;height:90px;align-items:center;justify-content:center;color:#475569;font-size:12px">차트 로딩 중...</div>
+      </a>
+    </div>
+    <div style="background:#0a0e1a;border-radius:8px;overflow:hidden;position:relative">
+      <div style="font-size:10px;color:#64748b;padding:4px 8px;background:#111827">📊 당일 분봉</div>
+      <a href="{naver_url}" target="_blank">
+        <img src="{chart_day}" style="width:100%;display:block;min-height:90px;object-fit:cover"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+          alt="당일 차트">
+        <div style="display:none;height:90px;align-items:center;justify-content:center;color:#475569;font-size:12px">차트 로딩 중...</div>
+      </a>
+    </div>
+  </div>
   <!-- 배지 -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
     <span style="font-size:11px;background:#0f4c35;color:#00ff88;padding:3px 10px;border-radius:12px">{mkt}</span>
     <span style="font-size:11px;background:#1a2744;color:#60a5fa;padding:3px 10px;border-radius:12px">RR {rr}</span>
     {"" if not vol_str else f'<span style="font-size:11px;background:#2a1f0a;color:#fb923c;padding:3px 10px;border-radius:12px">거래대금 {vol_str}</span>'}
     <span style="font-size:11px;background:#1a2744;color:#94a3b8;padding:3px 10px;border-radius:12px">RSI {rsi:.0f}</span>
+    <a href="{naver_url}" target="_blank" style="text-decoration:none">
+      <span style="font-size:11px;background:#1a2030;color:#7dd3fc;padding:3px 10px;border-radius:12px;border:1px solid #1e3a5f">🔗 네이버 차트</span>
+    </a>
   </div>
   <!-- K 분석 사유 -->
   {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
