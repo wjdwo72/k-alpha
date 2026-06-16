@@ -3065,6 +3065,13 @@ color:#4a5568;padding:4px 0;line-height:1.8">
 • 텔레그램 자동 전송은 로컬 분석 사용 (API 비용 없음)
 </div>""", unsafe_allow_html=True)
 
+    with st.expander("👥 회원 관리 (관리자)", expanded=False):
+        try:
+            from user_app import admin_panel
+            admin_panel()
+        except Exception as _adm_e:
+            st.error(f"관리자 패널 로드 오류: {_adm_e}")
+
     with st.expander("🔒 로그아웃"):
         if st.button("로그아웃",key="btn_logout"):
             for k in ["agreed","auth","kis_token","kis_ak","kis_sec","kis_acc"]:
