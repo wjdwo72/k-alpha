@@ -246,11 +246,13 @@ def _start_bg_scan_thread():
                                 )
                                 _ts = kst_strftime("%H:%M:%S")
                                 _sess_lbl = SESSION_SHORT.get(_session, '🟢 장중')
+                                _ui_n_bg = ss.get("ui_n_per_cat") or 10
                                 sr = {
                                     "swing":    [build_card(s,"swing")    for s in cats["swing"]],
                                     "surge":    [build_card(s,"surge")    for s in cats["surge"]],
                                     "tomorrow": [build_card(s,"tomorrow") for s in cats["tomorrow"]],
                                     "smallmid": [build_card(s,"smallmid") for s in cats["smallmid"]],
+                                    "ui_n_per_cat": _ui_n_bg,
                                     "ts":_ts,"total":len(all_s),
                                     "kospi_n":len(kp),"kosdaq_n":len(kd),
                                     "updated_at":time.time(),

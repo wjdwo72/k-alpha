@@ -319,7 +319,7 @@ def load_market_data():
     return result
 
 # ── Gist 스캔 데이터 ───────────────────────────────────────────
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def load_scan_data():
     if not GIST_ID: return None
     try:
