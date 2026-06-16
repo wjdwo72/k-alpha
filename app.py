@@ -3043,11 +3043,13 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                         _raw = _gr.json().get("files",{}).get("kalpha_scan.json",{}).get("content","")
                         if _raw:
                             _cur = json.loads(_raw)
-                    # ui_n_per_cat 업데이트 + 각 카테고리 슬라이스
+                    # ui_n_per_cat 값만 업데이트 (배열은 건드리지 않음)
                     _cur['ui_n_per_cat'] = _ui_n
+                    # session_state에 풀 스캔 데이터가 있으면 배열도 복원
+                    _ss_scan = st.session_state.get('last_scan_result', {})
                     for _k in ['swing','surge','tomorrow','smallmid','per']:
-                        if _k in _cur:
-                            _cur[_k] = _cur[_k][:_ui_n]
+                        if _ss_scan.get(_k):
+                            _cur[_k] = _ss_scan[_k]
                     _pw = requests.patch(
                         f"https://api.github.com/gists/{_gid_ui}",
                         headers={'Authorization': f'token {_ght_ui}',
@@ -3680,6 +3682,7 @@ if _gist_active or st.session_state.kis_token:
             'market_open': is_market_open(),
         }
         scan_json = json.dumps(scan_result, ensure_ascii=False)
+        st.session_state['last_scan_result'] = scan_result  # 설정 저장 버튼에서 배열 복원용
 
         # ── Gist에 scan_result 저장 (scan_worker가 읽어서 텔레그램 전송) ──
         _gist_id2  = _get_secret('GIST_ID')
