@@ -771,6 +771,8 @@ def page_main(user, sub):
         ("중소형주",     "smallmid", "📦"),
         ("PER저평가",    "per",      "💎"),
     ]
+    MAX_DISPLAY = 30  # UI 카테고리당 최대 표시 종목 수
+    cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for _, key, _ in categories}
 
     # ── 종목 상세 뷰 (팝업 목록에서 클릭 시) ───────────────────
     if st.session_state.get("selected_stock"):
@@ -790,7 +792,7 @@ def page_main(user, sub):
         cat_info = {k: (n, icon) for n, k, icon in categories}
         if popup_key in cat_info:
             popup_name, popup_icon = cat_info[popup_key]
-            popup_stocks = data.get(popup_key, [])
+            popup_stocks = cat_stocks.get(popup_key, [])
 
             col_title, col_close = st.columns([5, 1])
             with col_title:
@@ -838,7 +840,7 @@ def page_main(user, sub):
     # 카테고리 요약 카드 (갯수 클릭 → 팝업)
     cols = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
-        cnt = len(data.get(cat_key, []))
+        cnt = len(cat_stocks.get(cat_key, []))
         with cols[i]:
             st.markdown(f"""
 <div style="background:linear-gradient(135deg,#0d1520,#1a2744);border:1px solid #1e3a5f;
@@ -851,12 +853,12 @@ def page_main(user, sub):
                 st.session_state["popup_cat"] = cat_key
                 st.rerun()
 
-    tab_names = [f"{icon} {name} {len(data.get(key,[]))}" for name, key, icon in categories]
+    tab_names = [f"{icon} {name} {len(cat_stocks.get(key,[]))}" for name, key, icon in categories]
     tabs = st.tabs(tab_names)
 
     for idx, (tab, (cat_name, cat_key, cat_icon)) in enumerate(zip(tabs, categories)):
         with tab:
-            stocks = data.get(cat_key, [])
+            stocks = cat_stocks.get(cat_key, [])
             if not stocks:
                 st.markdown('<div style="text-align:center;color:#64748b;padding:40px">데이터 없음</div>',
                             unsafe_allow_html=True)
