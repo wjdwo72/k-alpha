@@ -28,7 +28,8 @@ SUPABASE_URL      = _s("SUPABASE_URL")
 SUPABASE_KEY      = _s("SUPABASE_SERVICE_KEY")   # service_role key (백엔드 전용)
 TG_BOT_TOKEN      = _s("TG_BOT_TOKEN")
 TG_GROUP1_CHAT    = _s("TG_GROUP1_CHAT") or _s("TG_ADMIN_CHAT")  # 관리자 승인 그룹방1
-TG_GROUP2_INVITE  = _s("TG_GROUP2_INVITE")                        # VIP 방2 초대링크
+TG_GROUP2_INVITE  = _s("TG_GROUP2_INVITE")                        # VIP 방2 초대링크 (승인불요)
+TG_PERSONAL_CHAT  = _s("TG_PERSONAL_CHAT")                        # 관리자 개인 채팅방
 TG_ADMIN_CHAT     = TG_GROUP1_CHAT
 GIST_ID           = _s("GIST_ID")
 TOSS_CLIENT_KEY   = _s("TOSS_CLIENT_KEY")         # 토스 테스트 클라이언트 키
@@ -80,6 +81,15 @@ def sb_upsert_user(email, name, provider, provider_id, avatar=""):
         "provider_id": str(provider_id), "avatar_url": avatar,
         "created_at": now, "last_login": now,
     })
+    if res:
+        kst = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
+        send_tg_personal(
+            f"🆕 <b>신규 회원가입</b>\n"
+            f"👤 {name or '(이름없음)'}\n"
+            f"📧 {email}\n"
+            f"🔑 {provider}\n"
+            f"⏰ {kst}"
+        )
     return res[0]["id"] if res else None
 
 def sb_get_active_sub(user_id):
@@ -158,16 +168,22 @@ def sb_create_tg_request(user_id):
         "requested_at": datetime.now(timezone.utc).isoformat(),
     })
 
-def send_tg_admin(text):
-    if not TG_BOT_TOKEN or not TG_ADMIN_CHAT:
-        return
+def _send_tg(chat_id, text):
+    if not TG_BOT_TOKEN or not chat_id: return
     try:
         requests.post(
             f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
-            json={"chat_id": TG_ADMIN_CHAT, "text": text, "parse_mode": "HTML"},
-            timeout=5,
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=5,
         )
     except: pass
+
+def send_tg_admin(text):
+    """그룹방1 + 개인채팅방 동시 발송"""
+    _send_tg(TG_ADMIN_CHAT, text)
+
+def send_tg_personal(text):
+    """관리자 개인채팅방 발송 (회원가입·신청 알림)"""
+    _send_tg(TG_PERSONAL_CHAT or TG_ADMIN_CHAT, text)
 
 def sb_save_payment(user_id, order_id, amount, plan, payment_key=None, status="pending", raw=None):
     if status == "done":
@@ -425,12 +441,15 @@ def page_login():
   <div style="display:inline-block;border:1px solid #c9a84c44;border-radius:20px;
     padding:3px 14px;font-size:12px;color:#c9a84c;margin-bottom:28px;">국내 주식 공유</div>
 
-  <!-- 텔레그램 박스 -->
+  <!-- 텔레그램 박스 (관리자 승인 필요) -->
   <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(201,168,76,0.25);
     border-radius:14px;padding:20px;margin-bottom:20px;">
-    <div style="font-size:14px;color:#aabbcc;line-height:1.6;margin-bottom:16px;">
-      최신 정보 및 특별 혜택을 위한<br>
-      <span style="color:#f5d98b;font-weight:600;">텔레그램 프리미엄 공유방</span>에 참여하세요
+    <div style="font-size:14px;color:#aabbcc;line-height:1.6;margin-bottom:6px;">
+      프리미엄 종목 공유 · 실시간 알림<br>
+      <span style="color:#f5d98b;font-weight:600;">관리자 승인 후 초대 링크 발송</span>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:14px;">
+      📌 로그인 → 결제 → 관리자 승인 순서로 진행됩니다
     </div>
     <a href="{TELEGRAM_JOIN_URL}" target="_blank" style="text-decoration:none;">
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;
@@ -439,7 +458,7 @@ def page_login():
       <svg width="28" height="28" viewBox="0 0 24 24" fill="#29B6F6">
         <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
       </svg>
-      <span style="color:#fff;font-size:15px;font-weight:600;">참여 신청</span>
+      <span style="color:#fff;font-size:15px;font-weight:600;">✋ 승인 신청하기</span>
     </div></a>
   </div>
 
@@ -677,41 +696,22 @@ def page_main(user, sub):
                 st.session_state.pop(k, None)
             st.rerun()
 
-    # VIP 텔레그램 참가 신청
-    tg_req = sb_get_tg_request(user["id"])
-    if not tg_req:
-        st.markdown("""
+    # VIP 텔레그램 — 구독자는 승인 없이 그룹방2 바로 입장
+    invite = TG_GROUP2_INVITE or ""
+    if invite:
+        st.markdown(f"""
+<a href="{invite}" target="_blank" style="text-decoration:none">
 <div style="background:linear-gradient(135deg,#1a2744,#243357);border:1px solid #2a4080;
-  border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;
-  align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  border-radius:12px;padding:16px 20px;margin-bottom:16px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;cursor:pointer;">
   <div>
-    <div style="color:#f5d98b;font-weight:700;font-size:15px;">📢 VIP 텔레그램 공유방</div>
-    <div style="color:#8899bb;font-size:13px;margin-top:2px;">실시간 종목 알림 · 프리미엄 정보 공유</div>
+    <div style="color:#f5d98b;font-weight:700;font-size:15px;">✈️ VIP 텔레그램 공유방</div>
+    <div style="color:#8899bb;font-size:13px;margin-top:2px;">실시간 종목 알림 · 프리미엄 정보 — 바로 입장 가능</div>
   </div>
-</div>
+  <span style="background:#1e3a5f;color:#7dd3fc;font-size:13px;font-weight:600;
+    padding:8px 18px;border-radius:8px;">입장하기 →</span>
+</div></a>
 """, unsafe_allow_html=True)
-        if st.button("✈️ VIP 텔레그램 참가 신청", key="btn_tg_join", type="primary"):
-            sb_create_tg_request(user["id"])
-            send_tg_admin(
-                f"🔔 <b>VIP 텔레그램 참가 신청</b>\n"
-                f"👤 이름: {user.get('name','(없음)')}\n"
-                f"📧 이메일: {user.get('email','')}\n"
-                f"📦 플랜: {sub.get('plan','')}\n"
-                f"⏰ 신청 시각: {datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M')}"
-            )
-            st.success("신청 완료! 관리자 확인 후 초대 링크를 보내드립니다.")
-            st.rerun()
-    elif tg_req.get("status") == "approved":
-        st.success("✅ VIP 텔레그램 참가 승인 완료", icon="✅")
-        if TG_GROUP2_INVITE:
-            st.markdown(f"""
-<a href="{TG_GROUP2_INVITE}" target="_blank" style="text-decoration:none">
-<div style="background:linear-gradient(135deg,#1a2744,#243357);border:1px solid #2a4080;
-  border-radius:10px;padding:14px 20px;text-align:center;color:#fff;font-weight:600;font-size:15px;cursor:pointer;">
-  ✈️ VIP 텔레그램 방 입장하기
-</div></a>""", unsafe_allow_html=True)
-    else:
-        st.info("⏳ VIP 텔레그램 참가 신청 검토 중입니다.", icon="📨")
 
     # 스캔 데이터 로드
     data = load_scan_data()
@@ -1106,7 +1106,8 @@ def admin_panel():
             st.info("결제 내역이 없습니다")
 
     with tab_vip:
-        st.markdown("**VIP 텔레그램 참가 신청 목록**")
+        st.markdown("**VIP 텔레그램 승인 신청 목록** (로그인 전 첫화면 신청 → 관리자 승인 필요)")
+        st.caption("💡 로그인 후 서비스 화면의 VIP 텔레그램 입장은 승인 불필요 (그룹방2 바로 연결)")
         vrows = _sb("get", "tg_join_requests", params={
             "select": "id,user_id,status,requested_at",
             "order": "requested_at.desc", "limit": "100"
