@@ -83,6 +83,7 @@ def _get_bg_state():
 
 def _start_bg_scan_thread():
     import threading, requests as _req, json as _jn
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
 
     bg = _get_bg_state()
     if bg["started"]:
@@ -101,7 +102,8 @@ def _start_bg_scan_thread():
         tok  = ss.get("tg_token", "")
         if not tok: return
 
-        kst_h = kst_now().hour  # 현재 KST 시각
+        kst_dt = _dt.now(_tz(_td(hours=9)))
+        kst_h  = kst_dt.hour  # 현재 KST 시각 (명시적 계산)
         now = time.time()
         startup_elapsed = now - bg.get("_start_at", now)
         all_enabled = ss.get("tg_all_enabled", True)
@@ -215,6 +217,7 @@ def _start_bg_scan_thread():
 
                 _session = get_market_session()
                 _active  = _session in ('pre', 'regular', 'after')
+                # 'after' 세션(15:40~20:00)은 스캔만 하고 TG는 시간 체크로 막힘
                 if elapsed >= iv * 60 and _active:
                     tok = ss.get("kis_token")
                     gid = _get_secret("GIST_ID")
