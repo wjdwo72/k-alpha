@@ -533,13 +533,11 @@ def page_login():
 </div>
 """, unsafe_allow_html=True)
 
-    # 법적고지 전체보기 토글
-    if st.session_state.get("show_legal"):
-        st.markdown("""
-<div style="background:rgba(10,14,26,0.95);border:1px solid #c9a84c44;border-radius:12px;
-  padding:20px;margin-bottom:12px;max-height:320px;overflow-y:auto;text-align:left;">
+    # 법적고지 항상 표시
+    st.markdown("""
+<div style="background:rgba(10,14,26,0.85);border:1px solid rgba(201,168,76,0.3);border-radius:12px;
+  padding:20px;margin-bottom:14px;text-align:left;">
 <div style="color:#c9a84c;font-size:14px;font-weight:700;margin-bottom:12px;">📋 법적고지 및 이용약관</div>
-
 <div style="color:#8899bb;font-size:12px;line-height:1.9;">
 
 <b style="color:#e2e8f0;">제1조 (서비스 성격)</b><br>
@@ -569,13 +567,6 @@ def page_login():
 
 </div>
 </div>""", unsafe_allow_html=True)
-        if st.button("▲ 법적고지 닫기", key="hide_legal", use_container_width=True):
-            st.session_state["show_legal"] = False
-            st.rerun()
-    else:
-        if st.button("📋 법적고지 전체 보기", key="show_legal_btn", use_container_width=True):
-            st.session_state["show_legal"] = True
-            st.rerun()
 
     # 법적고지 동의 체크박스
     st.markdown("""<style>
