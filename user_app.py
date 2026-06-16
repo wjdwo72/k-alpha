@@ -771,7 +771,8 @@ def page_main(user, sub):
         ("중소형주",     "smallmid", "📦"),
         ("PER저평가",    "per",      "💎"),
     ]
-    MAX_DISPLAY = 30  # UI 카테고리당 최대 표시 종목 수
+    # 관리자 앱 설정값 우선, 없으면 30 고정
+    MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 30)), 30)
     cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for _, key, _ in categories}
 
     # ── 종목 상세 뷰 (팝업 목록에서 클릭 시) ───────────────────

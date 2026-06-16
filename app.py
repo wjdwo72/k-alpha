@@ -3633,6 +3633,8 @@ if _gist_active or st.session_state.kis_token:
             'surge':    [build_card(s,'surge')    for s in cats['surge']],
             'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
             'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
+            'per':      [build_card(s,'per')      for s in scan_result.get('per', [])[:_ui_n]],
+            'ui_n_per_cat': _ui_n,
             'ts': price_ts,
             'total': scan_count,
             'kospi_n': len(kospi_stocks),
