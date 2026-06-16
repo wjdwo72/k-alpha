@@ -195,8 +195,11 @@ def exchange_google(code):
         "code": code, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_SECRET,
         "redirect_uri": _oauth_redirect_uri("google"), "grant_type": "authorization_code",
     }, timeout=10)
-    token = r.json().get("access_token")
-    if not token: return None
+    rj = r.json()
+    token = rj.get("access_token")
+    if not token:
+        st.error(f"Google 토큰 오류: {rj.get('error','')}: {rj.get('error_description','')}")
+        return None
     info = requests.get("https://www.googleapis.com/oauth2/v2/userinfo",
                         headers={"Authorization": f"Bearer {token}"}, timeout=10).json()
     return {"email": info.get("email"), "name": info.get("name"),
