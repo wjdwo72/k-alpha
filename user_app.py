@@ -740,16 +740,27 @@ def page_main(user, sub):
         ("PER저평가",    "per",      "💎"),
     ]
 
-    # 팝업 열기 상태
+    # ── 종목 상세 뷰 (팝업 목록에서 클릭 시) ───────────────────
+    if st.session_state.get("selected_stock"):
+        sel = st.session_state["selected_stock"]
+        col_back, _ = st.columns([2, 8])
+        with col_back:
+            if st.button("← 목록으로", key="btn_back_to_list"):
+                st.session_state.pop("selected_stock", None)
+                st.rerun()
+        _render_stock_list([sel])
+        return
+
+    # ── 팝업 목록 뷰 ────────────────────────────────────────────
     popup_key = st.session_state.get("popup_cat", None)
 
-    # 팝업이 열려 있으면 전체화면 오버레이로 종목 리스트 표시
     if popup_key:
         cat_info = {k: (n, icon) for n, k, icon in categories}
         if popup_key in cat_info:
             popup_name, popup_icon = cat_info[popup_key]
             popup_stocks = data.get(popup_key, [])
-            col_title, col_close = st.columns([5,1])
+
+            col_title, col_close = st.columns([5, 1])
             with col_title:
                 st.markdown(f"""
 <div style="font-size:20px;font-weight:800;color:#e2e8f0;padding:8px 0">
@@ -760,34 +771,36 @@ def page_main(user, sub):
                 if st.button("✕ 닫기", key="popup_close"):
                     st.session_state.pop("popup_cat", None)
                     st.rerun()
-            # 종목 요약 리스트 — 하나의 st.markdown으로 렌더링 (DOM 불일치 방지)
+
             grade_colors = {"S":"#ff3b5c","A":"#ff9900","B":"#ffc800","C":"#94a3b8"}
-            rows_html = ""
-            for s in popup_stocks:
-                n = s.get("name",""); c = s.get("code","")
+            for si, s in enumerate(popup_stocks):
+                n  = s.get("name","");  c  = s.get("code","")
                 pr = s.get("price",""); ch = s.get("change","")
                 chg_c = "#ff3b5c" if s.get("up", True) else "#4fa3e0"
-                sc = s.get("score",0); gr = s.get("grade","B")
+                sc = s.get("score", 0); gr = s.get("grade","B")
                 gc = grade_colors.get(gr,"#94a3b8")
-                rows_html += f"""
+
+                col_info, col_btn = st.columns([8, 2])
+                with col_info:
+                    st.markdown(f"""
 <div style="display:flex;justify-content:space-between;align-items:center;
-  padding:11px 0;border-bottom:1px solid #1a2a3a">
+  padding:10px 4px;border-bottom:1px solid #1a2a3a">
   <div>
     <span style="font-size:15px;font-weight:700;color:#e2e8f0">{n}</span>
     <span style="font-size:11px;color:#64748b;margin-left:6px">{c}</span>
   </div>
   <div style="text-align:right">
     <span style="font-size:14px;font-weight:600;color:#e2e8f0">{pr}원</span>
-    <span style="font-size:12px;color:{chg_c};margin-left:6px">{ch}</span>
+    <span style="font-size:12px;color:{chg_c};margin-left:8px">{ch}</span>
     <span style="font-size:11px;color:{gc};background:{gc}22;
       padding:2px 8px;border-radius:10px;margin-left:8px">{sc}점 {gr}</span>
   </div>
-</div>"""
-            st.markdown(f"""
-<div style="background:#0d1520;border:1px solid #1e3a5f;border-radius:14px;
-  padding:4px 16px 8px;margin-bottom:16px">
-{rows_html}
 </div>""", unsafe_allow_html=True)
+                with col_btn:
+                    if st.button("상세 보기 →", key=f"sel_stock_{popup_key}_{si}"):
+                        st.session_state["selected_stock"] = s
+                        st.session_state.pop("popup_cat", None)
+                        st.rerun()
             return  # 팝업 보여주는 동안 탭 숨김
 
     # 카테고리 요약 카드 (갯수 클릭 → 팝업)
