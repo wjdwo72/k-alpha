@@ -759,21 +759,18 @@ def page_main(user, sub):
                 if st.button("✕ 닫기", key="popup_close"):
                     st.session_state.pop("popup_cat", None)
                     st.rerun()
-            # 종목 요약 리스트 (팝업 스타일)
-            st.markdown("""
-<div style="background:#0d1520;border:1px solid #1e3a5f;border-radius:14px;padding:12px 16px;margin-bottom:16px">
-""", unsafe_allow_html=True)
+            # 종목 요약 리스트 — 하나의 st.markdown으로 렌더링 (DOM 불일치 방지)
+            grade_colors = {"S":"#ff3b5c","A":"#ff9900","B":"#ffc800","C":"#94a3b8"}
+            rows_html = ""
             for s in popup_stocks:
                 n = s.get("name",""); c = s.get("code","")
                 pr = s.get("price",""); ch = s.get("change","")
-                up = s.get("up", True)
-                chg_c = "#ff3b5c" if up else "#4fa3e0"
+                chg_c = "#ff3b5c" if s.get("up", True) else "#4fa3e0"
                 sc = s.get("score",0); gr = s.get("grade","B")
-                grade_colors = {"S":"#ff3b5c","A":"#ff9900","B":"#ffc800","C":"#94a3b8"}
                 gc = grade_colors.get(gr,"#94a3b8")
-                st.markdown(f"""
+                rows_html += f"""
 <div style="display:flex;justify-content:space-between;align-items:center;
-  padding:10px 0;border-bottom:1px solid #1a2a3a">
+  padding:11px 0;border-bottom:1px solid #1a2a3a">
   <div>
     <span style="font-size:15px;font-weight:700;color:#e2e8f0">{n}</span>
     <span style="font-size:11px;color:#64748b;margin-left:6px">{c}</span>
@@ -784,12 +781,15 @@ def page_main(user, sub):
     <span style="font-size:11px;color:{gc};background:{gc}22;
       padding:2px 8px;border-radius:10px;margin-left:8px">{sc}점 {gr}</span>
   </div>
+</div>"""
+            st.markdown(f"""
+<div style="background:#0d1520;border:1px solid #1e3a5f;border-radius:14px;
+  padding:4px 16px 8px;margin-bottom:16px">
+{rows_html}
 </div>""", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
             return  # 팝업 보여주는 동안 탭 숨김
 
     # 카테고리 요약 카드 (갯수 클릭 → 팝업)
-    st.markdown('<div style="margin-bottom:16px">', unsafe_allow_html=True)
     cols = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
         cnt = len(data.get(cat_key, []))
@@ -804,7 +804,6 @@ def page_main(user, sub):
             if st.button(f"목록 보기", key=f"popup_btn_{cat_key}"):
                 st.session_state["popup_cat"] = cat_key
                 st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
 
     tab_names = [f"{icon} {name} {len(data.get(key,[]))}" for name, key, icon in categories]
     tabs = st.tabs(tab_names)
