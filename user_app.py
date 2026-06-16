@@ -975,10 +975,10 @@ def page_main(user, sub):
         with cols[i]:
             st.markdown(f"""
 <div style="background:linear-gradient(135deg,#0d1520,#1a2744);border:1px solid #1e3a5f;
-  border-radius:12px;padding:14px 10px;text-align:center;margin-bottom:8px">
-  <div style="font-size:20px">{cat_icon}</div>
-  <div style="font-size:11px;color:#94a3b8;margin:4px 0">{cat_name}</div>
-  <div style="font-size:26px;font-weight:900;color:#00d4ff">{cnt}</div>
+  border-radius:10px;padding:8px 6px;text-align:center;margin-bottom:6px">
+  <div style="font-size:16px">{cat_icon}</div>
+  <div style="font-size:10px;color:#94a3b8;margin:2px 0;line-height:1.2">{cat_name}</div>
+  <div style="font-size:22px;font-weight:900;color:#00d4ff;line-height:1.2">{cnt}</div>
 </div>""", unsafe_allow_html=True)
             if st.button(f"목록 보기", key=f"popup_btn_{cat_key}"):
                 st.session_state["popup_cat"] = cat_key
