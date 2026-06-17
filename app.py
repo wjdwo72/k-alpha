@@ -229,10 +229,17 @@ def _start_bg_scan_thread():
                     if tok and gid and ght:
                         try:
                             import concurrent.futures as _cf
-                            with _cf.ThreadPoolExecutor(max_workers=2) as ex:
+                            with _cf.ThreadPoolExecutor(max_workers=3) as ex:
                                 fk = ex.submit(fetch_volume_ranking,tok,kb,ka,ks,"J",200)
                                 fd = ex.submit(fetch_volume_ranking,tok,kb,ka,ks,"Q",100)
+                                _per_en = ss.get("per_scan_enabled", True)
+                                fp = ex.submit(fetch_per_stocks,tok,kb,ka,ks,
+                                               ss.get("per_max",15.0),ss.get("per_min",0.1),
+                                               ss.get("pbr_max",3.0),ss.get("roe_min",5.0),
+                                               ss.get("per_vol_min",30),ss.get("per_top_n",20),
+                                               ss.get("trade_period_days",20)) if _per_en else None
                                 kp = fk.result(); kd = fd.result()
+                                _per_list = fp.result() if fp else []
                             all_s = kp + kd
                             if all_s:
                                 ui_n = ss.get("ui_n_per_cat") or 10
@@ -252,6 +259,7 @@ def _start_bg_scan_thread():
                                     "surge":    [build_card(s,"surge")    for s in cats["surge"]],
                                     "tomorrow": [build_card(s,"tomorrow") for s in cats["tomorrow"]],
                                     "smallmid": [build_card(s,"smallmid") for s in cats["smallmid"]],
+                                    "per":      [build_card(s,"per")      for s in _per_list],
                                     "ui_n_per_cat": _ui_n_bg,
                                     "ts":_ts,"total":len(all_s),
                                     "kospi_n":len(kp),"kosdaq_n":len(kd),
