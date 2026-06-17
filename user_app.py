@@ -882,13 +882,16 @@ def page_main(user, sub):
 </div>
 """, unsafe_allow_html=True)
     with col_r:
+        st.markdown("""<style>
+div[data-testid="column"] button {font-size:11px !important;padding:4px 8px !important;height:auto !important;}
+</style>""", unsafe_allow_html=True)
         _c1, _c2, _c3 = st.columns(3)
         with _c1:
-            if st.button("💳 결제", key="btn_goto_pay"):
+            if st.button("💳결제", key="btn_goto_pay"):
                 st.session_state["goto_subscribe"] = True
                 st.rerun()
         with _c2:
-            if st.button("💬 문의", key="btn_main_inq"):
+            if st.button("💬문의", key="btn_main_inq"):
                 st.session_state["show_main_inq"] = not st.session_state.get("show_main_inq", False)
         with _c3:
             if st.button("로그아웃", key="btn_logout_main"):
