@@ -1205,6 +1205,17 @@ def _render_stock_list(stocks):
     </div>
     <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
+  <!-- 종목명~현재가 사이 인라인 차트 -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0">
+      <img src="{chart_day}" style="width:100%;height:60px;object-fit:cover;display:block"
+        onerror="this.style.opacity='0.1'" alt="">
+    </div>
+    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0">
+      <img src="{chart_3m}" style="width:100%;height:60px;object-fit:cover;display:block"
+        onerror="this.style.opacity='0.1'" alt="">
+    </div>
+  </div>
   <!-- 가격 -->
   <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
     <span style="font-size:28px;font-weight:900;color:#e2e8f0">{price}원</span>
@@ -1219,27 +1230,6 @@ def _render_stock_list(stocks):
     <span style="font-size:13px;color:#64748b">손절가 <b style="color:#4fa3e0">{stop}원</b></span>
     <span style="color:#334155">·</span>
     <span style="font-size:13px;color:#64748b">손익비 <b style="color:#e2e8f0">{rr}</b></span>
-  </div>
-  <!-- 차트 2개 나란히 -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-    <div style="background:#0a0e1a;border-radius:8px;overflow:hidden;position:relative">
-      <div style="font-size:10px;color:#64748b;padding:4px 8px;background:#111827">📈 3개월 일봉</div>
-      <a href="{naver_url}" target="_blank">
-        <img src="{chart_3m}" style="width:100%;display:block;min-height:90px;object-fit:cover"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-          alt="3개월 차트">
-        <div style="display:none;height:90px;align-items:center;justify-content:center;color:#475569;font-size:12px">차트 로딩 중...</div>
-      </a>
-    </div>
-    <div style="background:#0a0e1a;border-radius:8px;overflow:hidden;position:relative">
-      <div style="font-size:10px;color:#64748b;padding:4px 8px;background:#111827">📊 당일 분봉</div>
-      <a href="{naver_url}" target="_blank">
-        <img src="{chart_day}" style="width:100%;display:block;min-height:90px;object-fit:cover"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-          alt="당일 차트">
-        <div style="display:none;height:90px;align-items:center;justify-content:center;color:#475569;font-size:12px">차트 로딩 중...</div>
-      </a>
-    </div>
   </div>
   <!-- 배지 -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
