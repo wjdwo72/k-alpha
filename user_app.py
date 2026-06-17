@@ -864,7 +864,7 @@ def page_main(user, sub):
     _kst_now = _dtnow.now(_tznow(_tdnow(hours=9)))
     _kst_str = _kst_now.strftime("%Y.%m.%d %H:%M:%S")
 
-    col_l, col_r = st.columns([4,1])
+    col_l, col_r = st.columns([3,2])
     with col_l:
         st.markdown(f"""
 <div style="padding:10px 0 4px;display:flex;align-items:center;gap:12px">
@@ -882,19 +882,19 @@ def page_main(user, sub):
 </div>
 """, unsafe_allow_html=True)
     with col_r:
-        st.markdown("""<style>
-div[data-testid="column"] button {font-size:11px !important;padding:4px 8px !important;height:auto !important;}
-</style>""", unsafe_allow_html=True)
-        _c1, _c2, _c3 = st.columns(3)
-        with _c1:
-            if st.button("💳결제", key="btn_goto_pay"):
+        _btn_style = ("display:inline-block;padding:5px 10px;margin:2px;font-size:12px;"
+                      "background:#1e3a5f;color:#e2e8f0;border:1px solid #2a4080;"
+                      "border-radius:6px;cursor:pointer;text-decoration:none;white-space:nowrap")
+        col_pay, col_inq, col_out = st.columns(3)
+        with col_pay:
+            if st.button("💳결제", key="btn_goto_pay", use_container_width=True):
                 st.session_state["goto_subscribe"] = True
                 st.rerun()
-        with _c2:
-            if st.button("💬문의", key="btn_main_inq"):
+        with col_inq:
+            if st.button("💬문의", key="btn_main_inq", use_container_width=True):
                 st.session_state["show_main_inq"] = not st.session_state.get("show_main_inq", False)
-        with _c3:
-            if st.button("로그아웃", key="btn_logout_main"):
+        with col_out:
+            if st.button("로그아웃", key="btn_logout_main", use_container_width=True):
                 for k in ["user","sub","legal"]:
                     st.session_state.pop(k, None)
                 st.rerun()
