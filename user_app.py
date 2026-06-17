@@ -998,6 +998,16 @@ tick(); setInterval(tick,1000);
     MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 10)), 30)
     cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
 
+    # ── 차트 클릭 query_param 처리 ─────────────────────────────
+    _qp_chart = st.query_params.get("show_chart", "")
+    if _qp_chart:
+        st.query_params.clear()
+        _all_flat = [s for key in _all_keys for s in data.get(key, [])]
+        _found = next((s for s in _all_flat if s.get("code","") == _qp_chart),
+                      {"code": _qp_chart, "name": _qp_chart})
+        st.session_state["show_chart"] = _found
+        st.rerun()
+
     # ── 시장 지표 바 ──────────────────────────────────────────
     mkt = load_market_data()
     def _mfmt(label, d, fmt="{:.2f}", prefix="", suffix=""):
@@ -1224,17 +1234,23 @@ def _render_stock_list(stocks):
     </div>
     <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
-  <!-- 종목명~현재가 사이 인라인 차트 -->
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0">
-      <img src="{chart_day}" style="width:100%;height:110px;object-fit:contain;display:block"
+  <!-- 종목명~현재가 사이 인라인 차트 (클릭 시 차트 팝업) -->
+  <a href="?show_chart={code}" target="_self" style="text-decoration:none;display:block;margin-bottom:6px">
+  <div style="display:flex;align-items:center;gap:10px;cursor:pointer;position:relative">
+    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0;border:1px solid #1e2a3a">
+      <img src="{chart_day}" style="width:100%;height:150px;object-fit:contain;display:block"
         onerror="this.style.opacity='0.1'" alt="">
     </div>
-    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0">
-      <img src="{chart_3m}" style="width:100%;height:110px;object-fit:contain;display:block"
+    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0;border:1px solid #1e2a3a">
+      <img src="{chart_3m}" style="width:100%;height:150px;object-fit:contain;display:block"
         onerror="this.style.opacity='0.1'" alt="">
+    </div>
+    <div style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.6);
+      color:#7dd3fc;font-size:10px;padding:2px 7px;border-radius:8px;pointer-events:none">
+      📊 클릭하여 차트 보기
     </div>
   </div>
+  </a>
   <!-- 가격 -->
   <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
     <span style="font-size:28px;font-weight:900;color:#e2e8f0">{price}원</span>
@@ -1264,9 +1280,6 @@ def _render_stock_list(stocks):
   {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
 </div>
 """, unsafe_allow_html=True)
-        if st.button("📊 차트 보기", key=f"chart_btn_{i}_{code}", use_container_width=False):
-            st.session_state["show_chart"] = s
-            st.rerun()
 
 def _show_chart_popup(s):
     """차트 팝업 뷰 (이미지2 스타일)"""
