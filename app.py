@@ -3684,13 +3684,13 @@ if _gist_active or st.session_state.kis_token:
         )
         scan_count = len(all_stocks)
 
-        # 카드 데이터 생성
+        # 카드 데이터 생성 (per는 아래 PER 스캔 후 채움)
         scan_result = {
             'swing':    [build_card(s,'swing')    for s in cats['swing']],
             'surge':    [build_card(s,'surge')    for s in cats['surge']],
             'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
             'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
-            'per':      [build_card(s,'per')      for s in scan_result.get('per', [])[:_ui_n]],
+            'per':      [],  # PER 스캔 후 라인 3769/3771에서 업데이트
             'ui_n_per_cat': _ui_n,
             'ts': price_ts,
             'total': scan_count,
@@ -3699,26 +3699,7 @@ if _gist_active or st.session_state.kis_token:
             'updated_at': time.time(),
             'market_open': is_market_open(),
         }
-        scan_json = json.dumps(scan_result, ensure_ascii=False)
         st.session_state['last_scan_result'] = scan_result  # 설정 저장 버튼에서 배열 복원용
-
-        # ── Gist에 scan_result 저장 (scan_worker가 읽어서 텔레그램 전송) ──
-        _gist_id2  = _get_secret('GIST_ID')
-        _gh_tok2   = _get_secret('GH_TOKEN')
-        if _gist_id2 and _gh_tok2:
-            try:
-                _gr = requests.patch(
-                    f"https://api.github.com/gists/{_gist_id2}",
-                    headers={'Authorization':f'token {_gh_tok2}',
-                             'Accept':'application/vnd.github.v3+json'},
-                    json={"files":{"kalpha_scan.json":{"content":scan_json}}},
-                    timeout=10)
-                if _gr.status_code == 200:
-                    st.toast("☁️ Gist 저장 완료", icon="✅")
-                else:
-                    st.caption(f"⚠ Gist 저장 실패: {_gr.status_code}")
-            except Exception as _ge:
-                st.caption(f"⚠ Gist 저장 오류: {_ge}")
 
         # 현재가 딕셔너리
         prices = {s['code']:{'price':s['price'],'change':s['change'],
@@ -3766,9 +3747,28 @@ if _gist_active or st.session_state.kis_token:
             st.caption("💎 PER 스캔: KIS API 연결 후 사용 가능")
         else:
             _per_list = _per_stocks_cache
-        scan_result['per'] = _per_list
+        scan_result['per'] = [build_card(s,'per') for s in _per_list]
     else:
         scan_result['per'] = []
+
+    # ── Gist에 scan_result 저장 (per 포함, 유저앱에 즉시 반영) ──
+    _gist_id2 = _get_secret('GIST_ID')
+    _gh_tok2  = _get_secret('GH_TOKEN')
+    if _gist_id2 and _gh_tok2:
+        try:
+            _scan_json_full = json.dumps(scan_result, ensure_ascii=False)
+            _gr = requests.patch(
+                f"https://api.github.com/gists/{_gist_id2}",
+                headers={'Authorization':f'token {_gh_tok2}',
+                         'Accept':'application/vnd.github.v3+json'},
+                json={"files":{"kalpha_scan.json":{"content":_scan_json_full}}},
+                timeout=10)
+            if _gr.status_code == 200:
+                st.toast("☁️ Gist 저장 완료", icon="✅")
+            else:
+                st.caption(f"⚠ Gist 저장 실패: {_gr.status_code}")
+        except Exception as _ge:
+            st.caption(f"⚠ Gist 저장 오류: {_ge}")
 
     # 상태 표시
     _dm_sess = get_market_session()
