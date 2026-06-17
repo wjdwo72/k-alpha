@@ -1762,3 +1762,8 @@ else:
                     page_subscribe(user)
                 else:
                     page_main(user, sub)
+                    # 60초마다 자동 새로고침 (Gist 최신 데이터 반영)
+                    import time as _t
+                    _t.sleep(60)
+                    load_scan_data.clear()
+                    st.rerun()
