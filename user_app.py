@@ -1222,17 +1222,8 @@ def _render_stock_list(stocks):
 
         st.markdown(f"""
 <div class="stock-card" style="margin-bottom:16px;padding:18px 20px;">
-  <!-- 상단: 종목명 + K점수 -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-    <div>
-      <span style="font-size:17px;font-weight:800;color:#e2e8f0">{name}</span>
-      <span style="font-size:11px;color:#64748b;margin-left:8px">{code}</span>
-      <span style="font-size:10px;color:#475569;background:#1e2a3a;padding:2px 7px;border-radius:4px;margin-left:6px">{mkt}</span>
-    </div>
-    <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
-  </div>
-  <!-- 종목명~현재가 사이 인라인 차트: 봉(당일) + 선(3개월) -->
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+  <!-- 차트 최상단 -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
     <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0;border:1px solid #1e2a3a">
       <div style="font-size:9px;color:#475569;padding:3px 6px">봉차트 (당일)</div>
       <img src="https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
@@ -1245,6 +1236,15 @@ def _render_stock_list(stocks):
         style="width:100%;height:160px;object-fit:contain;display:block"
         onerror="this.style.opacity='0.1'" alt="">
     </div>
+  </div>
+  <!-- 종목명 + K점수 -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+    <div>
+      <span style="font-size:17px;font-weight:800;color:#e2e8f0">{name}</span>
+      <span style="font-size:11px;color:#64748b;margin-left:8px">{code}</span>
+      <span style="font-size:10px;color:#475569;background:#1e2a3a;padding:2px 7px;border-radius:4px;margin-left:6px">{mkt}</span>
+    </div>
+    <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
   <!-- 가격 -->
   <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
