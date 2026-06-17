@@ -3076,6 +3076,8 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
                         timeout=10)
                     if _pw.status_code == 200:
                         fetch_gist_scan.clear()
+                        # server_store도 즉시 업데이트 → 백그라운드 스레드가 새 값으로 저장
+                        get_server_store()['ui_n_per_cat'] = _ui_n
                         st.success(f"✅ Gist 저장 완료 — 카테고리당 {_ui_n}개 설정 반영")
                     else:
                         st.error(f"Gist 저장 실패: {_pw.status_code}")
