@@ -1169,7 +1169,7 @@ def admin_panel():
                             st.success("✅ 테스트 메시지 발송 완료")
                         else:
                             st.error(f"❌ Telegram 오류: {_tj.get('description','알 수 없음')} (code {_tj.get('error_code','')})")
-                            st.caption(f"TOKEN: {_live_tok[:20] if _live_tok else '없음'}... | Chat ID: [{_test_id}]")
+                            st.caption(f"Chat ID bytes: {[hex(ord(c)) for c in str(_test_id)]}")
                             st.code(str(_tj))
                     except Exception as _te:
                         st.error(f"❌ 요청 오류: {_te}")
