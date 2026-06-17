@@ -1064,11 +1064,11 @@ tick(); setInterval(tick,1000);
 
     # 카테고리 탭
     categories = [
-        ("실시간 스윙주", "swing",    "🔴"),
-        ("급등 전야",    "surge",    "⚡"),
-        ("내일 관심주",  "tomorrow", "🌙"),
-        ("중소형주",     "smallmid", "📦"),
-        ("PER저평가",    "per",      "💎"),
+        ("실시간 스윙주",   "swing",    "🔴"),
+        ("급등 전야",      "surge",    "⚡"),
+        ("내일 관심주",    "tomorrow", "🌙"),
+        ("내일의 중소형주", "smallmid", "📦"),
+        ("PER저평가",      "per",      "💎"),
     ]
     # ── 종목 상세 뷰 (팝업 목록에서 클릭 시) ───────────────────
     if st.session_state.get("selected_stock"):
