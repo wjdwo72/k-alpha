@@ -1589,7 +1589,7 @@
           ◉ 내일 관심주 <span class="tab-badge" onclick="event.stopPropagation();openTabStockList(event,'tomorrow')">5</span>
         </button>
         <button class="tab-btn" data-tab="smallmid" onclick="switchTab('smallmid',this,'kr')">
-          ⬟ 내일의 중소형주 <span class="tab-badge" style="background:rgba(192,132,252,.15);color:#c084fc" onclick="event.stopPropagation();openTabStockList(event,'smallmid')">10</span>
+          ⬟ 중소형주 <span class="tab-badge" style="background:rgba(192,132,252,.15);color:#c084fc" onclick="event.stopPropagation();openTabStockList(event,'smallmid')">10</span>
         </button>
         <button class="tab-btn" data-tab="per" onclick="switchTab('per',this,'kr')">
           💎 PER저평가 <span class="tab-badge" id="badge-per" style="background:rgba(240,192,64,.15);color:#f0c040" onclick="event.stopPropagation();openTabStockList(event,'per')">0</span>
@@ -2652,7 +2652,7 @@ const DEMO_META = {
   // 중형주 추가 (mid)
   '251270': { tradingAmt:  420, mktType: 'kospi',  capType: 'mid',   rsi: 45 },
   '036570': { tradingAmt:  380, mktType: 'kosdaq', capType: 'mid',   rsi: 40 },
-  // 내일의 중소형주 Alpha-10
+  // 중소형주 Alpha-10
   '058470': { tradingAmt:  420, mktType: 'kosdaq', capType: 'small', rsi: 44 }, // 리노공업
   '140860': { tradingAmt:  280, mktType: 'kosdaq', capType: 'small', rsi: 42 }, // 파크시스템스
   '039440': { tradingAmt:  185, mktType: 'kosdaq', capType: 'small', rsi: 38 }, // 에스티아이
@@ -4845,7 +4845,7 @@ function startTelegramScheduler() {
       mainStocks.forEach(function(s) { lines.push(fmtOne(s)); });
     }
     if (smallStocks.length > 0) {
-      lines.push('\n⬟ <b>[내일의 중소형주 TOP5]</b>');
+      lines.push('\n⬟ <b>[중소형주 TOP5]</b>');
       smallStocks.forEach(function(s) { lines.push(fmtOne(s)); });
     }
 
