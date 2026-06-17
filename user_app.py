@@ -1303,11 +1303,10 @@ def _render_stock_list(stocks):
     <span style="font-size:11px;background:#3a1a1a;color:#ff3b5c;padding:3px 8px;border-radius:10px">목 {tgt}원</span>
     <span style="font-size:11px;background:#1a2a3a;color:#4fa3e0;padding:3px 8px;border-radius:10px">절 {stop}원</span>
   </div>
-  <!-- K 분석 사유 -->
-  {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
 </div>
 """, unsafe_allow_html=True)
         # 차트: .chart-ovl 마커 div + 투명 오버레이 버튼 → st.dialog (새로고침 없음)
+        # 배지 바로 아래, K 분석 사유 위에 위치
         col_c, col_l = st.columns(2)
         with col_c:
             st.markdown(f"""<div class="chart-ovl" style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:6px;overflow:hidden">
@@ -1325,6 +1324,13 @@ def _render_stock_list(stocks):
                 st.session_state["_dlg_stock"] = s
                 st.session_state["_dlg_type"]  = "line"
                 _chart_dialog()
+        # K 분석 사유 (차트 아래)
+        if reasons_html:
+            st.markdown(f"""
+<div class="stock-card" style="margin-top:-8px;margin-bottom:16px;padding:12px 18px;border-top:none;border-radius:0 0 12px 12px;">
+  <div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>
+  {reasons_html}
+</div>""", unsafe_allow_html=True)
 
 def _show_chart_popup(s):
     """차트 팝업 뷰: 봉차트(이미지4) 또는 선차트(이미지5) 타입별 분리"""
