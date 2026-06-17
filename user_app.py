@@ -998,6 +998,18 @@ tick(); setInterval(tick,1000);
     MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 10)), 30)
     cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
 
+    # ── 차트 클릭 query_param 처리 (?sc=CODE&ct=candle/line) ──
+    _qsc = st.query_params.get("sc", "")
+    _qct = st.query_params.get("ct", "candle")
+    if _qsc:
+        st.query_params.clear()
+        _all_flat = [s for k in _all_keys for s in data.get(k, [])]
+        _found = next((s for s in _all_flat if s.get("code","").zfill(6) == _qsc),
+                      {"code": _qsc, "name": _qsc})
+        st.session_state["_dlg_stock"] = _found
+        st.session_state["_dlg_type"]  = _qct
+        _chart_dialog()
+
 
     # ── 시장 지표 바 ──────────────────────────────────────────
     mkt = load_market_data()
@@ -1260,10 +1272,11 @@ def _render_stock_list(stocks):
         _url_candle = f"https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
         _url_line   = f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{code6}.png"
 
+        # 이미지1 형식 카드: 종목명/가격/2열그리드 → 차트(클릭가능) → 배지 → 분석사유
         st.markdown(f"""
-<div class="stock-card" style="margin-bottom:4px;padding:16px 18px;">
+<div class="stock-card" style="margin-bottom:16px;padding:16px 18px;">
   <!-- 종목명 + K점수 -->
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
     <div>
       <span style="font-size:16px;font-weight:800;color:#e2e8f0">{name}</span>
       <span style="font-size:11px;color:#64748b;margin-left:6px">{code}</span>
@@ -1271,20 +1284,36 @@ def _render_stock_list(stocks):
     </div>
     <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
-  <!-- 가격 -->
-  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">
+  <!-- LIVE + 가격 -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <span style="font-size:10px;font-weight:700;color:#00ff88;background:#0f4c35;padding:2px 6px;border-radius:4px;letter-spacing:1px">LIVE</span>
     <span style="font-size:26px;font-weight:900;color:#e2e8f0">{price}원</span>
     <span style="font-size:14px;font-weight:700;color:{chg_color}">{chg}</span>
   </div>
-  <!-- 매입/목표 · 손절/손익비 — 2열 그리드 -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin-bottom:12px">
-    <div style="font-size:13px;color:#64748b">매입가 <b style="color:#e2e8f0">{buy}원</b></div>
-    <div style="font-size:13px;color:#64748b">목표가 <b style="color:#ff3b5c">{tgt}원</b></div>
-    <div style="font-size:13px;color:#64748b">손절가 <b style="color:#4fa3e0">{stop}원</b></div>
-    <div style="font-size:13px;color:#64748b">손익비 <b style="color:#e2e8f0">{rr}</b></div>
+  <!-- 2열 그리드: 매입/목표 · 손절/손익비 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 20px;margin-bottom:12px">
+    <div style="font-size:13px;color:#64748b">매입가 &nbsp;<b style="color:#e2e8f0">{buy}원</b></div>
+    <div style="font-size:13px;color:#64748b">목표가 &nbsp;<b style="color:#ff3b5c">{tgt}원</b></div>
+    <div style="font-size:13px;color:#64748b">손절가 &nbsp;<b style="color:#4fa3e0">{stop}원</b></div>
+    <div style="font-size:13px;color:#64748b">손익비 &nbsp;<b style="color:#e2e8f0">{rr}</b></div>
+  </div>
+  <!-- 차트 2개 — 클릭하면 팝업 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <a href="?sc={code6}&ct=candle" target="_self" style="text-decoration:none;display:block">
+      <div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:6px;overflow:hidden;cursor:pointer">
+        <img src="{_url_candle}" style="width:100%;height:150px;object-fit:contain;display:block"
+          onerror="this.style.opacity='0.1'" alt="봉차트">
+      </div>
+    </a>
+    <a href="?sc={code6}&ct=line" target="_self" style="text-decoration:none;display:block">
+      <div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:6px;overflow:hidden;cursor:pointer">
+        <img src="{_url_line}" style="width:100%;height:150px;object-fit:contain;display:block"
+          onerror="this.style.opacity='0.1'" alt="선차트">
+      </div>
+    </a>
   </div>
   <!-- 배지 -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
     <span style="font-size:11px;background:#0f4c35;color:#00ff88;padding:3px 8px;border-radius:10px">{mkt}</span>
     <span style="font-size:11px;background:#1a2744;color:#60a5fa;padding:3px 8px;border-radius:10px">RR {rr}</span>
     {"" if not vol_str else f'<span style="font-size:11px;background:#2a1f0a;color:#fb923c;padding:3px 8px;border-radius:10px">거래대금 {vol_str}</span>'}
@@ -1293,33 +1322,9 @@ def _render_stock_list(stocks):
     <span style="font-size:11px;background:#1a2a3a;color:#4fa3e0;padding:3px 8px;border-radius:10px">절 {stop}원</span>
   </div>
   <!-- K 분석 사유 -->
-  {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
+  {f'<details style="cursor:pointer"><summary style="font-size:12px;color:#64748b;font-weight:600;list-style:none">◀ K 분석 사유</summary>{reasons_html}</details>' if reasons_html else ""}
 </div>
 """, unsafe_allow_html=True)
-        # 차트 2개 (봉/선) — 클릭 시 dialog 팝업
-        col_c, col_l = st.columns(2)
-        with col_c:
-            st.markdown(f"""
-<div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:8px;overflow:hidden">
-  <div style="font-size:9px;color:#475569;padding:2px 8px">봉차트 (당일)</div>
-  <img src="{_url_candle}" style="width:100%;height:150px;object-fit:contain;display:block"
-    onerror="this.style.opacity='0.1'" alt="">
-</div>""", unsafe_allow_html=True)
-            if st.button("🔍", key=f"c_{i}_{code}", use_container_width=True, help="봉차트 크게 보기"):
-                st.session_state["_dlg_stock"] = s
-                st.session_state["_dlg_type"]  = "candle"
-                _chart_dialog()
-        with col_l:
-            st.markdown(f"""
-<div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:8px;overflow:hidden">
-  <div style="font-size:9px;color:#475569;padding:2px 8px">선차트 (당일)</div>
-  <img src="{_url_line}" style="width:100%;height:150px;object-fit:contain;display:block"
-    onerror="this.style.opacity='0.1'" alt="">
-</div>""", unsafe_allow_html=True)
-            if st.button("🔍", key=f"l_{i}_{code}", use_container_width=True, help="선차트 크게 보기"):
-                st.session_state["_dlg_stock"] = s
-                st.session_state["_dlg_type"]  = "line"
-                _chart_dialog()
 
 def _show_chart_popup(s):
     """차트 팝업 뷰: 봉차트(이미지4) 또는 선차트(이미지5) 타입별 분리"""
