@@ -811,6 +811,10 @@ def page_main(user, sub):
         days_left = 0; exp_str = "?"
 
     # 상단 헤더
+    from datetime import datetime as _dtnow, timezone as _tznow, timedelta as _tdnow
+    _kst_now = _dtnow.now(_tznow(_tdnow(hours=9)))
+    _kst_str = _kst_now.strftime("%Y.%m.%d %H:%M:%S")
+
     col_l, col_r = st.columns([4,1])
     with col_l:
         st.markdown(f"""
@@ -823,14 +827,22 @@ def page_main(user, sub):
     <span style="color:{'#00ff88' if days_left>7 else '#ffc800'}">
       {days_left}일 남음 ({exp_str} 만료)
     </span>
+    &nbsp;·&nbsp;
+    <span style="color:#475569">🕐 {_kst_str}</span>
   </span>
 </div>
 """, unsafe_allow_html=True)
     with col_r:
-        if st.button("로그아웃", key="btn_logout_main"):
-            for k in ["user","sub","legal"]:
-                st.session_state.pop(k, None)
-            st.rerun()
+        _c1, _c2 = st.columns(2)
+        with _c1:
+            if st.button("💳 결제", key="btn_goto_pay"):
+                st.session_state["goto_subscribe"] = True
+                st.rerun()
+        with _c2:
+            if st.button("로그아웃", key="btn_logout_main"):
+                for k in ["user","sub","legal"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
 
     # VIP 텔레그램 — 구독자는 승인 없이 그룹방2 바로 입장
     invite = TG_GROUP2_INVITE or ""
@@ -1487,4 +1499,7 @@ else:
             if not legal:
                 page_legal(user)
             else:
-                page_main(user, sub)
+                if st.session_state.pop("goto_subscribe", False):
+                    page_subscribe(user)
+                else:
+                    page_main(user, sub)
