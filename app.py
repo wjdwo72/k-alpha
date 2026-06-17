@@ -233,7 +233,8 @@ def _start_bg_scan_thread():
                                 fk = ex.submit(fetch_volume_ranking,tok,kb,ka,ks,"J",200)
                                 fd = ex.submit(fetch_volume_ranking,tok,kb,ka,ks,"Q",100)
                                 _per_en = ss.get("per_scan_enabled", True)
-                                fp = ex.submit(fetch_per_stocks,tok,kb,ka,ks,
+                                _per_fn = getattr(fetch_per_stocks, "__wrapped__", fetch_per_stocks)
+                                fp = ex.submit(_per_fn,tok,kb,ka,ks,
                                                ss.get("per_max",15.0),ss.get("per_min",0.1),
                                                ss.get("pbr_max",3.0),ss.get("roe_min",5.0),
                                                ss.get("per_vol_min",30),ss.get("per_top_n",20),
