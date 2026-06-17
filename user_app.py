@@ -862,23 +862,32 @@ def page_main(user, sub):
     # 상단 헤더
     from datetime import datetime as _dtnow, timezone as _tznow, timedelta as _tdnow
     _kst_now = _dtnow.now(_tznow(_tdnow(hours=9)))
-    _kst_str = _kst_now.strftime("%Y.%m.%d %H:%M:%S")
+    _now_time = _kst_now.strftime("%H:%M:%S")
+    _now_date = _kst_now.strftime("%Y.%m.%d (%a)").replace("Mon","월").replace("Tue","화").replace("Wed","수").replace("Thu","목").replace("Fri","금").replace("Sat","토").replace("Sun","일")
+    # 스캔 업데이트 시각
+    _hdr_data = load_scan_data()
+    _scan_ts  = _hdr_data.get("ts", "") if _hdr_data else ""
 
     col_l, col_r = st.columns([3,2])
     with col_l:
         st.markdown(f"""
-<div style="padding:10px 0 4px;display:flex;align-items:center;gap:12px">
-  <span style="font-size:22px;font-weight:900">
-    <span style="color:#00d4ff">K</span>·<span style="color:#fff">ALPHA</span>
-  </span>
-  <span style="font-size:12px;color:#64748b">
-    {user.get('name') or user.get('email','')} ·
-    <span style="color:{'#00ff88' if days_left>7 else '#ffc800'}">
-      {days_left}일 남음 ({exp_str} 만료)
+<div style="padding:10px 0 4px">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:22px;font-weight:900">
+      <span style="color:#00d4ff">K</span>·<span style="color:#fff">ALPHA</span>
     </span>
-    &nbsp;·&nbsp;
-    <span style="color:#475569">🕐 {_kst_str}</span>
-  </span>
+    <span style="font-size:12px;color:#64748b">
+      {user.get('name') or user.get('email','')} ·
+      <span style="color:{'#00ff88' if days_left>7 else '#ffc800'}">
+        {days_left}일 남음 ({exp_str} 만료)
+      </span>
+    </span>
+  </div>
+  <div style="display:flex;gap:16px;margin-top:4px;align-items:center">
+    <span style="font-size:20px;font-weight:700;color:#e2e8f0;letter-spacing:1px">🕐 {_now_time}</span>
+    <span style="font-size:11px;color:#475569">{_now_date}</span>
+    {"<span style='font-size:11px;color:#334155'>│</span><span style='font-size:11px;color:#3b82f6'>📡 스캔 " + _scan_ts + "</span>" if _scan_ts else ""}
+  </div>
 </div>
 """, unsafe_allow_html=True)
     with col_r:
