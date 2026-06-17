@@ -1094,20 +1094,30 @@ tick(); setInterval(tick,1000);
                 sc = s.get("score", 0); gr = s.get("grade","B")
                 gc = grade_colors.get(gr,"#94a3b8")
 
+                _c6 = c.zfill(6) if c else ""
+                _chart_d = f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{_c6}.png"
+                _chart_m = f"https://ssl.pstatic.net/imgfinance/chart/item/area/month3/{_c6}.png"
                 col_info, col_btn = st.columns([8, 2])
                 with col_info:
                     st.markdown(f"""
-<div style="display:flex;justify-content:space-between;align-items:center;
-  padding:10px 4px;border-bottom:1px solid #1a2a3a">
-  <div>
-    <span style="font-size:15px;font-weight:700;color:#e2e8f0">{n}</span>
-    <span style="font-size:11px;color:#64748b;margin-left:6px">{c}</span>
+<div style="padding:10px 4px;border-bottom:1px solid #1a2a3a">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <div>
+      <span style="font-size:15px;font-weight:700;color:#e2e8f0">{n}</span>
+      <span style="font-size:11px;color:#64748b;margin-left:6px">{c}</span>
+    </div>
+    <div style="text-align:right">
+      <span style="font-size:14px;font-weight:600;color:#e2e8f0">{pr}원</span>
+      <span style="font-size:12px;color:{chg_c};margin-left:8px">{ch}</span>
+      <span style="font-size:11px;color:{gc};background:{gc}22;
+        padding:2px 8px;border-radius:10px;margin-left:8px">{sc}점 {gr}</span>
+    </div>
   </div>
-  <div style="text-align:right">
-    <span style="font-size:14px;font-weight:600;color:#e2e8f0">{pr}원</span>
-    <span style="font-size:12px;color:{chg_c};margin-left:8px">{ch}</span>
-    <span style="font-size:11px;color:{gc};background:{gc}22;
-      padding:2px 8px;border-radius:10px;margin-left:8px">{sc}점 {gr}</span>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+    <img src="{_chart_d}" style="width:100%;height:70px;object-fit:cover;border-radius:4px;background:#0a0e1a"
+      onerror="this.style.opacity='0.05'" alt="당일">
+    <img src="{_chart_m}" style="width:100%;height:70px;object-fit:cover;border-radius:4px;background:#0a0e1a"
+      onerror="this.style.opacity='0.05'" alt="3개월">
   </div>
 </div>""", unsafe_allow_html=True)
                 with col_btn:
@@ -1208,11 +1218,11 @@ def _render_stock_list(stocks):
   <!-- 종목명~현재가 사이 인라인 차트 -->
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
     <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0">
-      <img src="{chart_day}" style="width:100%;height:60px;object-fit:cover;display:block"
+      <img src="{chart_day}" style="width:100%;height:100px;object-fit:cover;display:block"
         onerror="this.style.opacity='0.1'" alt="">
     </div>
     <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0">
-      <img src="{chart_3m}" style="width:100%;height:60px;object-fit:cover;display:block"
+      <img src="{chart_3m}" style="width:100%;height:100px;object-fit:cover;display:block"
         onerror="this.style.opacity='0.1'" alt="">
     </div>
   </div>
