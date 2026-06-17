@@ -884,33 +884,27 @@ def page_main(user, sub):
     </span>
   </div>
   <div style="display:flex;gap:16px;margin-top:4px;align-items:center">
-    <span id="kalpha-clock" style="font-size:20px;font-weight:700;color:#e2e8f0;letter-spacing:1px">🕐 {_now_time}</span>
-    <span id="kalpha-date" style="font-size:11px;color:#475569">{_now_date}</span>
+    <span style="font-size:11px;color:#475569">{_now_date}</span>
     {"<span style='font-size:11px;color:#334155'>│</span><span style='font-size:11px;color:#3b82f6'>📡 스캔 " + _scan_ts + "</span>" if _scan_ts else ""}
   </div>
 </div>
-<script>
-(function(){{
-  const DAYS=["일","월","화","수","목","금","토"];
-  function tick(){{
-    var now=new Date();
-    var kst=new Date(now.getTime()+9*3600000);
-    var h=String(kst.getUTCHours()).padStart(2,'0');
-    var m=String(kst.getUTCMinutes()).padStart(2,'0');
-    var s=String(kst.getUTCSeconds()).padStart(2,'0');
-    var y=kst.getUTCFullYear();
-    var mo=String(kst.getUTCMonth()+1).padStart(2,'0');
-    var d=String(kst.getUTCDate()).padStart(2,'0');
-    var wd=DAYS[kst.getUTCDay()];
-    var cl=document.getElementById('kalpha-clock');
-    var dt=document.getElementById('kalpha-date');
-    if(cl) cl.textContent='🕐 '+h+':'+m+':'+s;
-    if(dt) dt.textContent=y+'.'+mo+'.'+d+' ('+wd+')';
-  }}
-  tick(); setInterval(tick,1000);
-}})();
-</script>
 """, unsafe_allow_html=True)
+    components.html("""
+<div style="margin:-12px 0 4px 0">
+<span id="clk" style="font-size:20px;font-weight:700;color:#e2e8f0;letter-spacing:2px;font-family:monospace">00:00:00</span>
+</div>
+<script>
+const DAYS=["일","월","화","수","목","금","토"];
+function tick(){
+  var now=new Date(), kst=new Date(now.getTime()+9*3600000);
+  var h=String(kst.getUTCHours()).padStart(2,'0');
+  var m=String(kst.getUTCMinutes()).padStart(2,'0');
+  var s=String(kst.getUTCSeconds()).padStart(2,'0');
+  document.getElementById('clk').textContent=h+':'+m+':'+s;
+}
+tick(); setInterval(tick,1000);
+</script>
+""", height=36)
     with col_r:
         _btn_style = ("display:inline-block;padding:5px 10px;margin:2px;font-size:12px;"
                       "background:#1e3a5f;color:#e2e8f0;border:1px solid #2a4080;"
