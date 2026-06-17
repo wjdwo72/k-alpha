@@ -1167,7 +1167,8 @@ def admin_panel():
                             st.success("✅ 테스트 메시지 발송 완료")
                         else:
                             st.error(f"❌ Telegram 오류: {_tj.get('description','알 수 없음')} (code {_tj.get('error_code','')})")
-                            st.caption(f"BOT_TOKEN 앞 10자: {TG_BOT_TOKEN[:10] if TG_BOT_TOKEN else '없음'} | Chat ID: {_test_id}")
+                            st.caption(f"TOKEN: {TG_BOT_TOKEN[:20] if TG_BOT_TOKEN else '없음'}... | Chat ID: [{_test_id}] len={len(str(_test_id))}")
+                            st.code(str(_tj))
                     except Exception as _te:
                         st.error(f"❌ 요청 오류: {_te}")
                 else:
