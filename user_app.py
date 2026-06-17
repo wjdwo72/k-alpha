@@ -1159,9 +1159,10 @@ def admin_panel():
                     _kst = _dtt.now(_tzz(_tdd(hours=9))).strftime("%Y-%m-%d %H:%M")
                     try:
                         _live_tok = st.secrets.get("TG_BOT_TOKEN") or st.secrets.get("BOT_TOKEN") or TG_BOT_TOKEN
+                        _chat_int = int(_test_id.strip())
                         _tr = requests.post(
                             f"https://api.telegram.org/bot{_live_tok}/sendMessage",
-                            json={"chat_id": _test_id, "text": f"✅ <b>K-ALPHA 관리 알림방 연결 완료</b>\n⏰ {_kst}", "parse_mode": "HTML"},
+                            json={"chat_id": _chat_int, "text": f"✅ <b>K-ALPHA 관리 알림방 연결 완료</b>\n⏰ {_kst}", "parse_mode": "HTML"},
                             timeout=8,
                         )
                         _tj = _tr.json()
@@ -1169,8 +1170,9 @@ def admin_panel():
                             st.success("✅ 테스트 메시지 발송 완료")
                         else:
                             st.error(f"❌ Telegram 오류: {_tj.get('description','알 수 없음')} (code {_tj.get('error_code','')})")
-                            st.caption(f"Chat ID bytes: {[hex(ord(c)) for c in str(_test_id)]}")
-                            st.code(str(_tj))
+                            # getChat으로 봇이 해당 그룹을 볼 수 있는지 확인
+                            _gc = requests.get(f"https://api.telegram.org/bot{_live_tok}/getChat?chat_id={_chat_int}", timeout=5).json()
+                            st.code(f"sendMessage: {_tj}\ngetChat: {_gc}")
                     except Exception as _te:
                         st.error(f"❌ 요청 오류: {_te}")
                 else:
