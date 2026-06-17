@@ -3747,7 +3747,7 @@ if _gist_active or st.session_state.kis_token:
             st.caption("💎 PER 스캔: KIS API 연결 후 사용 가능")
         else:
             _per_list = _per_stocks_cache
-        scan_result['per'] = [build_card(s,'per') for s in _per_list]
+        scan_result['per'] = _per_list
     else:
         scan_result['per'] = []
 
