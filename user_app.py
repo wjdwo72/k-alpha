@@ -618,6 +618,21 @@ def page_subscribe(user):
     email   = user["email"]
     name    = user.get("name", "")
 
+    # 상단 버튼
+    _tg_contact = _s("TG_CONTACT_URL") or "https://t.me/kalpha_my_bot"
+    col_home, col_inq, _ = st.columns([1, 1, 4])
+    with col_home:
+        if st.button("🏠 홈으로", key="btn_sub_home"):
+            st.session_state.pop("goto_subscribe", None)
+            st.rerun()
+    with col_inq:
+        st.markdown(
+            f'<a href="{_tg_contact}" target="_blank">'
+            f'<button style="width:100%;padding:8px;background:#2196f3;color:#fff;'
+            f'border:none;border-radius:8px;font-size:14px;cursor:pointer;">💬 문의하기</button></a>',
+            unsafe_allow_html=True
+        )
+
     st.markdown(f"""
 <div style="text-align:center;padding:40px 0 20px">
 <div style="font-size:28px;font-weight:800">
