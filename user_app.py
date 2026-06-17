@@ -1007,10 +1007,10 @@ tick(); setInterval(tick,1000);
     kospi  = data.get("kospi_n", 0)
     kosdaq = data.get("kosdaq_n", 0)
 
-    # cat_stocks / MAX_DISPLAY — 시장 지표보다 먼저 정의
+    # cat_stocks — Gist 저장 시 관리자가 이미 개수 조절, 여기선 전체 사용
     _all_keys = ["swing", "surge", "tomorrow", "smallmid", "per"]
-    MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 10)), 30)
-    cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
+    MAX_DISPLAY = data.get("ui_n_per_cat", 10)  # 표시용 레이블만 사용
+    cat_stocks = {key: data.get(key, []) for key in _all_keys}
 
 
 
