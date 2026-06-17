@@ -1222,23 +1222,8 @@ def _render_stock_list(stocks):
 
         st.markdown(f"""
 <div class="stock-card" style="margin-bottom:16px;padding:18px 20px;">
-  <!-- 차트 최상단 -->
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0;border:1px solid #1e2a3a">
-      <div style="font-size:9px;color:#475569;padding:3px 6px">봉차트 (당일)</div>
-      <img src="https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
-        style="width:100%;height:160px;object-fit:contain;display:block"
-        onerror="this.style.opacity='0.1'" alt="">
-    </div>
-    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0;border:1px solid #1e2a3a">
-      <div style="font-size:9px;color:#475569;padding:3px 6px">선차트 (3개월)</div>
-      <img src="{chart_3m}"
-        style="width:100%;height:160px;object-fit:contain;display:block"
-        onerror="this.style.opacity='0.1'" alt="">
-    </div>
-  </div>
-  <!-- 종목명 + K점수 -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+  <!-- 상단: 종목명 + K점수 -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
     <div>
       <span style="font-size:17px;font-weight:800;color:#e2e8f0">{name}</span>
       <span style="font-size:11px;color:#64748b;margin-left:8px">{code}</span>
@@ -1247,7 +1232,7 @@ def _render_stock_list(stocks):
     <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
   <!-- 가격 -->
-  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
     <span style="font-size:28px;font-weight:900;color:#e2e8f0">{price}원</span>
     <span style="font-size:15px;font-weight:700;color:{chg_color}">{chg}</span>
   </div>
@@ -1272,21 +1257,45 @@ def _render_stock_list(stocks):
     </a>
   </div>
   <!-- K 분석 사유 -->
-  {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
+  {f'<div style="font-size:12px;color:#64748b;margin-bottom:10px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
 </div>
 """, unsafe_allow_html=True)
-        if st.button(f"📊 차트 자세히 보기  {name}", key=f"chart_btn_{i}_{code}",
-                     use_container_width=True):
-            st.session_state["show_chart"] = s
-            st.rerun()
+        # 차트 2개 + 각각 클릭 버튼 (봉차트/선차트 당일)
+        _url_candle = f"https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
+        _url_line   = f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{code6}.png"
+        col_c, col_l = st.columns(2)
+        with col_c:
+            st.markdown(f"""
+<div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:8px;overflow:hidden;margin-bottom:4px">
+  <div style="font-size:9px;color:#475569;padding:3px 8px">봉차트 (당일)</div>
+  <img src="{_url_candle}" style="width:100%;height:150px;object-fit:contain;display:block"
+    onerror="this.style.opacity='0.1'" alt="">
+</div>""", unsafe_allow_html=True)
+            if st.button("📊 봉차트 보기", key=f"candle_btn_{i}_{code}", use_container_width=True):
+                st.session_state["show_chart"] = {**s, "_chart_type": "candle"}
+                st.rerun()
+        with col_l:
+            st.markdown(f"""
+<div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:8px;overflow:hidden;margin-bottom:4px">
+  <div style="font-size:9px;color:#475569;padding:3px 8px">선차트 (당일)</div>
+  <img src="{_url_line}" style="width:100%;height:150px;object-fit:contain;display:block"
+    onerror="this.style.opacity='0.1'" alt="">
+</div>""", unsafe_allow_html=True)
+            if st.button("📈 선차트 보기", key=f"line_btn_{i}_{code}", use_container_width=True):
+                st.session_state["show_chart"] = {**s, "_chart_type": "line"}
+                st.rerun()
 
 def _show_chart_popup(s):
-    """차트 팝업 뷰 (이미지2 스타일): 봉차트(당일) + 선차트(3개월)"""
-    name  = s.get("name","")
-    code  = s.get("code","")
-    code6 = code.zfill(6) if code else ""
-    chart_candle_day = f"https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
-    chart_line_3m    = f"https://ssl.pstatic.net/imgfinance/chart/item/area/month3/{code6}.png"
+    """차트 팝업 뷰: 봉차트(이미지4) 또는 선차트(이미지5) 타입별 분리"""
+    name       = s.get("name","")
+    code       = s.get("code","")
+    code6      = code.zfill(6) if code else ""
+    chart_type = s.get("_chart_type", "candle")   # "candle" or "line"
+
+    chart_url  = (f"https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
+                  if chart_type == "candle" else
+                  f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{code6}.png")
+    label      = "봉차트(일봉)" if chart_type == "candle" else "선차트(당일)"
     naver_url  = f"https://finance.naver.com/item/fchart.naver?code={code6}"
     daum_url   = f"https://finance.daum.net/quotes/A{code6}"
     krx_url    = f"https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020101&isSearch=Y&searchText={code6}"
@@ -1295,7 +1304,7 @@ def _show_chart_popup(s):
     with col_title:
         st.markdown(f"""
 <div style="padding:12px 0 8px">
-  <div style="font-size:18px;font-weight:800;color:#e2e8f0">📊 차트 보기</div>
+  <div style="font-size:18px;font-weight:800;color:#e2e8f0">{"📊" if chart_type=="candle" else "📈"} 차트 보기</div>
   <div style="font-size:15px;color:#94a3b8;margin-top:2px">{name} <span style="font-size:12px;color:#475569">{code}</span></div>
 </div>""", unsafe_allow_html=True)
     with col_close:
@@ -1304,25 +1313,15 @@ def _show_chart_popup(s):
             st.session_state.pop("show_chart", None)
             st.rerun()
 
-    # 봉차트(당일) + 선차트(3개월) 미리보기
+    # 차트 미리보기 (단일 — 봉 또는 선)
     st.markdown(f"""
 <div style="background:#0d1520;border:1px solid #1e2a3a;border-radius:12px;padding:12px;margin-bottom:12px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <span style="font-size:13px;font-weight:600;color:#94a3b8">📊 봉차트(당일) &nbsp;·&nbsp; 📈 선차트(3개월)</span>
+    <span style="font-size:13px;font-weight:600;color:#94a3b8">{"📊" if chart_type=="candle" else "📈"} {label} 미리보기</span>
     <a href="{naver_url}" target="_blank" style="font-size:12px;color:#7dd3fc;text-decoration:none">네이버에서 보기 ↗</a>
   </div>
-  <div style="display:flex;gap:8px">
-    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden">
-      <div style="font-size:9px;color:#475569;padding:3px 6px">봉차트 (당일)</div>
-      <img src="{chart_candle_day}" style="width:100%;height:200px;object-fit:contain;display:block"
-        onerror="this.style.opacity='0.1'" alt="봉차트">
-    </div>
-    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden">
-      <div style="font-size:9px;color:#475569;padding:3px 6px">선차트 (3개월)</div>
-      <img src="{chart_line_3m}" style="width:100%;height:200px;object-fit:contain;display:block"
-        onerror="this.style.opacity='0.1'" alt="선차트">
-    </div>
-  </div>
+  <img src="{chart_url}" style="width:100%;border-radius:8px;background:#0a0e1a;display:block"
+    onerror="this.style.opacity='0.1'" alt="{label}">
 </div>
 """, unsafe_allow_html=True)
 
