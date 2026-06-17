@@ -998,15 +998,6 @@ tick(); setInterval(tick,1000);
     MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 10)), 30)
     cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
 
-    # ── 차트 클릭 query_param 처리 ─────────────────────────────
-    _qp_chart = st.query_params.get("show_chart", "")
-    if _qp_chart:
-        st.query_params.clear()
-        _all_flat = [s for key in _all_keys for s in data.get(key, [])]
-        _found = next((s for s in _all_flat if s.get("code","") == _qp_chart),
-                      {"code": _qp_chart, "name": _qp_chart})
-        st.session_state["show_chart"] = _found
-        st.rerun()
 
     # ── 시장 지표 바 ──────────────────────────────────────────
     mkt = load_market_data()
@@ -1110,13 +1101,13 @@ tick(); setInterval(tick,1000);
                 gc = grade_colors.get(gr,"#94a3b8")
 
                 _c6 = c.zfill(6) if c else ""
-                _chart_d = f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{_c6}.png"
-                _chart_m = f"https://ssl.pstatic.net/imgfinance/chart/item/area/month3/{_c6}.png"
+                _chart_candle = f"https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{_c6}.png"
+                _chart_line   = f"https://ssl.pstatic.net/imgfinance/chart/item/area/month3/{_c6}.png"
                 col_info, col_btn = st.columns([8, 2])
                 with col_info:
                     st.markdown(f"""
 <div style="padding:10px 4px;border-bottom:1px solid #1a2a3a">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
     <div>
       <span style="font-size:15px;font-weight:700;color:#e2e8f0">{n}</span>
       <span style="font-size:11px;color:#64748b;margin-left:6px">{c}</span>
@@ -1128,11 +1119,17 @@ tick(); setInterval(tick,1000);
         padding:2px 8px;border-radius:10px;margin-left:8px">{sc}점 {gr}</span>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-    <img src="{_chart_d}" style="width:100%;height:80px;object-fit:contain;border-radius:4px;background:#0a0e1a"
-      onerror="this.style.opacity='0.05'" alt="당일">
-    <img src="{_chart_m}" style="width:100%;height:80px;object-fit:contain;border-radius:4px;background:#0a0e1a"
-      onerror="this.style.opacity='0.05'" alt="3개월">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div style="background:#0a0e1a;border-radius:6px;overflow:hidden;border:1px solid #1e2a3a">
+      <div style="font-size:9px;color:#475569;padding:2px 5px">봉차트 (당일)</div>
+      <img src="{_chart_candle}" style="width:100%;height:110px;object-fit:contain;display:block"
+        onerror="this.style.opacity='0.05'" alt="봉차트">
+    </div>
+    <div style="background:#0a0e1a;border-radius:6px;overflow:hidden;border:1px solid #1e2a3a">
+      <div style="font-size:9px;color:#475569;padding:2px 5px">선차트 (3개월)</div>
+      <img src="{_chart_line}" style="width:100%;height:110px;object-fit:contain;display:block"
+        onerror="this.style.opacity='0.05'" alt="선차트">
+    </div>
   </div>
 </div>""", unsafe_allow_html=True)
                 with col_btn:
@@ -1234,23 +1231,21 @@ def _render_stock_list(stocks):
     </div>
     <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
-  <!-- 종목명~현재가 사이 인라인 차트 (클릭 시 차트 팝업) -->
-  <a href="?show_chart={code}" target="_self" style="text-decoration:none;display:block;margin-bottom:6px">
-  <div style="display:flex;align-items:center;gap:10px;cursor:pointer;position:relative">
+  <!-- 종목명~현재가 사이 인라인 차트: 봉(당일) + 선(3개월) -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
     <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0;border:1px solid #1e2a3a">
-      <img src="{chart_day}" style="width:100%;height:150px;object-fit:contain;display:block"
+      <div style="font-size:9px;color:#475569;padding:3px 6px">봉차트 (당일)</div>
+      <img src="https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
+        style="width:100%;height:160px;object-fit:contain;display:block"
         onerror="this.style.opacity='0.1'" alt="">
     </div>
     <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden;min-width:0;border:1px solid #1e2a3a">
-      <img src="{chart_3m}" style="width:100%;height:150px;object-fit:contain;display:block"
+      <div style="font-size:9px;color:#475569;padding:3px 6px">선차트 (3개월)</div>
+      <img src="{chart_3m}"
+        style="width:100%;height:160px;object-fit:contain;display:block"
         onerror="this.style.opacity='0.1'" alt="">
-    </div>
-    <div style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.6);
-      color:#7dd3fc;font-size:10px;padding:2px 7px;border-radius:8px;pointer-events:none">
-      📊 클릭하여 차트 보기
     </div>
   </div>
-  </a>
   <!-- 가격 -->
   <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
     <span style="font-size:28px;font-weight:900;color:#e2e8f0">{price}원</span>
@@ -1280,13 +1275,18 @@ def _render_stock_list(stocks):
   {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
 </div>
 """, unsafe_allow_html=True)
+        if st.button(f"📊 차트 자세히 보기  {name}", key=f"chart_btn_{i}_{code}",
+                     use_container_width=True):
+            st.session_state["show_chart"] = s
+            st.rerun()
 
 def _show_chart_popup(s):
-    """차트 팝업 뷰 (이미지2 스타일)"""
+    """차트 팝업 뷰 (이미지2 스타일): 봉차트(당일) + 선차트(3개월)"""
     name  = s.get("name","")
     code  = s.get("code","")
     code6 = code.zfill(6) if code else ""
-    chart_day  = f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{code6}.png"
+    chart_candle_day = f"https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{code6}.png"
+    chart_line_3m    = f"https://ssl.pstatic.net/imgfinance/chart/item/area/month3/{code6}.png"
     naver_url  = f"https://finance.naver.com/item/fchart.naver?code={code6}"
     daum_url   = f"https://finance.daum.net/quotes/A{code6}"
     krx_url    = f"https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020101&isSearch=Y&searchText={code6}"
@@ -1295,7 +1295,7 @@ def _show_chart_popup(s):
     with col_title:
         st.markdown(f"""
 <div style="padding:12px 0 8px">
-  <div style="font-size:18px;font-weight:800;color:#e2e8f0">차트 보기</div>
+  <div style="font-size:18px;font-weight:800;color:#e2e8f0">📊 차트 보기</div>
   <div style="font-size:15px;color:#94a3b8;margin-top:2px">{name} <span style="font-size:12px;color:#475569">{code}</span></div>
 </div>""", unsafe_allow_html=True)
     with col_close:
@@ -1304,22 +1304,33 @@ def _show_chart_popup(s):
             st.session_state.pop("show_chart", None)
             st.rerun()
 
-    # 선차트(당일) 미리보기
+    # 봉차트(당일) + 선차트(3개월) 미리보기
     st.markdown(f"""
-<div style="background:#0d1520;border:1px solid #1e2a3a;border-radius:12px;padding:12px;margin-bottom:10px">
+<div style="background:#0d1520;border:1px solid #1e2a3a;border-radius:12px;padding:12px;margin-bottom:12px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <span style="font-size:13px;font-weight:600;color:#94a3b8">📈 선차트(당일) 미리보기</span>
+    <span style="font-size:13px;font-weight:600;color:#94a3b8">📊 봉차트(당일) &nbsp;·&nbsp; 📈 선차트(3개월)</span>
     <a href="{naver_url}" target="_blank" style="font-size:12px;color:#7dd3fc;text-decoration:none">네이버에서 보기 ↗</a>
   </div>
-  <img src="{chart_day}" style="width:100%;border-radius:8px;background:#0a0e1a" onerror="this.style.opacity='0.1'" alt="차트">
+  <div style="display:flex;gap:8px">
+    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden">
+      <div style="font-size:9px;color:#475569;padding:3px 6px">봉차트 (당일)</div>
+      <img src="{chart_candle_day}" style="width:100%;height:200px;object-fit:contain;display:block"
+        onerror="this.style.opacity='0.1'" alt="봉차트">
+    </div>
+    <div style="flex:1;background:#0a0e1a;border-radius:6px;overflow:hidden">
+      <div style="font-size:9px;color:#475569;padding:3px 6px">선차트 (3개월)</div>
+      <img src="{chart_line_3m}" style="width:100%;height:200px;object-fit:contain;display:block"
+        onerror="this.style.opacity='0.1'" alt="선차트">
+    </div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
     # 외부 링크 목록
     links = [
         ("🟢", "네이버 금융 차트", "끊김 없이 · 로그인 없음 · 바로 열림", naver_url, "#03C75A"),
-        ("🔵", "다음 금융", "끊김 · 로그인 필요 · 바로 열림", daum_url, "#4285F4"),
-        ("📋", "한국거래소 정보데이터시스템", f"data.krx.co.kr · 로그인 없음", krx_url, "#64748b"),
+        ("🔵", "다음 금융", "바로 열림", daum_url, "#4285F4"),
+        ("📋", "한국거래소 정보데이터시스템", "data.krx.co.kr · 로그인 없음", krx_url, "#64748b"),
     ]
     for icon, title, desc, url, color in links:
         st.markdown(f"""
