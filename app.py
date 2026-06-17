@@ -138,13 +138,16 @@ def _start_bg_scan_thread():
 
             # 헤더
             ts = kst_strftime("%H:%M:%S")
-            sw  = sr.get("swing",   [])[:n_cat]
-            su  = sr.get("surge",   [])[:n_cat]
-            tm  = sr.get("tomorrow",[])[:n_cat]
-            sml = sr.get("smallmid",[])[:n_cat]
+            menus = ["tg_menu_p","tg_menu_g1","tg_menu_g2","tg_menu_g3"]
+            menu = ss.get(menus[i], {"swing":True,"surge":True,"tomorrow":True,"smallmid":True,"per":False})
+            sw  = sr.get("swing",   [])[:n_cat] if menu.get("swing",True)    else []
+            su  = sr.get("surge",   [])[:n_cat] if menu.get("surge",True)    else []
+            tm  = sr.get("tomorrow",[])[:n_cat] if menu.get("tomorrow",True) else []
+            sml = sr.get("smallmid",[])[:n_cat] if menu.get("smallmid",True) else []
+            per = sr.get("per",     [])[:n_cat] if menu.get("per",False)     else []
             hdr = (f"📡 <b>K-ALPHA {label} 스캔</b> [{ts}] 🟢장중\n"
                    f"KOSPI {sr.get('kospi_n',0)}+KOSDAQ {sr.get('kosdaq_n',0)}종목\n"
-                   f"🔥스윙:{len(sw)} ⚡급등:{len(su)} 🌙내일:{len(tm)} 📦중소형:{len(sml)}")
+                   f"🔥스윙:{len(sw)} ⚡급등:{len(su)} 🌙내일:{len(tm)} 📦중소형:{len(sml)} 💎PER:{len(per)}")
             _send_tg_msg(tok, chat, hdr)
             time.sleep(0.3)
 
@@ -169,6 +172,7 @@ def _start_bg_scan_thread():
             _send_cat(su,  "⚡", "급등전야")
             _send_cat(tm,  "🌙", "내일관심")
             _send_cat(sml, "📦", "중소형주")
+            _send_cat(per, "💎", "PER저평가")
             _send_tg_msg(tok, chat, f"━━━━━━━━━━━━━━━━\n📊 총 {sr.get('total',0)}종목 스캔완료\n⏱ 다음 전송 {iv_min}분 후")
 
     def _bg_fmt_card(c):
