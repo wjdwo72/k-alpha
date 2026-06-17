@@ -1159,6 +1159,8 @@ def admin_panel():
                     _kst = _dtt.now(_tzz(_tdd(hours=9))).strftime("%Y-%m-%d %H:%M")
                     try:
                         _live_tok = st.secrets.get("TG_BOT_TOKEN") or st.secrets.get("BOT_TOKEN") or TG_BOT_TOKEN
+                        # 먼저 getMe로 어떤 봇 토큰인지 확인
+                        _gm = requests.get(f"https://api.telegram.org/bot{_live_tok}/getMe", timeout=5).json()
                         _chat_int = int(_test_id.strip())
                         _tr = requests.post(
                             f"https://api.telegram.org/bot{_live_tok}/sendMessage",
@@ -1170,9 +1172,7 @@ def admin_panel():
                             st.success("✅ 테스트 메시지 발송 완료")
                         else:
                             st.error(f"❌ Telegram 오류: {_tj.get('description','알 수 없음')} (code {_tj.get('error_code','')})")
-                            # getChat으로 봇이 해당 그룹을 볼 수 있는지 확인
-                            _gc = requests.get(f"https://api.telegram.org/bot{_live_tok}/getChat?chat_id={_chat_int}", timeout=5).json()
-                            st.code(f"sendMessage: {_tj}\ngetChat: {_gc}")
+                            st.code(f"getMe: {_gm}\nsendMessage: {_tj}")
                     except Exception as _te:
                         st.error(f"❌ 요청 오류: {_te}")
                 else:
