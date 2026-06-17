@@ -3041,6 +3041,7 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
         _ui_n = st.slider("📊 UI 카테고리당 종목 수", min_value=1, max_value=30,
             value=st.session_state.get('ui_n_per_cat', 10), key="sl_ui_n")
         st.session_state['ui_n_per_cat'] = _ui_n
+        get_server_store()['ui_n_per_cat'] = _ui_n  # 백그라운드 스레드에 즉시 반영
         st.caption(f"현재 설정: 카테고리당 {_ui_n}개 표시 (실시간 스윙 / 급등전야 / 내일관심 / 중소형주 / 💎PER저평가)")
 
         # 설정값 즉시 Gist 반영 버튼
