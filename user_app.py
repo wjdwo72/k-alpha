@@ -433,6 +433,20 @@ body, .stApp { background: #0a0e1a; color: #e2e8f0; }
 .stock-card:hover { border-color: #00d4ff44; }
 .pos { color: #ff3b5c; } .neg { color: #4fa3e0; }
 input[type=text] { border-radius: 8px !important; }
+/* 차트 이미지 위 투명 오버레이 버튼 */
+div.element-container:has(.chart-ovl) + div.element-container .stButton button {
+  transform: translateY(-152px) !important;
+  height: 152px !important; min-height: 152px !important;
+  opacity: 0 !important; cursor: pointer !important;
+  display: block !important; width: 100% !important;
+  position: relative !important; z-index: 50 !important;
+  box-shadow: none !important; border: none !important;
+  background: transparent !important;
+}
+div.element-container:has(.chart-ovl) + div.element-container {
+  height: 0 !important; overflow: visible !important;
+  padding: 0 !important; margin: 0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -998,17 +1012,6 @@ tick(); setInterval(tick,1000);
     MAX_DISPLAY = min(int(data.get("ui_n_per_cat", 10)), 30)
     cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
 
-    # ── 차트 클릭 query_param 처리 (?sc=CODE&ct=candle/line) ──
-    _qsc = st.query_params.get("sc", "")
-    _qct = st.query_params.get("ct", "candle")
-    if _qsc:
-        st.query_params.clear()
-        _all_flat = [s for k in _all_keys for s in data.get(k, [])]
-        _found = next((s for s in _all_flat if s.get("code","").zfill(6) == _qsc),
-                      {"code": _qsc, "name": _qsc})
-        st.session_state["_dlg_stock"] = _found
-        st.session_state["_dlg_type"]  = _qct
-        _chart_dialog()
 
 
     # ── 시장 지표 바 ──────────────────────────────────────────
@@ -1109,7 +1112,7 @@ tick(); setInterval(tick,1000);
 
                 _c6 = c.zfill(6) if c else ""
                 _chart_candle = f"https://ssl.pstatic.net/imgfinance/chart/item/candle/day/{_c6}.png"
-                _chart_line   = f"https://ssl.pstatic.net/imgfinance/chart/item/area/month3/{_c6}.png"
+                _chart_line   = f"https://ssl.pstatic.net/imgfinance/chart/item/area/day/{_c6}.png"
                 col_info, col_btn = st.columns([8, 2])
                 with col_info:
                     st.markdown(f"""
@@ -1128,22 +1131,16 @@ tick(); setInterval(tick,1000);
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <div style="background:#0a0e1a;border-radius:6px;overflow:hidden;border:1px solid #1e2a3a">
-      <div style="font-size:9px;color:#475569;padding:2px 5px">봉차트 (당일)</div>
-      <img src="{_chart_candle}" style="width:100%;height:110px;object-fit:contain;display:block"
+      <img src="{_chart_candle}" style="width:100%;height:150px;object-fit:contain;display:block"
         onerror="this.style.opacity='0.05'" alt="봉차트">
     </div>
     <div style="background:#0a0e1a;border-radius:6px;overflow:hidden;border:1px solid #1e2a3a">
-      <div style="font-size:9px;color:#475569;padding:2px 5px">선차트 (3개월)</div>
-      <img src="{_chart_line}" style="width:100%;height:110px;object-fit:contain;display:block"
+      <img src="{_chart_line}" style="width:100%;height:150px;object-fit:contain;display:block"
         onerror="this.style.opacity='0.05'" alt="선차트">
     </div>
   </div>
 </div>""", unsafe_allow_html=True)
                 with col_btn:
-                    if st.button("📊", key=f"chart_stock_{popup_key}_{si}", help="차트 보기", use_container_width=True):
-                        st.session_state["show_chart"] = s
-                        st.session_state.pop("popup_cat", None)
-                        st.rerun()
                     if st.button("상세 →", key=f"sel_stock_{popup_key}_{si}", use_container_width=True):
                         st.session_state["selected_stock"] = s
                         st.session_state.pop("popup_cat", None)
@@ -1297,21 +1294,6 @@ def _render_stock_list(stocks):
     <div style="font-size:13px;color:#64748b">손절가 &nbsp;<b style="color:#4fa3e0">{stop}원</b></div>
     <div style="font-size:13px;color:#64748b">손익비 &nbsp;<b style="color:#e2e8f0">{rr}</b></div>
   </div>
-  <!-- 차트 2개 — 클릭하면 팝업 -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-    <a href="?sc={code6}&ct=candle" target="_self" style="text-decoration:none;display:block">
-      <div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:6px;overflow:hidden;cursor:pointer">
-        <img src="{_url_candle}" style="width:100%;height:150px;object-fit:contain;display:block"
-          onerror="this.style.opacity='0.1'" alt="봉차트">
-      </div>
-    </a>
-    <a href="?sc={code6}&ct=line" target="_self" style="text-decoration:none;display:block">
-      <div style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:6px;overflow:hidden;cursor:pointer">
-        <img src="{_url_line}" style="width:100%;height:150px;object-fit:contain;display:block"
-          onerror="this.style.opacity='0.1'" alt="선차트">
-      </div>
-    </a>
-  </div>
   <!-- 배지 -->
   <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
     <span style="font-size:11px;background:#0f4c35;color:#00ff88;padding:3px 8px;border-radius:10px">{mkt}</span>
@@ -1322,9 +1304,27 @@ def _render_stock_list(stocks):
     <span style="font-size:11px;background:#1a2a3a;color:#4fa3e0;padding:3px 8px;border-radius:10px">절 {stop}원</span>
   </div>
   <!-- K 분석 사유 -->
-  {f'<details style="cursor:pointer"><summary style="font-size:12px;color:#64748b;font-weight:600;list-style:none">◀ K 분석 사유</summary>{reasons_html}</details>' if reasons_html else ""}
+  {f'<div style="font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">K 분석 사유</div>{reasons_html}' if reasons_html else ""}
 </div>
 """, unsafe_allow_html=True)
+        # 차트: .chart-ovl 마커 div + 투명 오버레이 버튼 → st.dialog (새로고침 없음)
+        col_c, col_l = st.columns(2)
+        with col_c:
+            st.markdown(f"""<div class="chart-ovl" style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:6px;overflow:hidden">
+  <img src="{_url_candle}" style="width:100%;height:150px;object-fit:contain;display:block"
+    onerror="this.style.opacity='0.1'" alt="봉차트"></div>""", unsafe_allow_html=True)
+            if st.button(" ", key=f"c_{i}_{code}", use_container_width=True):
+                st.session_state["_dlg_stock"] = s
+                st.session_state["_dlg_type"]  = "candle"
+                _chart_dialog()
+        with col_l:
+            st.markdown(f"""<div class="chart-ovl" style="background:#0a0e1a;border:1px solid #1e2a3a;border-radius:6px;overflow:hidden">
+  <img src="{_url_line}" style="width:100%;height:150px;object-fit:contain;display:block"
+    onerror="this.style.opacity='0.1'" alt="선차트"></div>""", unsafe_allow_html=True)
+            if st.button(" ", key=f"l_{i}_{code}", use_container_width=True):
+                st.session_state["_dlg_stock"] = s
+                st.session_state["_dlg_type"]  = "line"
+                _chart_dialog()
 
 def _show_chart_popup(s):
     """차트 팝업 뷰: 봉차트(이미지4) 또는 선차트(이미지5) 타입별 분리"""
