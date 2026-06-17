@@ -619,19 +619,37 @@ def page_subscribe(user):
     name    = user.get("name", "")
 
     # 상단 버튼
-    _tg_contact = _s("TG_CONTACT_URL") or "https://t.me/kalpha_my_bot"
     col_home, col_inq, _ = st.columns([1, 1, 4])
     with col_home:
         if st.button("🏠 홈으로", key="btn_sub_home"):
             st.session_state.pop("goto_subscribe", None)
             st.rerun()
     with col_inq:
-        st.markdown(
-            f'<a href="{_tg_contact}" target="_blank">'
-            f'<button style="width:100%;padding:8px;background:#2196f3;color:#fff;'
-            f'border:none;border-radius:8px;font-size:14px;cursor:pointer;">💬 문의하기</button></a>',
-            unsafe_allow_html=True
-        )
+        if st.button("💬 문의하기", key="btn_sub_inq"):
+            st.session_state["show_inq"] = not st.session_state.get("show_inq", False)
+
+    if st.session_state.get("show_inq"):
+        with st.container():
+            st.markdown("---")
+            inq_text = st.text_area("문의 내용을 입력하세요", key="inq_text", height=100,
+                                     placeholder="궁금하신 점이나 요청사항을 입력해주세요.")
+            if st.button("📨 전송", key="btn_inq_send"):
+                if inq_text.strip():
+                    from datetime import datetime as _di, timezone as _tzi, timedelta as _tdi
+                    _kst = _di.now(_tzi(_tdi(hours=9))).strftime("%Y-%m-%d %H:%M")
+                    send_tg_mgmt(
+                        f"💬 <b>문의 접수</b>\n"
+                        f"👤 {name or '(이름없음)'}\n"
+                        f"📧 {email}\n"
+                        f"⏰ {_kst}\n\n"
+                        f"📝 {inq_text.strip()}"
+                    )
+                    st.success("✅ 문의가 전송되었습니다. 빠르게 답변드리겠습니다.")
+                    st.session_state["show_inq"] = False
+                    st.session_state.pop("inq_text", None)
+                else:
+                    st.warning("문의 내용을 입력해주세요.")
+            st.markdown("---")
 
     st.markdown(f"""
 <div style="text-align:center;padding:40px 0 20px">
