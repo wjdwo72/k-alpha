@@ -1117,33 +1117,35 @@ tick(); setInterval(tick,1000);
                         st.rerun()
             return  # 팝업 보여주는 동안 탭 숨김
 
-    # 카테고리 요약 카드 (갯수 클릭 → 팝업)
+    # 카테고리 요약 카드 (클릭 → 해당 메뉴로 이동)
+    _sel_cat = st.session_state.get("popup_cat", categories[0][1])
     cols = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
         cnt = len(cat_stocks.get(cat_key, []))
+        _active = _sel_cat == cat_key
+        _border = "#00d4ff" if _active else "#1e3a5f"
+        _bg     = "linear-gradient(135deg,#0d2030,#1a3050)" if _active else "linear-gradient(135deg,#0d1520,#1a2744)"
         with cols[i]:
-            st.markdown(f"""
-<div style="background:linear-gradient(135deg,#0d1520,#1a2744);border:1px solid #1e3a5f;
-  border-radius:8px;padding:4px 3px;text-align:center;margin-bottom:4px">
-  <div style="font-size:12px">{cat_icon}</div>
-  <div style="font-size:9px;color:#94a3b8;line-height:1.2">{cat_name}</div>
-  <div style="font-size:16px;font-weight:900;color:#00d4ff;line-height:1.3">{cnt}</div>
-</div>""", unsafe_allow_html=True)
-            if st.button(f"목록 보기", key=f"popup_btn_{cat_key}"):
+            if st.button(
+                f"{cat_icon}\n{cat_name}\n{cnt}",
+                key=f"cat_btn_{cat_key}",
+                use_container_width=True,
+            ):
                 st.session_state["popup_cat"] = cat_key
                 st.rerun()
 
-    tab_names = [f"{icon} {name} {len(cat_stocks.get(key,[]))}" for name, key, icon in categories]
-    tabs = st.tabs(tab_names)
-
-    for idx, (tab, (cat_name, cat_key, cat_icon)) in enumerate(zip(tabs, categories)):
-        with tab:
-            stocks = cat_stocks.get(cat_key, [])
-            if not stocks:
-                st.markdown('<div style="text-align:center;color:#64748b;padding:40px">데이터 없음</div>',
-                            unsafe_allow_html=True)
-                continue
-            _render_stock_list(stocks)
+    # 선택된 카테고리 종목 표시
+    _active_cat = st.session_state.get("popup_cat", categories[0][1])
+    _active_name = next((n for n,k,_ in categories if k==_active_cat), "")
+    _active_icon = next((ic for _,k,ic in categories if k==_active_cat), "")
+    st.markdown(f"<div style='color:#00d4ff;font-size:14px;font-weight:700;padding:8px 0 4px'>"
+                f"{_active_icon} {_active_name}</div>", unsafe_allow_html=True)
+    _active_stocks = cat_stocks.get(_active_cat, [])
+    if not _active_stocks:
+        st.markdown('<div style="text-align:center;color:#64748b;padding:40px">스캔 결과 없음</div>',
+                    unsafe_allow_html=True)
+    else:
+        _render_stock_list(_active_stocks)
 
 def _render_stock_list(stocks):
     for i, s in enumerate(stocks):
