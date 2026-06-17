@@ -3037,53 +3037,36 @@ border-radius:8px;padding:12px;font-family:monospace;font-size:12px;color:#e2e8f
         st.caption(f"개인방:{_n_p}개 | 그룹방1:{_n_g1}개 | 그룹방2:{_n_g2}개 | 그룹방3:{_n_g3}개")
 
         st.divider()
+        def _auto_save_ui_n():
+            """슬라이더 변경 시 자동으로 Gist에 저장"""
+            _n = st.session_state.get('sl_ui_n', 10)
+            get_server_store()['ui_n_per_cat'] = _n
+            _gid = _get_secret('GIST_ID'); _ght = _get_secret('GH_TOKEN')
+            if not _gid or not _ght: return
+            try:
+                _gr = requests.get(f"https://api.github.com/gists/{_gid}",
+                    headers={'Authorization':f'token {_ght}','Accept':'application/vnd.github.v3+json'}, timeout=8)
+                _cur = {}
+                if _gr.status_code == 200:
+                    _raw = _gr.json().get("files",{}).get("kalpha_scan.json",{}).get("content","")
+                    if _raw: _cur = json.loads(_raw)
+                _cur['ui_n_per_cat'] = _n
+                _srv = get_server_store().get('scan_result') or st.session_state.get('last_scan_result', {})
+                for _k in ['swing','surge','tomorrow','smallmid','per']:
+                    if _srv.get(_k): _cur[_k] = _srv[_k]
+                requests.patch(f"https://api.github.com/gists/{_gid}",
+                    headers={'Authorization':f'token {_ght}','Accept':'application/vnd.github.v3+json'},
+                    json={"files":{"kalpha_scan.json":{"content":json.dumps(_cur,ensure_ascii=False)}}}, timeout=10)
+                fetch_gist_scan.clear()
+            except: pass
+
         st.markdown("**🖥️ UI 화면 카테고리당 표시 종목 수**")
         _ui_n = st.slider("📊 UI 카테고리당 종목 수", min_value=1, max_value=30,
-            value=st.session_state.get('ui_n_per_cat', 10), key="sl_ui_n")
+            value=st.session_state.get('ui_n_per_cat', 10), key="sl_ui_n",
+            on_change=_auto_save_ui_n)
         st.session_state['ui_n_per_cat'] = _ui_n
-        get_server_store()['ui_n_per_cat'] = _ui_n  # 백그라운드 스레드에 즉시 반영
         st.caption(f"현재 설정: 카테고리당 {_ui_n}개 표시 (실시간 스윙 / 급등전야 / 내일관심 / 중소형주 / 💎PER저평가)")
-
-        # 설정값 즉시 Gist 반영 버튼
-        if st.button("💾 Gist에 설정 저장 (유저앱 즉시 반영)", key="btn_save_ui_n"):
-            _gid_ui = _get_secret('GIST_ID')
-            _ght_ui = _get_secret('GH_TOKEN')
-            if not _gid_ui or not _ght_ui:
-                st.error("GIST_ID 또는 GH_TOKEN 시크릿 없음")
-            else:
-                try:
-                    # 현재 Gist 데이터 읽기
-                    _gr = requests.get(
-                        f"https://api.github.com/gists/{_gid_ui}",
-                        headers={'Authorization': f'token {_ght_ui}',
-                                 'Accept': 'application/vnd.github.v3+json'}, timeout=8)
-                    _cur = {}
-                    if _gr.status_code == 200:
-                        _raw = _gr.json().get("files",{}).get("kalpha_scan.json",{}).get("content","")
-                        if _raw:
-                            _cur = json.loads(_raw)
-                    # ui_n_per_cat 업데이트
-                    _cur['ui_n_per_cat'] = _ui_n
-                    # server_store의 풀 스캔 데이터로 배열 교체 (trimming은 유저앱에서)
-                    _srv_scan = get_server_store().get('scan_result') or st.session_state.get('last_scan_result', {})
-                    for _k in ['swing','surge','tomorrow','smallmid','per']:
-                        if _srv_scan.get(_k):
-                            _cur[_k] = _srv_scan[_k]
-                    _pw = requests.patch(
-                        f"https://api.github.com/gists/{_gid_ui}",
-                        headers={'Authorization': f'token {_ght_ui}',
-                                 'Accept': 'application/vnd.github.v3+json'},
-                        json={"files": {"kalpha_scan.json": {"content": json.dumps(_cur, ensure_ascii=False)}}},
-                        timeout=10)
-                    if _pw.status_code == 200:
-                        fetch_gist_scan.clear()
-                        # server_store도 즉시 업데이트 → 백그라운드 스레드가 새 값으로 저장
-                        get_server_store()['ui_n_per_cat'] = _ui_n
-                        st.success(f"✅ Gist 저장 완료 — 카테고리당 {_ui_n}개 설정 반영")
-                    else:
-                        st.error(f"Gist 저장 실패: {_pw.status_code}")
-                except Exception as _e:
-                    st.error(f"오류: {_e}")
+        st.caption("✅ 슬라이더 변경 시 Gist 자동 저장 — 유저앱 60초 내 반영")
 
     # ── 🤖 Google AI Studio (Gemini) ──────────────────────────────
     with st.expander("🤖 Google AI 분석 설정 (Gemini)", expanded=False):
