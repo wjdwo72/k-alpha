@@ -631,22 +631,38 @@ def page_subscribe(user):
     if st.session_state.get("show_inq"):
         with st.container():
             st.markdown("---")
-            inq_text = st.text_area("문의 내용을 입력하세요", key="inq_text", height=100,
-                                     placeholder="궁금하신 점이나 요청사항을 입력해주세요.")
+            _tg_id_s  = st.text_input("텔레그램 ID (선택)", placeholder="@username", key="inq_tg_id_s")
+            inq_text  = st.text_area("문의 내용을 입력하세요", key="inq_text", height=100,
+                                      placeholder="궁금하신 점이나 요청사항을 입력해주세요.")
+            _inq_file_s = st.file_uploader("사진/문서 첨부 (선택)", type=["jpg","jpeg","png","gif","pdf","docx","xlsx","txt"], key="inq_file_s")
             if st.button("📨 전송", key="btn_inq_send"):
                 if inq_text.strip():
                     from datetime import datetime as _di, timezone as _tzi, timedelta as _tdi
                     _kst = _di.now(_tzi(_tdi(hours=9))).strftime("%Y-%m-%d %H:%M")
+                    _tg_line_s = f"📱 텔레그램: {_tg_id_s.strip()}\n" if _tg_id_s.strip() else ""
                     send_tg_mgmt(
                         f"💬 <b>문의 접수</b>\n"
                         f"👤 {name or '(이름없음)'}\n"
                         f"📧 {email}\n"
+                        f"{_tg_line_s}"
                         f"⏰ {_kst}\n\n"
                         f"📝 {inq_text.strip()}"
                     )
+                    if _inq_file_s:
+                        _live_tok_s = (st.session_state.get("tg_token") or
+                                       st.secrets.get("TG_BOT_TOKEN") or TG_BOT_TOKEN)
+                        _mgmt_id_s = _get_mgmt_chat()
+                        if _live_tok_s and _mgmt_id_s:
+                            try:
+                                requests.post(
+                                    f"https://api.telegram.org/bot{_live_tok_s}/sendDocument",
+                                    data={"chat_id": _mgmt_id_s, "caption": f"📎 {_inq_file_s.name}"},
+                                    files={"document": (_inq_file_s.name, _inq_file_s.read())},
+                                    timeout=15,
+                                )
+                            except: pass
                     st.success("✅ 문의가 전송되었습니다. 빠르게 답변드리겠습니다.")
                     st.session_state["show_inq"] = False
-                    st.session_state.pop("inq_text", None)
                 else:
                     st.warning("문의 내용을 입력해주세요.")
             st.markdown("---")
@@ -866,16 +882,61 @@ def page_main(user, sub):
 </div>
 """, unsafe_allow_html=True)
     with col_r:
-        _c1, _c2 = st.columns(2)
+        _c1, _c2, _c3 = st.columns(3)
         with _c1:
             if st.button("💳 결제", key="btn_goto_pay"):
                 st.session_state["goto_subscribe"] = True
                 st.rerun()
         with _c2:
+            if st.button("💬 문의", key="btn_main_inq"):
+                st.session_state["show_main_inq"] = not st.session_state.get("show_main_inq", False)
+        with _c3:
             if st.button("로그아웃", key="btn_logout_main"):
                 for k in ["user","sub","legal"]:
                     st.session_state.pop(k, None)
                 st.rerun()
+
+    # 문의 폼 (메인 화면 인라인)
+    if st.session_state.get("show_main_inq"):
+        with st.expander("💬 문의하기", expanded=True):
+            _name_m  = user.get("name","")
+            _email_m = user.get("email","")
+            _tg_id   = st.text_input("텔레그램 ID (선택)", placeholder="@username", key="inq_tg_id")
+            _inq_txt = st.text_area("문의 내용", height=120, placeholder="궁금하신 점이나 요청사항을 입력해주세요.", key="inq_main_txt")
+            _inq_file = st.file_uploader("사진/문서 첨부 (선택)", type=["jpg","jpeg","png","gif","pdf","docx","xlsx","txt"], key="inq_file")
+            if st.button("📨 전송", key="btn_main_inq_send"):
+                if _inq_txt.strip():
+                    from datetime import datetime as _di2, timezone as _tzi2, timedelta as _tdi2
+                    _kst2 = _di2.now(_tzi2(_tdi2(hours=9))).strftime("%Y-%m-%d %H:%M")
+                    _tg_line = f"📱 텔레그램: {_tg_id.strip()}\n" if _tg_id.strip() else ""
+                    _msg = (f"💬 <b>문의 접수</b>\n"
+                            f"👤 {_name_m or '(이름없음)'}\n"
+                            f"📧 {_email_m}\n"
+                            f"{_tg_line}"
+                            f"⏰ {_kst2}\n\n"
+                            f"📝 {_inq_txt.strip()}")
+                    send_tg_mgmt(_msg)
+                    # 파일 첨부
+                    if _inq_file:
+                        _live_tok2 = (st.session_state.get("tg_token") or
+                                      st.secrets.get("TG_BOT_TOKEN") or TG_BOT_TOKEN)
+                        _mgmt_id = _get_mgmt_chat()
+                        if _live_tok2 and _mgmt_id:
+                            try:
+                                _fdata = _inq_file.read()
+                                _fname = _inq_file.name
+                                requests.post(
+                                    f"https://api.telegram.org/bot{_live_tok2}/sendDocument",
+                                    data={"chat_id": _mgmt_id, "caption": f"📎 {_fname}"},
+                                    files={"document": (_fname, _fdata)},
+                                    timeout=15,
+                                )
+                            except: pass
+                    st.success("✅ 문의가 전송되었습니다. 빠르게 답변드리겠습니다.")
+                    st.session_state["show_main_inq"] = False
+                    st.rerun()
+                else:
+                    st.warning("문의 내용을 입력해주세요.")
 
     # VIP 텔레그램 — 구독자는 승인 없이 그룹방2 바로 입장
     invite = TG_GROUP2_INVITE or ""
