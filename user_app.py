@@ -171,7 +171,11 @@ def sb_create_tg_request(user_id):
     })
 
 def _send_tg(chat_id, text):
-    _tok = st.secrets.get("TG_BOT_TOKEN") or st.secrets.get("BOT_TOKEN") or TG_BOT_TOKEN
+    # app.py에서 호출 시 session_state["tg_token"] 우선 사용
+    _tok = (st.session_state.get("tg_token") or
+            st.secrets.get("TG_BOT_TOKEN") or
+            st.secrets.get("BOT_TOKEN") or
+            TG_BOT_TOKEN)
     if not _tok or not chat_id: return
     try:
         requests.post(
@@ -1158,7 +1162,10 @@ def admin_panel():
                     from datetime import datetime as _dtt, timezone as _tzz, timedelta as _tdd
                     _kst = _dtt.now(_tzz(_tdd(hours=9))).strftime("%Y-%m-%d %H:%M")
                     try:
-                        _live_tok = st.secrets.get("TG_BOT_TOKEN") or st.secrets.get("BOT_TOKEN") or TG_BOT_TOKEN
+                        _live_tok = (st.session_state.get("tg_token") or
+                                     st.secrets.get("TG_BOT_TOKEN") or
+                                     st.secrets.get("BOT_TOKEN") or
+                                     TG_BOT_TOKEN)
                         # 먼저 getMe로 어떤 봇 토큰인지 확인
                         _gm = requests.get(f"https://api.telegram.org/bot{_live_tok}/getMe", timeout=5).json()
                         _chat_int = int(_test_id.strip())
