@@ -171,10 +171,11 @@ def sb_create_tg_request(user_id):
     })
 
 def _send_tg(chat_id, text):
-    if not TG_BOT_TOKEN or not chat_id: return
+    _tok = st.secrets.get("TG_BOT_TOKEN") or st.secrets.get("BOT_TOKEN") or TG_BOT_TOKEN
+    if not _tok or not chat_id: return
     try:
         requests.post(
-            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+            f"https://api.telegram.org/bot{_tok}/sendMessage",
             json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=5,
         )
     except: pass
@@ -1157,8 +1158,9 @@ def admin_panel():
                     from datetime import datetime as _dtt, timezone as _tzz, timedelta as _tdd
                     _kst = _dtt.now(_tzz(_tdd(hours=9))).strftime("%Y-%m-%d %H:%M")
                     try:
+                        _live_tok = st.secrets.get("TG_BOT_TOKEN") or st.secrets.get("BOT_TOKEN") or TG_BOT_TOKEN
                         _tr = requests.post(
-                            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+                            f"https://api.telegram.org/bot{_live_tok}/sendMessage",
                             json={"chat_id": _test_id, "text": f"✅ <b>K-ALPHA 관리 알림방 연결 완료</b>\n⏰ {_kst}", "parse_mode": "HTML"},
                             timeout=8,
                         )
@@ -1167,7 +1169,7 @@ def admin_panel():
                             st.success("✅ 테스트 메시지 발송 완료")
                         else:
                             st.error(f"❌ Telegram 오류: {_tj.get('description','알 수 없음')} (code {_tj.get('error_code','')})")
-                            st.caption(f"TOKEN: {TG_BOT_TOKEN[:20] if TG_BOT_TOKEN else '없음'}... | Chat ID: [{_test_id}] len={len(str(_test_id))}")
+                            st.caption(f"TOKEN: {_live_tok[:20] if _live_tok else '없음'}... | Chat ID: [{_test_id}]")
                             st.code(str(_tj))
                     except Exception as _te:
                         st.error(f"❌ 요청 오류: {_te}")
