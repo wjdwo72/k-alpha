@@ -1156,25 +1156,29 @@ tick(); setInterval(tick,1000);
                         st.rerun()
             return  # 팝업 보여주는 동안 탭 숨김
 
-    # 카테고리 요약 카드 (클릭 → 해당 메뉴로 이동)
-    _sel_cat = st.session_state.get("popup_cat", categories[0][1])
-    cols = st.columns(5)
+    # ── 카테고리 버튼 (메인=카테고리페이지, 목록=팝업) ──────────────
+    _sel_cat = st.session_state.get("page_cat", categories[0][1])
+    # 5개 카테고리 × 2버튼(메인+목록) → 10칸 컬럼
+    cols = st.columns([3,1, 3,1, 3,1, 3,1, 3,1])
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
         cnt = len(cat_stocks.get(cat_key, []))
         _active = _sel_cat == cat_key
-        _border = "#00d4ff" if _active else "#1e3a5f"
-        _bg     = "linear-gradient(135deg,#0d2030,#1a3050)" if _active else "linear-gradient(135deg,#0d1520,#1a2744)"
-        with cols[i]:
+        with cols[i*2]:
             if st.button(
-                f"{cat_icon}\n{cat_name}\n{cnt}",
+                f"{cat_icon} {cat_name} {cnt}",
                 key=f"cat_btn_{cat_key}",
                 use_container_width=True,
             ):
+                st.session_state["page_cat"] = cat_key
+                st.session_state.pop("popup_cat", None)
+                st.rerun()
+        with cols[i*2+1]:
+            if st.button("목록", key=f"cat_list_{cat_key}", use_container_width=True):
                 st.session_state["popup_cat"] = cat_key
                 st.rerun()
 
-    # 선택된 카테고리 종목 표시
-    _active_cat = st.session_state.get("popup_cat", categories[0][1])
+    # ── 선택된 카테고리 종목 표시 (카테고리 페이지) ──────────────────
+    _active_cat = st.session_state.get("page_cat", categories[0][1])
     _active_name = next((n for n,k,_ in categories if k==_active_cat), "")
     _active_icon = next((ic for _,k,ic in categories if k==_active_cat), "")
     st.markdown(f"<div style='color:#00d4ff;font-size:14px;font-weight:700;padding:8px 0 4px'>"
