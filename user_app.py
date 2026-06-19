@@ -1159,8 +1159,9 @@ tick(); setInterval(tick,1000);
     # ── 카테고리 버튼 1행: 메인 버튼 ────────────────────────────────
     _sel_cat = st.session_state.get("page_cat", categories[0][1])
     st.markdown("""<style>
-.cat-main button { font-size:12px !important; padding:6px 4px !important; }
-.cat-list button { font-size:10px !important; padding:2px 4px !important; min-height:0 !important; height:28px !important; }
+.cat-main button { font-size:12px !important; padding:6px 4px !important; white-space:nowrap !important; }
+.cat-list button { font-size:10px !important; padding:2px 6px !important; min-height:0 !important;
+    height:26px !important; white-space:nowrap !important; line-height:1 !important; }
 </style>""", unsafe_allow_html=True)
     cols1 = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
@@ -1170,13 +1171,15 @@ tick(); setInterval(tick,1000);
                 st.session_state["page_cat"] = cat_key
                 st.session_state.pop("popup_cat", None)
                 st.rerun()
-    # 2행: 목록 버튼 (폭 좁게 — 가운데 정렬)
-    list_cols = st.columns([1,2,1, 1,2,1, 1,2,1, 1,2,1, 1,2,1])
+    # 2행: 목록 버튼 (5컬럼 동일 비율, 가운데 좁은 버튼)
+    list_cols = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
-        with list_cols[i*3+1]:
-            if st.button("📋 목록", key=f"cat_list_{cat_key}", use_container_width=True):
-                st.session_state["popup_cat"] = cat_key
-                st.rerun()
+        with list_cols[i]:
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c2:
+                if st.button("📋 목록", key=f"cat_list_{cat_key}", use_container_width=True):
+                    st.session_state["popup_cat"] = cat_key
+                    st.rerun()
 
     # ── 선택된 카테고리 종목 표시 (카테고리 페이지) ──────────────────
     _active_cat = st.session_state.get("page_cat", categories[0][1])
