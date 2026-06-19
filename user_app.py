@@ -1156,11 +1156,30 @@ tick(); setInterval(tick,1000);
                         st.rerun()
             return  # 팝업 보여주는 동안 탭 숨김
 
-    # ── 카테고리 버튼 1행: 메인 버튼 ────────────────────────────────
+    # ── 카테고리 버튼 (모바일 포함 가로 고정) ────────────────────────
     _sel_cat = st.session_state.get("page_cat", categories[0][1])
+    # 강제 가로 레이아웃 CSS (모바일에서 columns 세로 쌓임 방지)
     st.markdown("""<style>
-.cat-main button { font-size:clamp(9px,1.2vw,13px) !important; padding:6px 4px !important; }
-.stButton button p { white-space:nowrap !important; font-size:clamp(9px,1.1vw,12px) !important; }
+div[data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+    width: 0 !important;
+}
+.stButton button {
+    font-size: clamp(8px, 2.5vw, 13px) !important;
+    padding: 6px 2px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+.stButton button p {
+    white-space: nowrap !important;
+    font-size: inherit !important;
+}
 </style>""", unsafe_allow_html=True)
     cols1 = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
@@ -1170,7 +1189,7 @@ tick(); setInterval(tick,1000);
                 st.session_state["page_cat"] = cat_key
                 st.session_state.pop("popup_cat", None)
                 st.rerun()
-    # 2행: 목록 버튼 (가운데 정렬, 가로쓰기)
+    # 2행: 목록 버튼
     list_cols = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
         with list_cols[i]:
