@@ -1159,9 +1159,9 @@ tick(); setInterval(tick,1000);
     # ── 카테고리 버튼 1행: 메인 버튼 ────────────────────────────────
     _sel_cat = st.session_state.get("page_cat", categories[0][1])
     st.markdown("""<style>
-.cat-main button { font-size:12px !important; padding:6px 4px !important; white-space:nowrap !important; }
-.cat-list button { font-size:10px !important; padding:2px 6px !important; min-height:0 !important;
-    height:26px !important; white-space:nowrap !important; line-height:1 !important; }
+.cat-main button { font-size:12px !important; padding:6px 4px !important; }
+/* 목록 버튼 가로쓰기 강제 */
+.stButton button p { white-space:nowrap !important; }
 </style>""", unsafe_allow_html=True)
     cols1 = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
@@ -1171,12 +1171,7 @@ tick(); setInterval(tick,1000);
                 st.session_state["page_cat"] = cat_key
                 st.session_state.pop("popup_cat", None)
                 st.rerun()
-    # 2행: 목록 버튼 (가로형, 텍스트 폭만큼만)
-    st.markdown("""<style>
-div[data-testid="stHorizontalBlock"] div[data-testid="stColumn"] .cat-list-row button {
-    white-space:nowrap !important; font-size:11px !important;
-    padding:3px 10px !important; height:28px !important; }
-</style>""", unsafe_allow_html=True)
+    # 2행: 목록 버튼 (가운데 정렬, 가로쓰기)
     list_cols = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
         with list_cols[i]:
