@@ -1315,8 +1315,9 @@ def _render_stock_list(stocks):
 </div>
 """, unsafe_allow_html=True)
         # 차트 위 면책 문구
-        st.markdown("""<div style="font-size:10px;color:#475569;background:#0d1520;border:1px solid #1e2a3a;
-border-radius:6px;padding:6px 10px;margin-bottom:4px;line-height:1.5">
+        st.markdown("""<div style="font-size:12px;font-weight:700;color:#fbbf24;background:#1a1200;
+border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:6px;line-height:1.6;
+text-shadow:0 0 8px rgba(251,191,36,0.3)">
 ⚠️ 표시되는 시세와 그래프는 스캔 시점에 따라 실제 시장가와 차이가 발생할 수 있으므로
 매매 시 반드시 실시간 데이터를 재확인 바랍니다.</div>""", unsafe_allow_html=True)
         # 차트: .chart-ovl 마커 div + 투명 오버레이 버튼 → st.dialog (새로고침 없음)
