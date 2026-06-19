@@ -1156,24 +1156,25 @@ tick(); setInterval(tick,1000);
                         st.rerun()
             return  # 팝업 보여주는 동안 탭 숨김
 
-    # ── 카테고리 버튼 (메인=카테고리페이지, 목록=팝업) ──────────────
+    # ── 카테고리 버튼 1행: 메인 버튼 ────────────────────────────────
     _sel_cat = st.session_state.get("page_cat", categories[0][1])
-    # 5개 카테고리 × 2버튼(메인+목록) → 10칸 컬럼
-    cols = st.columns([3,1, 3,1, 3,1, 3,1, 3,1])
+    st.markdown("""<style>
+.cat-main button { font-size:12px !important; padding:6px 4px !important; }
+.cat-list button { font-size:10px !important; padding:2px 4px !important; min-height:0 !important; height:28px !important; }
+</style>""", unsafe_allow_html=True)
+    cols1 = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
         cnt = len(cat_stocks.get(cat_key, []))
-        _active = _sel_cat == cat_key
-        with cols[i*2]:
-            if st.button(
-                f"{cat_icon} {cat_name} {cnt}",
-                key=f"cat_btn_{cat_key}",
-                use_container_width=True,
-            ):
+        with cols1[i]:
+            if st.button(f"{cat_icon} {cat_name} {cnt}", key=f"cat_btn_{cat_key}", use_container_width=True):
                 st.session_state["page_cat"] = cat_key
                 st.session_state.pop("popup_cat", None)
                 st.rerun()
-        with cols[i*2+1]:
-            if st.button("목록", key=f"cat_list_{cat_key}", use_container_width=True):
+    # 2행: 목록 버튼
+    cols2 = st.columns(5)
+    for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
+        with cols2[i]:
+            if st.button("📋 목록", key=f"cat_list_{cat_key}", use_container_width=True):
                 st.session_state["popup_cat"] = cat_key
                 st.rerun()
 
