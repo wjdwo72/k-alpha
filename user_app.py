@@ -1159,9 +1159,8 @@ tick(); setInterval(tick,1000);
     # ── 카테고리 버튼 1행: 메인 버튼 ────────────────────────────────
     _sel_cat = st.session_state.get("page_cat", categories[0][1])
     st.markdown("""<style>
-.cat-main button { font-size:12px !important; padding:6px 4px !important; }
-/* 목록 버튼 가로쓰기 강제 */
-.stButton button p { white-space:nowrap !important; }
+.cat-main button { font-size:clamp(9px,1.2vw,13px) !important; padding:6px 4px !important; }
+.stButton button p { white-space:nowrap !important; font-size:clamp(9px,1.1vw,12px) !important; }
 </style>""", unsafe_allow_html=True)
     cols1 = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
