@@ -1472,6 +1472,13 @@
   }
 </style>
 </head>
+<script>
+// Keep-alive: Streamlit Cloud 절전모드 방지 (5분마다 자가 핑)
+(function(){
+  function ping(){ fetch(window.location.href,{method:'GET',cache:'no-cache'}).catch(function(){}); }
+  setInterval(ping, 300000);
+})();
+</script>
 <body>
 
 <!-- ════ 대분류 마켓 스위처 ════ -->

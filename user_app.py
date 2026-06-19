@@ -347,6 +347,13 @@ def load_scan_data():
 
 # ── 공통 CSS ───────────────────────────────────────────────────
 def inject_css():
+    # Keep-alive: Streamlit Cloud 절전모드 방지 (5분마다 자가 핑)
+    components.html("""<script>
+(function(){
+  function ping(){ fetch(window.location.href,{method:'GET',cache:'no-cache'}).catch(()=>{}); }
+  setInterval(ping, 300000);  // 5분마다
+})();
+</script>""", height=0)
     st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap');
@@ -616,8 +623,10 @@ div[data-testid="stCheckbox"] input[type=checkbox] { width:18px;height:18px;acce
         key="legal_agree"
     )
 
+    _consent_txt = """<div style="text-align:center;font-size:11px;color:#64748b;margin-top:10px;line-height:1.7">
+버튼 클릭 시 <span style="color:#94a3b8;font-weight:600">[개인정보 수집 및 이용]</span>에 동의하는 것으로 간주됩니다.</div>"""
     if agreed:
-        st.markdown(google_btn + kakao_btn + naver_btn, unsafe_allow_html=True)
+        st.markdown(google_btn + kakao_btn + naver_btn + _consent_txt, unsafe_allow_html=True)
     else:
         st.markdown(
             '<div style="opacity:0.3;pointer-events:none;">'
@@ -1305,6 +1314,11 @@ def _render_stock_list(stocks):
   </div>
 </div>
 """, unsafe_allow_html=True)
+        # 차트 위 면책 문구
+        st.markdown("""<div style="font-size:10px;color:#475569;background:#0d1520;border:1px solid #1e2a3a;
+border-radius:6px;padding:6px 10px;margin-bottom:4px;line-height:1.5">
+⚠️ 표시되는 시세와 그래프는 스캔 시점에 따라 실제 시장가와 차이가 발생할 수 있으므로
+매매 시 반드시 실시간 데이터를 재확인 바랍니다.</div>""", unsafe_allow_html=True)
         # 차트: .chart-ovl 마커 div + 투명 오버레이 버튼 → st.dialog (새로고침 없음)
         # 배지 바로 아래, K 분석 사유 위에 위치
         col_c, col_l = st.columns(2)
@@ -1729,11 +1743,13 @@ else:
     sub   = st.session_state.get("sub")
     legal = st.session_state.get("legal")
 
+    # 자동 rerun 플래그 소비 (다음 사용자 인터랙션에선 초기화)
+    _is_auto = st.session_state.pop("_auto_rerun", False)
     if not user:
         page_login()
     else:
-        # 구독 조회 (캐시)
-        if sub is None:
+        # 구독 조회 (자동 rerun 시 재조회 안함 — 세션 유지)
+        if sub is None and not st.session_state.get("_auto_rerun"):
             sub = sb_get_active_sub(user["id"])
             st.session_state["sub"] = sub
 
@@ -1766,4 +1782,5 @@ else:
                     import time as _t
                     _t.sleep(60)
                     load_scan_data.clear()
+                    st.session_state["_auto_rerun"] = True
                     st.rerun()
