@@ -1171,15 +1171,18 @@ tick(); setInterval(tick,1000);
                 st.session_state["page_cat"] = cat_key
                 st.session_state.pop("popup_cat", None)
                 st.rerun()
-    # 2행: 목록 버튼 (5컬럼 동일 비율, 가운데 좁은 버튼)
+    # 2행: 목록 버튼 (가로형, 텍스트 폭만큼만)
+    st.markdown("""<style>
+div[data-testid="stHorizontalBlock"] div[data-testid="stColumn"] .cat-list-row button {
+    white-space:nowrap !important; font-size:11px !important;
+    padding:3px 10px !important; height:28px !important; }
+</style>""", unsafe_allow_html=True)
     list_cols = st.columns(5)
     for i, (cat_name, cat_key, cat_icon) in enumerate(categories):
         with list_cols[i]:
-            c1, c2, c3 = st.columns([1, 2, 1])
-            with c2:
-                if st.button("📋 목록", key=f"cat_list_{cat_key}", use_container_width=True):
-                    st.session_state["popup_cat"] = cat_key
-                    st.rerun()
+            if st.button("📋 목록", key=f"cat_list_{cat_key}"):
+                st.session_state["popup_cat"] = cat_key
+                st.rerun()
 
     # ── 선택된 카테고리 종목 표시 (카테고리 페이지) ──────────────────
     _active_cat = st.session_state.get("page_cat", categories[0][1])
