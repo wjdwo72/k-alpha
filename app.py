@@ -508,6 +508,9 @@ if not st.session_state.get("tg_token") and not qp.get("tg") and not server_stor
                            'tg_send_start_p','tg_send_end_p']:
                     if _gc.get(_k) is not None:
                         st.session_state[_k] = _gc[_k]
+                # server_store 에도 즉시 반영 (백그라운드 스레드가 읽음)
+                if _gc.get('tg_all_enabled') is not None:
+                    server_store['tg_all_enabled'] = _gc['tg_all_enabled']
             server_store['_cfg_loaded'] = True
     except: pass
 
@@ -1965,8 +1968,21 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
 
         # ── 전체 발송 ON/OFF ──────────────────────────
         def _on_tg_toggle():
-            get_server_store()['tg_all_enabled'] = st.session_state.get('tog_tg_all', True)
-            st.session_state['tg_all_enabled'] = st.session_state.get('tog_tg_all', True)
+            _v = st.session_state.get('tog_tg_all', True)
+            get_server_store()['tg_all_enabled'] = _v
+            st.session_state['tg_all_enabled'] = _v
+            # Gist에도 즉시 저장 (재시작 후에도 유지)
+            try:
+                _gid = _get_secret('GIST_ID'); _ght = _get_secret('GH_TOKEN')
+                if _gid and _ght:
+                    _r = requests.get(f"https://api.github.com/gists/{_gid}",
+                        headers={"Authorization":f"token {_ght}","Accept":"application/vnd.github.v3+json"},timeout=5)
+                    _cur = json.loads(_r.json().get('files',{}).get('kalpha_config.json',{}).get('content','{}') or '{}')
+                    _cur['tg_all_enabled'] = _v
+                    requests.patch(f"https://api.github.com/gists/{_gid}",
+                        headers={"Authorization":f"token {_ght}","Accept":"application/vnd.github.v3+json"},
+                        json={"files":{"kalpha_config.json":{"content":json.dumps(_cur,ensure_ascii=False)}}},timeout=5)
+            except: pass
         _all_en = st.toggle(
             "📡 메시지 발송 ON/OFF",
             value=st.session_state.get('tg_all_enabled', True),
