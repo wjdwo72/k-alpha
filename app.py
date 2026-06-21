@@ -260,11 +260,11 @@ def _start_bg_scan_thread():
                                 _sess_lbl = SESSION_SHORT.get(_session, '🟢 장중')
                                 _ui_n_bg = ss.get("ui_n_per_cat") or 10
                                 sr = {
-                                    "swing":    [build_card(s,"swing")    for s in cats["swing"]],
-                                    "surge":    [build_card(s,"surge")    for s in cats["surge"]],
-                                    "tomorrow": [build_card(s,"tomorrow") for s in cats["tomorrow"]],
-                                    "smallmid": [build_card(s,"smallmid") for s in cats["smallmid"]],
-                                    "per":      [build_card(s,"per")      for s in _per_list],
+                                    "swing":    [build_card(s,"swing",_session)    for s in cats["swing"]],
+                                    "surge":    [build_card(s,"surge",_session)    for s in cats["surge"]],
+                                    "tomorrow": [build_card(s,"tomorrow",_session) for s in cats["tomorrow"]],
+                                    "smallmid": [build_card(s,"smallmid",_session) for s in cats["smallmid"]],
+                                    "per":      [build_card(s,"per",_session)      for s in _per_list],
                                     "ui_n_per_cat": _ui_n_bg,
                                     "ts":_ts,"total":len(all_s),
                                     "kospi_n":len(kp),"kosdaq_n":len(kd),
@@ -1105,7 +1105,7 @@ def _rebuild_reasons(c):
     except Exception:
         return existing
 
-def build_card(s, cat):
+def build_card(s, cat, session=None):
     """카드 데이터 포맷팅 (기본적 분석 + 외부요인 포함)"""
     price = s['price']
     chg   = s['changePct']
@@ -1114,6 +1114,8 @@ def build_card(s, cat):
     stop_p= int(price * 0.97)
     tgt_p = int(price * 1.10)
     rr    = round((tgt_p-price)/(price-stop_p+1), 1)
+    _sess = session or get_market_session()
+    _sess_labels = {'pre':'🟡 프리장', 'after':'🟠 애프터장', 'regular':'🟢 정규장', 'closed':'🔴 장마감'}
     return {
         'name': s['name'], 'code': s['code'],
         'score': s.get('score',70), 'grade': s.get('grade','B'),
@@ -1124,6 +1126,8 @@ def build_card(s, cat):
         'rr': str(rr), 'vol': s.get('trAmt',0),
         'mkt': s.get('mkt','kospi'),
         'rsiApprox': s.get('rsiApprox', 50),
+        'session': _sess,
+        'session_label': _sess_labels.get(_sess, ''),
         'reasons': _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p),
         'inds': [
             {'label':s.get('mkt','KOSPI').upper(),'cat':'green'},

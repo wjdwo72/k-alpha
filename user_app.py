@@ -921,9 +921,20 @@ def page_main(user, sub):
     _kst_now = _dtnow.now(_tznow(_tdnow(hours=9)))
     _now_time = _kst_now.strftime("%H:%M:%S")
     _now_date = _kst_now.strftime("%Y.%m.%d (%a)").replace("Mon","월").replace("Tue","화").replace("Wed","수").replace("Thu","목").replace("Fri","금").replace("Sat","토").replace("Sun","일")
-    # 스캔 업데이트 시각
+    # 스캔 업데이트 시각 + 세션 정보
     _hdr_data = load_scan_data()
     _scan_ts  = _hdr_data.get("ts", "") if _hdr_data else ""
+    _scan_session = _hdr_data.get("session", "") if _hdr_data else ""
+    _sess_badge = {
+        'pre':     ('<span style="background:#92400e;color:#fcd34d;font-size:10px;font-weight:700;'
+                    'padding:2px 7px;border-radius:10px;margin-left:6px">🟡 프리장</span>'),
+        'after':   ('<span style="background:#7c2d12;color:#fb923c;font-size:10px;font-weight:700;'
+                    'padding:2px 7px;border-radius:10px;margin-left:6px">🟠 애프터장</span>'),
+        'regular': ('<span style="background:#14532d;color:#4ade80;font-size:10px;font-weight:700;'
+                    'padding:2px 7px;border-radius:10px;margin-left:6px">🟢 정규장</span>'),
+        'closed':  ('<span style="background:#1e293b;color:#94a3b8;font-size:10px;font-weight:700;'
+                    'padding:2px 7px;border-radius:10px;margin-left:6px">🔴 장마감</span>'),
+    }.get(_scan_session, '')
 
     col_l, col_r = st.columns([3,2])
     with col_l:
@@ -942,7 +953,7 @@ def page_main(user, sub):
   </div>
   <div style="display:flex;gap:16px;margin-top:4px;align-items:center">
     <span style="font-size:11px;color:#475569">{_now_date}</span>
-    {"<span style='font-size:11px;color:#334155'>│</span><span style='font-size:11px;color:#3b82f6'>📡 스캔 " + _scan_ts + "</span>" if _scan_ts else ""}
+    {"<span style='font-size:11px;color:#334155'>│</span><span style='font-size:11px;color:#3b82f6'>📡 스캔 " + _scan_ts + "</span>" + _sess_badge if _scan_ts else ""}
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1307,6 +1318,19 @@ def _render_stock_list(stocks):
         chg_color = "#ff3b5c" if up else "#4fa3e0"
         grade_colors = {"S":"#ff3b5c","A":"#ff9900","B":"#ffc800","C":"#94a3b8"}
         grade_color = grade_colors.get(grade,"#94a3b8")
+        # 세션 배지
+        _s_sess = s.get("session", "")
+        _sess_badge_map = {
+            'pre':     ('<span style="font-size:10px;font-weight:700;color:#fcd34d;background:#78350f;'
+                        'padding:2px 7px;border-radius:4px;letter-spacing:1px">🟡 프리장</span>'),
+            'after':   ('<span style="font-size:10px;font-weight:700;color:#fb923c;background:#7c2d12;'
+                        'padding:2px 7px;border-radius:4px;letter-spacing:1px">🟠 애프터장</span>'),
+            'regular': ('<span style="font-size:10px;font-weight:700;color:#00ff88;background:#0f4c35;'
+                        'padding:2px 7px;border-radius:4px;letter-spacing:1px">LIVE</span>'),
+        }
+        _live_badge = _sess_badge_map.get(_s_sess,
+            '<span style="font-size:10px;font-weight:700;color:#00ff88;background:#0f4c35;'
+            'padding:2px 7px;border-radius:4px;letter-spacing:1px">LIVE</span>')
 
         # reasons 분류
         tech_items, basic_text, ext_text = [], "", ""
@@ -1348,9 +1372,9 @@ def _render_stock_list(stocks):
     </div>
     <span style="font-size:13px;font-weight:700;color:{grade_color};background:{grade_color}22;padding:3px 10px;border-radius:20px">{score}점 {grade}</span>
   </div>
-  <!-- LIVE + 가격 -->
+  <!-- 세션배지 + 가격 -->
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-    <span style="font-size:10px;font-weight:700;color:#00ff88;background:#0f4c35;padding:2px 6px;border-radius:4px;letter-spacing:1px">LIVE</span>
+    {_live_badge}
     <span style="font-size:26px;font-weight:900;color:#e2e8f0">{price}원</span>
     <span style="font-size:14px;font-weight:700;color:{chg_color}">{chg}</span>
   </div>
