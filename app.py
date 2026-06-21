@@ -72,12 +72,11 @@ SESSION_SHORT = {
 # ────────────────────────────────────────────────────────────────
 @st.cache_resource
 def _get_bg_state():
-    # last_scan=현재시각: 시작 직후 스캔/텔레그램 전송 방지 (첫 전송은 iv_min분 후)
+    # last_scan=0: 재시작 즉시 스캔 → Gist 최신화
     now = time.time()
-    # 현재 버킷으로 초기화 → 재시작 직후 "아직 보내지 않은 버킷"으로 판단해 보내는 것 방지
-    default_iv = 10  # 기본 10분 버킷
+    default_iv = 10
     cur_bkt = int(now // (default_iv * 60))
-    return {"started": False, "last_scan": now,
+    return {"started": False, "last_scan": 0,
             "tg_bkt": {f"r{i}": cur_bkt for i in range(4)},
             "_start_at": now}
 

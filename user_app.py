@@ -1072,7 +1072,8 @@ tick(); setInterval(tick,1000);
     # cat_stocks — 관리자 설정(ui_n_per_cat)에 맞춰 캡핑
     _all_keys = ["swing", "surge", "tomorrow", "smallmid", "per"]
     MAX_DISPLAY = int(data.get("ui_n_per_cat", 10))
-    cat_stocks = {key: data.get(key, [])[:MAX_DISPLAY] for key in _all_keys}
+    # Gist 배열 자체가 이미 ui_n_per_cat 기준으로 trim됨 — 추가 slice 불필요
+    cat_stocks = {key: data.get(key, []) for key in _all_keys}
 
 
 
