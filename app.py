@@ -1964,12 +1964,17 @@ try{{localStorage.setItem('ka_ck_v9',{json.dumps(ck_v)});
     with st.expander("📱 텔레그램 알림 설정", expanded=False):
 
         # ── 전체 발송 ON/OFF ──────────────────────────
+        def _on_tg_toggle():
+            get_server_store()['tg_all_enabled'] = st.session_state.get('tog_tg_all', True)
+            st.session_state['tg_all_enabled'] = st.session_state.get('tog_tg_all', True)
         _all_en = st.toggle(
             "📡 메시지 발송 ON/OFF",
             value=st.session_state.get('tg_all_enabled', True),
             key="tog_tg_all",
+            on_change=_on_tg_toggle,
             help="끄면 앱과 GitHub Actions 모두 전송 중단")
         st.session_state['tg_all_enabled'] = _all_en
+        get_server_store()['tg_all_enabled'] = _all_en
         if not _all_en:
             st.warning("⛔ 전송 비활성화 — 모든 채팅방으로 메시지가 발송되지 않습니다.", icon="🔕")
         else:
