@@ -924,7 +924,15 @@ def page_main(user, sub):
     # 스캔 업데이트 시각 + 세션 정보
     _hdr_data = load_scan_data()
     _scan_ts  = _hdr_data.get("ts", "") if _hdr_data else ""
-    _scan_session = _hdr_data.get("session", "") if _hdr_data else ""
+    # 헤더 세션 배지: 현재 시각 기준
+    from datetime import datetime as _dts, timezone as _tzs, timedelta as _tds
+    _kst_h = _dts.now(_tzs(_tds(hours=9))).hour
+    _kst_m = _dts.now(_tzs(_tds(hours=9))).minute
+    _kst_total = _kst_h * 60 + _kst_m
+    if 480 <= _kst_total <= 530:    _cur_sess = 'pre'
+    elif 540 <= _kst_total <= 930:  _cur_sess = 'regular'
+    elif 940 <= _kst_total <= 1200: _cur_sess = 'after'
+    else:                           _cur_sess = 'closed'
     _sess_badge = {
         'pre':     ('<span style="background:#92400e;color:#fcd34d;font-size:10px;font-weight:700;'
                     'padding:2px 7px;border-radius:10px;margin-left:6px">🟡 프리장</span>'),
@@ -934,7 +942,7 @@ def page_main(user, sub):
                     'padding:2px 7px;border-radius:10px;margin-left:6px">🟢 정규장</span>'),
         'closed':  ('<span style="background:#1e293b;color:#94a3b8;font-size:10px;font-weight:700;'
                     'padding:2px 7px;border-radius:10px;margin-left:6px">🔴 장마감</span>'),
-    }.get(_scan_session, '')
+    }.get(_cur_sess, '')
 
     col_l, col_r = st.columns([3,2])
     with col_l:
