@@ -317,51 +317,237 @@ def _start_bg_scan_thread():
                 try: _req.get(_url, timeout=15)
                 except: pass
 
-    # ── 실시간 현재가 폴링: 3초마다 KIS REST → server_store + 10초마다 Gist ──
-    def _price_poll():
+    # ── KIS WebSocket 실시간 현재가 ─────────────────────────────────────────────
+    def _get_ws_approval(ka, ks, kb):
+        """WebSocket 접속키 발급"""
+        try:
+            r = _req.post(
+                f"{kb}/oauth2/Approval",
+                headers={'content-type': 'application/json'},
+                json={'grant_type': 'client_credentials', 'appkey': ka, 'secretkey': ks},
+                timeout=10)
+            return r.json().get('approval_key', '')
+        except: return ''
+
+    def _ws_subscribe_msg(approval_key, code, tr_type='1'):
+        """종목 구독/해제 메시지"""
+        return _jn.dumps({
+            "header": {
+                "approval_key": approval_key,
+                "custtype": "P",
+                "tr_type": tr_type,  # "1"=구독, "2"=해제
+                "content-type": "utf-8"
+            },
+            "body": {
+                "input": {
+                    "tr_id": "H0STCNT0",  # 실시간 체결가
+                    "tr_key": code
+                }
+            }
+        })
+
+    def _parse_ws_data(raw):
+        """KIS WebSocket 실시간 데이터 파싱
+        포맷: 0|H0STCNT0|001|{종목코드}^{체결시간}^{현재가}^{전일대비부호}^{전일대비}^{전일대비율}^...
+        """
+        try:
+            if raw.startswith('0|H0STCNT0'):
+                parts = raw.split('|')
+                if len(parts) < 4: return None
+                fields = parts[3].split('^')
+                if len(fields) < 6: return None
+                code   = fields[0]
+                price  = int(fields[2] or 0)
+                sign   = fields[3]  # 1:상한 2:상승 3:보합 4:하락 5:하한
+                change = fields[4]
+                pct    = fields[5]
+                if price <= 0: return None
+                return {
+                    'code':   code,
+                    'price':  price,
+                    'change': change,
+                    'pct':    pct,
+                    'sign':   sign,
+                    'ts':     time.time(),
+                }
+        except: pass
+        return None
+
+    def _price_ws():
+        """WebSocket 실시간 시세 수신 루프 (장중), 장외에는 REST 폴링 fallback"""
+        import time as _t
+        try:
+            import websocket as _ws_lib
+        except ImportError:
+            ss = get_server_store()
+            ss['_ws_status'] = 'websocket-client 패키지 없음 — REST 폴백 사용'
+            _price_rest_fallback()
+            return
+
+        _gist_ts    = 0
+        _cur_codes  = set()
+
+        def _save_gist(lp):
+            nonlocal _gist_ts
+            _now = _t.time()
+            if _now - _gist_ts < 5: return
+            _gid = _get_secret('GIST_ID')
+            _ght = _get_secret('GH_TOKEN')
+            if _gid and _ght and lp:
+                try:
+                    _req.patch(
+                        f"https://api.github.com/gists/{_gid}",
+                        headers={'Authorization': f'token {_ght}',
+                                 'Accept': 'application/vnd.github.v3+json'},
+                        json={"files": {"kalpha_prices.json": {
+                            "content": _jn.dumps(lp, ensure_ascii=False)}}},
+                        timeout=10)
+                    _gist_ts = _now
+                except: pass
+
+        while True:
+            ss  = get_server_store()
+            ka  = ss.get('kis_ak', '')
+            ks  = ss.get('kis_sec', '')
+            kb  = ss.get('kis_base_url', 'https://openapi.kis.or.kr')
+            sr  = ss.get('scan_result') or {}
+
+            # 장중이 아니면 대기
+            _sess = get_market_session()
+            if _sess not in ('pre', 'regular', 'after') or not ka or not ks:
+                _t.sleep(30)
+                continue
+
+            # 구독할 종목 코드 수집 (최대 41개)
+            _codes = []
+            for _cat in ['swing', 'surge', 'tomorrow', 'smallmid', 'per']:
+                for _s in (sr.get(_cat) or [])[:10]:
+                    _code = _s.get('code', '')
+                    if _code and _code not in _codes:
+                        _codes.append(_code)
+            _codes = _codes[:41]
+
+            if not _codes:
+                _t.sleep(10)
+                continue
+
+            # WebSocket 접속키 발급
+            apk = _get_ws_approval(ka, ks, kb)
+            if not apk:
+                ss['_ws_status'] = 'approval_key 발급 실패'
+                _t.sleep(60)
+                continue
+
+            # WebSocket URL (실전/모의 구분)
+            _mock = 'vts' in kb.lower() or 'openapivts' in kb.lower()
+            _ws_url = ('ws://ops.koreainvestment.com:31000'
+                       if _mock else
+                       'ws://ops.koreainvestment.com:21000')
+
+            ss['_ws_status'] = f'연결 중... ({len(_codes)}종목)'
+            _lp = dict(ss.get('live_prices') or {})
+
+            try:
+                ws = _ws_lib.create_connection(_ws_url, timeout=15)
+                ss['_ws_status'] = f'실시간 연결됨 ({len(_codes)}종목)'
+
+                # 종목 구독
+                for _c in _codes:
+                    ws.send(_ws_subscribe_msg(apk, _c, '1'))
+                    _t.sleep(0.05)
+                _cur_codes = set(_codes)
+
+                ws.settimeout(5)
+                _last_resubscribe = _t.time()
+
+                while True:
+                    # 종목 목록 변경 확인 (1분마다)
+                    if _t.time() - _last_resubscribe > 60:
+                        sr2 = get_server_store().get('scan_result') or {}
+                        _new_codes = []
+                        for _cat in ['swing', 'surge', 'tomorrow', 'smallmid', 'per']:
+                            for _s in (sr2.get(_cat) or [])[:10]:
+                                _c2 = _s.get('code', '')
+                                if _c2 and _c2 not in _new_codes:
+                                    _new_codes.append(_c2)
+                        _new_codes = set(_new_codes[:41])
+                        # 추가 구독
+                        for _c2 in _new_codes - _cur_codes:
+                            try: ws.send(_ws_subscribe_msg(apk, _c2, '1')); _t.sleep(0.05)
+                            except: pass
+                        # 해제
+                        for _c2 in _cur_codes - _new_codes:
+                            try: ws.send(_ws_subscribe_msg(apk, _c2, '2')); _t.sleep(0.05)
+                            except: pass
+                        _cur_codes = _new_codes
+                        _last_resubscribe = _t.time()
+
+                    try:
+                        raw = ws.recv()
+                        if not raw: continue
+                        parsed = _parse_ws_data(raw)
+                        if parsed:
+                            _code = parsed.pop('code')
+                            _lp[_code] = parsed
+                            get_server_store()['live_prices'] = _lp
+                            _save_gist(_lp)
+                    except _ws_lib.WebSocketTimeoutException:
+                        # 핑/퐁
+                        try: ws.ping()
+                        except: break
+                    except Exception:
+                        break
+
+                try: ws.close()
+                except: pass
+                ss['_ws_status'] = '재연결 대기...'
+
+            except Exception as _we:
+                ss['_ws_status'] = f'WS오류: {str(_we)[:60]}'
+
+            _t.sleep(10)  # 재연결 전 대기
+
+    def _price_rest_fallback():
+        """WebSocket 불가 시 REST 3초 폴링 (fallback)"""
         _gist_ts = 0
         while True:
             try:
                 ss  = get_server_store()
-                tok = ss.get('kis_token','')
-                kb  = ss.get('kis_base_url','https://openapi.kis.or.kr')
-                ka  = ss.get('kis_ak','')
-                ks  = ss.get('kis_sec','')
+                tok = ss.get('kis_token', '')
+                kb  = ss.get('kis_base_url', 'https://openapi.kis.or.kr')
+                ka  = ss.get('kis_ak', '')
+                ks  = ss.get('kis_sec', '')
                 sr  = ss.get('scan_result') or {}
-
                 _codes = []
-                for _cat in ['swing','surge','tomorrow','smallmid','per']:
+                for _cat in ['swing', 'surge', 'tomorrow', 'smallmid', 'per']:
                     for _s in (sr.get(_cat) or [])[:10]:
-                        _code = _s.get('code','')
-                        _mkt  = 'J' if 'kospi' in str(_s.get('mkt','')).lower() else 'Q'
-                        if _code and _code not in [c[0] for c in _codes]:
-                            _codes.append((_code, _mkt))
-
+                        _c = _s.get('code', '')
+                        _m = 'J' if 'kospi' in str(_s.get('mkt', '')).lower() else 'Q'
+                        if _c and _c not in [x[0] for x in _codes]:
+                            _codes.append((_c, _m))
                 if tok and _codes:
                     lp = dict(ss.get('live_prices') or {})
                     for _code, _mkt in _codes[:30]:
                         try:
                             rp = _req.get(
                                 f"{kb}/uapi/domestic-stock/v1/quotations/inquire-price",
-                                params={'FID_COND_MRKT_DIV_CODE':_mkt,'FID_INPUT_ISCD':_code},
-                                headers={'Content-Type':'application/json',
-                                         'authorization':f'Bearer {tok}',
-                                         'appkey':ka,'appsecret':ks,'tr_id':'FHKST01010100'},
+                                params={'FID_COND_MRKT_DIV_CODE': _mkt, 'FID_INPUT_ISCD': _code},
+                                headers={'Content-Type': 'application/json',
+                                         'authorization': f'Bearer {tok}',
+                                         'appkey': ka, 'appsecret': ks, 'tr_id': 'FHKST01010100'},
                                 verify=False, timeout=3)
-                            o = rp.json().get('output',{})
+                            o = rp.json().get('output', {})
                             if o.get('stck_prpr'):
                                 lp[_code] = {
-                                    'price':  int(o.get('stck_prpr',0) or 0),
-                                    'change': o.get('prdy_vrss','0'),
-                                    'pct':    o.get('prdy_ctrt','0'),
-                                    'sign':   o.get('prdy_vrss_sign','3'),
+                                    'price':  int(o.get('stck_prpr', 0) or 0),
+                                    'change': o.get('prdy_vrss', '0'),
+                                    'pct':    o.get('prdy_ctrt', '0'),
+                                    'sign':   o.get('prdy_vrss_sign', '3'),
                                     'ts':     time.time(),
                                 }
                         except: pass
                         time.sleep(0.12)
                     ss['live_prices'] = lp
-
-                    # 10초마다 Gist에 저장 (유저앱 참조용)
                     _now = time.time()
                     if _now - _gist_ts > 10 and lp:
                         _gid = _get_secret('GIST_ID')
@@ -370,10 +556,10 @@ def _start_bg_scan_thread():
                             try:
                                 _req.patch(
                                     f"https://api.github.com/gists/{_gid}",
-                                    headers={'Authorization':f'token {_ght}',
-                                             'Accept':'application/vnd.github.v3+json'},
-                                    json={"files":{"kalpha_prices.json":{
-                                        "content":_jn.dumps(lp, ensure_ascii=False)}}},
+                                    headers={'Authorization': f'token {_ght}',
+                                             'Accept': 'application/vnd.github.v3+json'},
+                                    json={"files": {"kalpha_prices.json": {
+                                        "content": _jn.dumps(lp, ensure_ascii=False)}}},
                                     timeout=10)
                                 _gist_ts = _now
                             except: pass
@@ -382,7 +568,7 @@ def _start_bg_scan_thread():
 
     import threading
     threading.Thread(target=_keepalive, daemon=True).start()
-    threading.Thread(target=_price_poll, daemon=True).start()
+    threading.Thread(target=_price_ws, daemon=True).start()
     threading.Thread(target=_run, daemon=True).start()
 
 
@@ -1685,9 +1871,9 @@ else:
     # 장외/주말/공휴일: 자동 갱신 중단 (수동 ↻ 버튼만 허용)
     _has_gist = bool(_get_secret('GIST_ID'))
 
-# 현재가 실시간 갱신 — KIS 연결 시 5초마다 (장 여부 무관)
+# 현재가 실시간 갱신 — KIS 연결 시 1초마다 (WebSocket 수신 데이터 화면 반영)
 if st.session_state.get('auth') and st.session_state.get('kis_token'):
-    st_autorefresh(interval=5000, limit=None, key="price_live_refresh")
+    st_autorefresh(interval=1000, limit=None, key="price_live_refresh")
 
 # ════ 4. 메인 패널 ════
 if st.session_state.pop('_load_ok',False):
@@ -3888,8 +4074,11 @@ if _gist_active or st.session_state.kis_token:
     _dm_lbl = _dm_lbl_map.get(_dm_sess, '')
     scan_result['session']       = _dm_sess
     scan_result['session_label'] = SESSION_SHORT.get(_dm_sess, '')
+    _ws_stat = get_server_store().get('_ws_status','')
+    _ws_color = '#00ff88' if '연결됨' in _ws_stat else ('#ffc800' if '대기' in _ws_stat or '중' in _ws_stat else '#ff4444')
+    _lp_cnt = len(get_server_store().get('live_prices') or {})
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
-📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl}<br>
+📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl} · <span style="color:{_ws_color}">⚡ WS {_ws_stat or '대기중'}</span> ({_lp_cnt}종목 현재가)<br>
 🔍 실시간스윙 {len(scan_result.get('swing',[]))}개 · 급등전야 {len(scan_result.get('surge',[]))}개 · 내일관심 {len(scan_result.get('tomorrow',[]))}개 · 중소형주 {len(scan_result.get('smallmid',[]))}개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
 </div>""", unsafe_allow_html=True)
 
