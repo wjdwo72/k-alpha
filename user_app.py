@@ -72,9 +72,11 @@ PLAN_PRICE = {"monthly": 33000, "yearly": 363000}
 PLAN_LABEL = {"monthly": "월정액 33,000원", "yearly": "연간 363,000원 (1개월 무료)"}
 
 # ── Supabase 헬퍼 ──────────────────────────────────────────────
-def _sb(method, path, body=None, params=None):
+def _sb(method, path, body=None, params=None, _silent=False):
     """Supabase REST API 호출"""
     if not SUPABASE_URL or not SUPABASE_KEY:
+        if not _silent:
+            st.error("⚠️ Supabase 미설정: SUPABASE_URL 또는 SUPABASE_SERVICE_KEY 시크릿을 확인하세요.")
         return None
     headers = {
         "apikey": SUPABASE_KEY,
@@ -85,12 +87,14 @@ def _sb(method, path, body=None, params=None):
     url = f"{SUPABASE_URL}/rest/v1/{path}"
     try:
         r = getattr(requests, method)(url, headers=headers, json=body, params=params, timeout=10)
-        if r.status_code == 204: return []          # DELETE 성공 (빈 응답)
+        if r.status_code == 204: return []
         if r.status_code in (200, 201): return r.json()
-        st.warning(f"Supabase 오류 [{r.status_code}]: {r.text[:200]}")
+        if not _silent:
+            st.warning(f"Supabase 오류 [{r.status_code}]: {r.text[:300]}")
         return None
     except Exception as e:
-        st.warning(f"Supabase 예외: {e}")
+        if not _silent:
+            st.warning(f"Supabase 연결 오류: {e}")
         return None
 
 def sb_upsert_user(email, name, provider, provider_id, avatar=""):
@@ -865,34 +869,38 @@ async function pay(){{
 
     # ── 쿠폰 탭 ──
     with tab_coupon:
-        st.markdown("""
+        # Supabase 연결 상태 확인
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            st.error("⚠️ 서버 설정 오류: SUPABASE_URL / SUPABASE_SERVICE_KEY 시크릿이 없습니다. 관리자에게 문의하세요.")
+        else:
+            st.markdown("""
 <div style="max-width:400px;margin:20px auto;text-align:center">
   <div style="font-size:40px;margin-bottom:12px">🎫</div>
   <div style="font-size:18px;font-weight:700;margin-bottom:8px">무료 쿠폰</div>
-  <div style="color:#64748b;font-size:13px;margin-bottom:24px">쿠폰 번호를 입력하면 7일간 무료로 이용할 수 있습니다</div>
+  <div style="color:#64748b;font-size:13px;margin-bottom:24px">쿠폰 번호를 입력하면 무료로 이용할 수 있습니다</div>
 </div>
 """, unsafe_allow_html=True)
-        coupon_code = st.text_input("쿠폰 번호", placeholder="예: KALPHA-XXXX-XXXX", max_chars=30,
-                                    label_visibility="collapsed").strip().upper()
-        if st.button("쿠폰 적용", use_container_width=True, type="primary", key="btn_coupon"):
-            if not coupon_code:
-                st.error("쿠폰 번호를 입력해주세요")
-            else:
-                days, err = sb_use_coupon(coupon_code, user_id)
-                if err:
-                    st.error(f"❌ {err}")
-                elif not days or days <= 0:
-                    st.error("❌ 쿠폰 기간이 0일입니다. 관리자에게 문의하세요.")
+            coupon_code = st.text_input("쿠폰 번호", placeholder="예: KALPHA-XXXX-XXXX", max_chars=30,
+                                        label_visibility="collapsed").strip().upper()
+            if st.button("쿠폰 적용", use_container_width=True, type="primary", key="btn_coupon"):
+                if not coupon_code:
+                    st.error("쿠폰 번호를 입력해주세요")
                 else:
-                    res = sb_create_sub(user_id, "coupon", days)
-                    if res:
-                        st.success(f"✅ {days}일 무료 이용이 시작됩니다!")
-                        time.sleep(0.5)
-                        new_sub = sb_get_active_sub(user_id)
-                        st.session_state["sub"] = new_sub
-                        st.rerun()
+                    with st.spinner("쿠폰 확인 중..."):
+                        days, err = sb_use_coupon(coupon_code, user_id)
+                    if err:
+                        st.error(f"❌ {err}")
+                    elif not days or days <= 0:
+                        st.error("❌ 쿠폰 기간이 0일입니다. 관리자에게 문의하세요.")
                     else:
-                        st.error("❌ 구독 생성 실패. 잠시 후 다시 시도하거나 관리자에게 문의하세요.")
+                        with st.spinner("구독 생성 중..."):
+                            res = sb_create_sub(user_id, "coupon", days)
+                        if res:
+                            st.success(f"✅ {days}일 무료 이용이 시작됩니다!")
+                            time.sleep(1)
+                            st.session_state["sub"] = sb_get_active_sub(user_id)
+                            st.rerun()
+                        # 실패 시 _sb() 내부에서 이미 st.warning 표시됨
 
     # 로그아웃
     st.markdown("---")
