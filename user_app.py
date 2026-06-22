@@ -32,10 +32,10 @@ def _start_user_keepalive():
     return True
 _start_user_keepalive()
 
-# ── 현재가 10초 자동 갱신 (최상단 — 모든 페이지에서 항상 실행) ────────────────
+# ── 스캔 데이터 30초 자동 갱신 (최상단 — 모든 페이지에서 항상 실행) ───────────
 try:
     from streamlit_autorefresh import st_autorefresh as _st_sar
-    _st_sar(interval=10000, limit=None, key="user_price_refresh")
+    _st_sar(interval=30000, limit=None, key="user_scan_refresh")
 except ImportError:
     pass
 
@@ -360,8 +360,8 @@ def load_market_data():
     return result
 
 # ── Gist 스캔 데이터 ───────────────────────────────────────────
-@st.cache_data(ttl=30, show_spinner=False)
 def load_scan_data():
+    """매번 Gist에서 직접 읽기 — autorefresh가 30초마다 호출하므로 캐시 불필요"""
     if not GIST_ID: return None
     try:
         hdrs = {"Accept": "application/vnd.github.v3+json"}
