@@ -32,12 +32,8 @@ def _start_user_keepalive():
     return True
 _start_user_keepalive()
 
-# ── 스캔 데이터 30초 자동 갱신 (최상단 — 모든 페이지에서 항상 실행) ───────────
-try:
-    from streamlit_autorefresh import st_autorefresh as _st_sar
-    _st_sar(interval=30000, limit=None, key="user_scan_refresh")
-except ImportError:
-    pass
+# autorefresh는 종목 화면에서만 (쿠폰/결제 페이지에서는 버튼 클릭 씹힘 방지)
+# → show_stocks() 함수 내부에서 조건부로 활성화
 
 st.set_page_config(
     page_title="K-ALPHA",
@@ -360,8 +356,9 @@ def load_market_data():
     return result
 
 # ── Gist 스캔 데이터 ───────────────────────────────────────────
+@st.cache_data(ttl=25, show_spinner=False)
 def load_scan_data():
-    """매번 Gist에서 직접 읽기 — autorefresh가 30초마다 호출하므로 캐시 불필요"""
+    """Gist에서 스캔 데이터 읽기 (TTL=25s, autorefresh=30s → 항상 최신)"""
     if not GIST_ID: return None
     try:
         hdrs = {"Accept": "application/vnd.github.v3+json"}
@@ -884,12 +881,18 @@ async function pay(){{
                 days, err = sb_use_coupon(coupon_code, user_id)
                 if err:
                     st.error(f"❌ {err}")
+                elif not days or days <= 0:
+                    st.error("❌ 쿠폰 기간이 0일입니다. 관리자에게 문의하세요.")
                 else:
-                    sb_create_sub(user_id, "coupon", days)
-                    st.success(f"✅ {days}일 무료 이용이 시작됩니다!")
-                    time.sleep(1)
-                    st.session_state["sub"] = sb_get_active_sub(user_id)
-                    st.rerun()
+                    res = sb_create_sub(user_id, "coupon", days)
+                    if res:
+                        st.success(f"✅ {days}일 무료 이용이 시작됩니다!")
+                        time.sleep(0.5)
+                        new_sub = sb_get_active_sub(user_id)
+                        st.session_state["sub"] = new_sub
+                        st.rerun()
+                    else:
+                        st.error("❌ 구독 생성 실패. 잠시 후 다시 시도하거나 관리자에게 문의하세요.")
 
     # 로그아웃
     st.markdown("---")
@@ -948,6 +951,13 @@ K-ALPHA는 국내 주식시장의 실시간 데이터를 분석하여 투자 참
 
 # ── 메인 종목 뷰 ──────────────────────────────────────────────
 def page_main(user, sub):
+    # 종목 화면에서만 autorefresh (쿠폰/결제 페이지에서는 비활성)
+    try:
+        from streamlit_autorefresh import st_autorefresh as _sar
+        _sar(interval=30000, limit=None, key="stocks_refresh")
+    except ImportError:
+        pass
+
     expires = sub.get("expires_at","")
     try:
         exp_dt = datetime.fromisoformat(expires.replace("Z","+00:00"))
