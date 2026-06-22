@@ -12,6 +12,33 @@ import requests, json, time, secrets, hashlib, uuid
 from datetime import datetime, timedelta, timezone
 import urllib.parse
 
+# ── 유저앱 절전 방지: 서버사이드 셀프 핑 스레드 ──────────────────────────────
+import threading as _threading, os as _os
+@st.cache_resource
+def _start_user_keepalive():
+    def _ping():
+        _url = ""
+        try:
+            import streamlit as _st
+            _url = _st.secrets.get("USER_APP_URL","") or _st.secrets.get("APP_URL","")
+        except: pass
+        while True:
+            time.sleep(240)
+            if _url:
+                try: requests.get(_url, timeout=15)
+                except: pass
+    t = _threading.Thread(target=_ping, daemon=True)
+    t.start()
+    return True
+_start_user_keepalive()
+
+# ── 현재가 10초 자동 갱신 (최상단 — 모든 페이지에서 항상 실행) ────────────────
+try:
+    from streamlit_autorefresh import st_autorefresh as _st_sar
+    _st_sar(interval=10000, limit=None, key="user_price_refresh")
+except ImportError:
+    pass
+
 st.set_page_config(
     page_title="K-ALPHA",
     page_icon="📈",
@@ -1070,13 +1097,6 @@ tick(); setInterval(tick,1000);
     padding:8px 18px;border-radius:8px;">입장하기 →</span>
 </div></a>
 """, unsafe_allow_html=True)
-
-    # 실시간 현재가 10초 갱신 (관리앱 백그라운드가 Gist에 저장한 데이터 읽기)
-    try:
-        from streamlit_autorefresh import st_autorefresh as _sar
-        _sar(interval=10000, limit=None, key="user_price_refresh")
-    except ImportError:
-        pass
 
     # 스캔 데이터 로드
     data = load_scan_data()
