@@ -3778,10 +3778,11 @@ if _gist_active or st.session_state.kis_token:
     else:
         scan_result['per'] = []
 
-    # ── Gist에 scan_result 저장 (per 포함, 유저앱에 즉시 반영) ──
+    # ── Gist에 scan_result 저장 — KIS 직접 스캔 결과일 때만 (Gist 읽기 데이터 덮어쓰기 방지) ──
     _gist_id2 = _get_secret('GIST_ID')
     _gh_tok2  = _get_secret('GH_TOKEN')
-    if _gist_id2 and _gh_tok2:
+    _is_fresh_scan = _force_kis or (not gist_data and all_stocks)
+    if _gist_id2 and _gh_tok2 and _is_fresh_scan:
         try:
             _scan_json_full = json.dumps(scan_result, ensure_ascii=False)
             _gr = requests.patch(
@@ -3791,6 +3792,7 @@ if _gist_active or st.session_state.kis_token:
                 json={"files":{"kalpha_scan.json":{"content":_scan_json_full}}},
                 timeout=10)
             if _gr.status_code == 200:
+                fetch_gist_scan.clear()
                 st.toast("☁️ Gist 저장 완료", icon="✅")
             else:
                 st.caption(f"⚠ Gist 저장 실패: {_gr.status_code}")
