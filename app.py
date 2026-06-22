@@ -264,9 +264,9 @@ def _start_bg_scan_thread():
                                 _sm = [build_card(s,"smallmid",_session) for s in cats["smallmid"]]
                                 _pe = [build_card(s,"per",_session)      for s in _per_list]
 
-                                # 프리/애프터장에서 모든 카테고리 0이면 이전 데이터 보존
+                                # 모든 카테고리 0이면 이전 데이터 보존 (장 초반 거래대금 부족 등)
                                 _all_empty = not any([_sw, _su, _tm, _sm, _pe])
-                                if _all_empty and _session in ('pre', 'after'):
+                                if _all_empty:
                                     # 타임스탬프·세션만 업데이트하고 종목 데이터는 이전 것 유지
                                     _prev = ss.get("scan_result") or {}
                                     sr = dict(_prev)
