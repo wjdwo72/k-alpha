@@ -258,20 +258,34 @@ def _start_bg_scan_thread():
                                 _ts = kst_strftime("%H:%M:%S")
                                 _sess_lbl = SESSION_SHORT.get(_session, '🟢 장중')
                                 _ui_n_bg = ss.get("ui_n_per_cat") or 10
-                                sr = {
-                                    "swing":    [build_card(s,"swing",_session)    for s in cats["swing"]],
-                                    "surge":    [build_card(s,"surge",_session)    for s in cats["surge"]],
-                                    "tomorrow": [build_card(s,"tomorrow",_session) for s in cats["tomorrow"]],
-                                    "smallmid": [build_card(s,"smallmid",_session) for s in cats["smallmid"]],
-                                    "per":      [build_card(s,"per",_session)      for s in _per_list],
-                                    "ui_n_per_cat": _ui_n_bg,
-                                    "ts":_ts,"total":len(all_s),
-                                    "kospi_n":len(kp),"kosdaq_n":len(kd),
-                                    "updated_at":time.time(),
-                                    "market_open": _session == 'regular',
-                                    "session": _session,
-                                    "session_label": _sess_lbl,
-                                }
+                                _sw = [build_card(s,"swing",_session)    for s in cats["swing"]]
+                                _su = [build_card(s,"surge",_session)    for s in cats["surge"]]
+                                _tm = [build_card(s,"tomorrow",_session) for s in cats["tomorrow"]]
+                                _sm = [build_card(s,"smallmid",_session) for s in cats["smallmid"]]
+                                _pe = [build_card(s,"per",_session)      for s in _per_list]
+
+                                # 프리/애프터장에서 모든 카테고리 0이면 이전 데이터 보존
+                                _all_empty = not any([_sw, _su, _tm, _sm, _pe])
+                                if _all_empty and _session in ('pre', 'after'):
+                                    # 타임스탬프·세션만 업데이트하고 종목 데이터는 이전 것 유지
+                                    _prev = ss.get("scan_result") or {}
+                                    sr = dict(_prev)
+                                    sr.update({"ts":_ts,"total":len(all_s),
+                                               "kospi_n":len(kp),"kosdaq_n":len(kd),
+                                               "updated_at":time.time(),
+                                               "session":_session,"session_label":_sess_lbl})
+                                else:
+                                    sr = {
+                                        "swing": _sw, "surge": _su, "tomorrow": _tm,
+                                        "smallmid": _sm, "per": _pe,
+                                        "ui_n_per_cat": _ui_n_bg,
+                                        "ts":_ts,"total":len(all_s),
+                                        "kospi_n":len(kp),"kosdaq_n":len(kd),
+                                        "updated_at":time.time(),
+                                        "market_open": _session == 'regular',
+                                        "session": _session,
+                                        "session_label": _sess_lbl,
+                                    }
                                 sj = _jn.dumps(sr, ensure_ascii=False)
                                 r = _req.patch(
                                     f"https://api.github.com/gists/{gid}",
