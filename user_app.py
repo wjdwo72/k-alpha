@@ -899,12 +899,14 @@ async function pay(){{
                     else:
                         with st.spinner("구독 생성 중..."):
                             res = sb_create_sub(user_id, "coupon", days)
-                        if res:
+                        if res is not None:
                             st.success(f"✅ {days}일 무료 이용이 시작됩니다!")
                             time.sleep(1)
-                            st.session_state["sub"] = sb_get_active_sub(user_id)
+                            new_sub = sb_get_active_sub(user_id)
+                            st.session_state["sub"] = new_sub
                             st.rerun()
-                        # 실패 시 _sb() 내부에서 이미 st.warning 표시됨
+                        else:
+                            st.error("❌ 구독 생성 실패. Supabase 설정을 확인하세요.")
 
     # 로그아웃
     st.markdown("---")
@@ -1737,6 +1739,34 @@ def admin_panel():
             st.info("회원이 없습니다")
 
     with tab_coupons:
+        # ── 직접 구독 부여 ──
+        st.markdown("**직접 구독 부여 (쿠폰 없이)**")
+        dg_col1, dg_col2 = st.columns([3, 1])
+        with dg_col1:
+            dg_email = st.text_input("이메일", placeholder="user@example.com", key="dg_email")
+        with dg_col2:
+            dg_days = st.number_input("기간(일)", min_value=1, max_value=3650, value=100, key="dg_days")
+        if st.button("구독 부여", type="primary", key="btn_direct_grant"):
+            if not dg_email:
+                st.error("이메일을 입력하세요")
+            else:
+                _urows = _sb("get", "users", params={"email": f"eq.{dg_email.strip().lower()}", "limit": "1"})
+                if not _urows:
+                    st.error(f"❌ 유저 없음: {dg_email}")
+                else:
+                    _uid = _urows[0]["id"]
+                    _now = datetime.now(timezone.utc)
+                    _expires = (_now + timedelta(days=int(dg_days))).isoformat()
+                    _res = _sb("post", "subscriptions", body={
+                        "user_id": _uid, "plan": "admin_grant", "status": "active",
+                        "starts_at": _now.isoformat(), "expires_at": _expires,
+                    })
+                    if _res is not None:
+                        st.success(f"✅ {dg_email} → {dg_days}일 구독 부여 완료")
+                    else:
+                        st.error("구독 생성 실패")
+
+        st.markdown("---")
         st.markdown("**신규 쿠폰 발급**")
         c1, c2, c3 = st.columns(3)
         with c1:
