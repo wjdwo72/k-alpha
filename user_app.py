@@ -156,8 +156,12 @@ def sb_use_coupon(code, user_id):
     if not rows: return None, "존재하지 않는 쿠폰입니다"
     c = rows[0]
     now = datetime.now(timezone.utc)
-    if c.get("expires_at") and now > datetime.fromisoformat(c["expires_at"].replace("Z", "+00:00")):
-        return None, "만료된 쿠폰입니다"
+    if c.get("expires_at"):
+        try:
+            _exp = datetime.fromisoformat(c["expires_at"].replace("Z", "+00:00"))
+            if now > _exp:
+                return None, f"만료된 쿠폰입니다 (만료일: {_exp.strftime('%Y-%m-%d')})"
+        except: pass
     if c.get("use_count", 0) >= c.get("max_uses", 1):
         return None, "이미 사용된 쿠폰입니다"
     # 사용 처리

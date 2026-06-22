@@ -390,20 +390,24 @@ def _start_bg_scan_thread():
         def _save_gist(lp):
             nonlocal _gist_ts
             _now = _t.time()
-            if _now - _gist_ts < 5: return
+            if _now - _gist_ts < 60: return  # 60초마다 (rate limit 방지)
             _gid = _get_secret('GIST_ID')
             _ght = _get_secret('GH_TOKEN')
             if _gid and _ght and lp:
                 try:
-                    _req.patch(
+                    _r = _req.patch(
                         f"https://api.github.com/gists/{_gid}",
                         headers={'Authorization': f'token {_ght}',
                                  'Accept': 'application/vnd.github.v3+json'},
                         json={"files": {"kalpha_prices.json": {
                             "content": _jn.dumps(lp, ensure_ascii=False)}}},
                         timeout=10)
-                    _gist_ts = _now
-                except: pass
+                    if _r.status_code == 200:
+                        _gist_ts = _now
+                    else:
+                        get_server_store()['_price_gist_err'] = f"{_r.status_code}"
+                except Exception as _pe:
+                    get_server_store()['_price_gist_err'] = str(_pe)[:80]
 
         while True:
             ss  = get_server_store()
@@ -549,19 +553,20 @@ def _start_bg_scan_thread():
                         time.sleep(0.12)
                     ss['live_prices'] = lp
                     _now = time.time()
-                    if _now - _gist_ts > 10 and lp:
+                    if _now - _gist_ts > 60 and lp:  # 60초마다 (rate limit 방지)
                         _gid = _get_secret('GIST_ID')
                         _ght = _get_secret('GH_TOKEN')
                         if _gid and _ght:
                             try:
-                                _req.patch(
+                                _rp = _req.patch(
                                     f"https://api.github.com/gists/{_gid}",
                                     headers={'Authorization': f'token {_ght}',
                                              'Accept': 'application/vnd.github.v3+json'},
                                     json={"files": {"kalpha_prices.json": {
                                         "content": _jn.dumps(lp, ensure_ascii=False)}}},
                                     timeout=10)
-                                _gist_ts = _now
+                                if _rp.status_code == 200:
+                                    _gist_ts = _now
                             except: pass
             except: pass
             time.sleep(3)
