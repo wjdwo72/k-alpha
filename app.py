@@ -302,10 +302,10 @@ def _start_bg_scan_thread():
                                     # 스캔 직후 TG 전송 (세션 레이블 포함)
                                     iv_lbl = f"{_sess_lbl} {iv}분"
                                     _do_tg_send(ss, sr, iv_lbl)
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+                        except Exception as _e:
+                            ss["_bg_last_err"] = str(_e)
+            except Exception as _e:
+                ss["_bg_last_err"] = str(_e)
             time.sleep(30)  # 30초마다 경과 체크
 
     import threading
@@ -3364,8 +3364,10 @@ if _gist_active or st.session_state.kis_token:
     with cb:
         if st.button("↻", key="btn_ref", help="즉시 갱신"):
             server_store['scan_ts'] = 0
-            server_store['force_kis'] = True   # KIS 직접 스캔 강제 실행
-            # Gist 캐시 클리어 + KIS 캐시도 초기화
+            server_store['force_kis'] = True
+            # 백그라운드 스캔도 즉시 재실행 → Gist 갱신
+            try: _get_bg_state()["last_scan"] = 0
+            except: pass
             fetch_gist_scan.clear()
             try: fetch_volume_ranking.clear()
             except: pass
@@ -3451,15 +3453,16 @@ if _gist_active or st.session_state.kis_token:
     _no_data = (not scan_result.get('swing') and not scan_result.get('surge') and
                 not scan_result.get('tomorrow') and not scan_result.get('smallmid'))
     if _no_data and GIST_ID and not _force_kis:
-        # Gist 설정됨 — 백그라운드 스레드 첫 스캔 대기 중
         _wait_min = st.session_state.get('scan_refresh_min', 10)
+        _bg_err = server_store.get('_bg_last_err', '')
+        _err_txt = f'<br><span style="color:#f87171;font-size:11px">⚠ 백그라운드 오류: {_bg_err}</span>' if _bg_err else ''
         st.markdown(
             f'<div style="font-family:monospace;font-size:12px;color:#ffc800;'
             f'padding:6px 10px;background:rgba(255,200,0,0.06);'
             f'border:1px solid rgba(255,200,0,0.2);border-radius:6px;margin:4px 0">'
-            f'📡 백그라운드 스레드 첫 스캔 준비 중 — 약 {_wait_min}분 후 자동 표시<br>'
+            f'📡 백그라운드 스캔 결과 없음 (장 초반 거래대금 부족 또는 스캔 대기 중)<br>'
             f'<span style="color:#64748b;font-size:11px">'
-            f'↻ 버튼으로 즉시 KIS 직접 스캔 가능</span></div>',
+            f'↻ 버튼으로 즉시 갱신 가능</span>{_err_txt}</div>',
             unsafe_allow_html=True)
 
     elif _no_data and st.session_state.kis_token and (not GIST_ID or _force_kis):
