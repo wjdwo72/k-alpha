@@ -308,7 +308,81 @@ def _start_bg_scan_thread():
                 ss["_bg_last_err"] = str(_e)
             time.sleep(30)  # 30초마다 경과 체크
 
+    # ── 셀프 핑: 절전(Zzzz) 방지 — 4분마다 앱 자체 URL 호출 ──────────────────
+    def _keepalive():
+        _url = _get_secret('ADMIN_APP_URL', '')
+        while True:
+            time.sleep(240)
+            if _url:
+                try: _req.get(_url, timeout=15)
+                except: pass
+
+    # ── 실시간 현재가 폴링: 3초마다 KIS REST → server_store + 10초마다 Gist ──
+    def _price_poll():
+        _gist_ts = 0
+        while True:
+            try:
+                ss  = get_server_store()
+                tok = ss.get('kis_token','')
+                kb  = ss.get('kis_base_url','https://openapi.kis.or.kr')
+                ka  = ss.get('kis_ak','')
+                ks  = ss.get('kis_sec','')
+                sr  = ss.get('scan_result') or {}
+
+                _codes = []
+                for _cat in ['swing','surge','tomorrow','smallmid','per']:
+                    for _s in (sr.get(_cat) or [])[:10]:
+                        _code = _s.get('code','')
+                        _mkt  = 'J' if 'kospi' in str(_s.get('mkt','')).lower() else 'Q'
+                        if _code and _code not in [c[0] for c in _codes]:
+                            _codes.append((_code, _mkt))
+
+                if tok and _codes:
+                    lp = dict(ss.get('live_prices') or {})
+                    for _code, _mkt in _codes[:30]:
+                        try:
+                            rp = _req.get(
+                                f"{kb}/uapi/domestic-stock/v1/quotations/inquire-price",
+                                params={'FID_COND_MRKT_DIV_CODE':_mkt,'FID_INPUT_ISCD':_code},
+                                headers={'Content-Type':'application/json',
+                                         'authorization':f'Bearer {tok}',
+                                         'appkey':ka,'appsecret':ks,'tr_id':'FHKST01010100'},
+                                verify=False, timeout=3)
+                            o = rp.json().get('output',{})
+                            if o.get('stck_prpr'):
+                                lp[_code] = {
+                                    'price':  int(o.get('stck_prpr',0) or 0),
+                                    'change': o.get('prdy_vrss','0'),
+                                    'pct':    o.get('prdy_ctrt','0'),
+                                    'sign':   o.get('prdy_vrss_sign','3'),
+                                    'ts':     time.time(),
+                                }
+                        except: pass
+                        time.sleep(0.12)
+                    ss['live_prices'] = lp
+
+                    # 10초마다 Gist에 저장 (유저앱 참조용)
+                    _now = time.time()
+                    if _now - _gist_ts > 10 and lp:
+                        _gid = _get_secret('GIST_ID')
+                        _ght = _get_secret('GH_TOKEN')
+                        if _gid and _ght:
+                            try:
+                                _req.patch(
+                                    f"https://api.github.com/gists/{_gid}",
+                                    headers={'Authorization':f'token {_ght}',
+                                             'Accept':'application/vnd.github.v3+json'},
+                                    json={"files":{"kalpha_prices.json":{
+                                        "content":_jn.dumps(lp, ensure_ascii=False)}}},
+                                    timeout=10)
+                                _gist_ts = _now
+                            except: pass
+            except: pass
+            time.sleep(3)
+
     import threading
+    threading.Thread(target=_keepalive, daemon=True).start()
+    threading.Thread(target=_price_poll, daemon=True).start()
     threading.Thread(target=_run, daemon=True).start()
 
 
@@ -1610,6 +1684,10 @@ if _can_refresh:
 else:
     # 장외/주말/공휴일: 자동 갱신 중단 (수동 ↻ 버튼만 허용)
     _has_gist = bool(_get_secret('GIST_ID'))
+
+# 현재가 실시간 갱신 — KIS 연결 시 5초마다 (장 여부 무관)
+if st.session_state.get('auth') and st.session_state.get('kis_token'):
+    st_autorefresh(interval=5000, limit=None, key="price_live_refresh")
 
 # ════ 4. 메인 패널 ════
 if st.session_state.pop('_load_ok',False):
@@ -3818,6 +3896,26 @@ if _gist_active or st.session_state.kis_token:
 # ════ 6. HTML 터미널 ════
 if not os.path.exists("app.html"):
     st.error("app.html 파일을 GitHub 저장소에 업로드하세요."); st.stop()
+
+# 실시간 현재가 주입 (백그라운드 폴링 → scan_result에 병합)
+_lp = get_server_store().get('live_prices') or {}
+if _lp:
+    scan_result['live_prices'] = _lp
+    # 각 카드의 price 필드를 실시간 현재가로 갱신
+    for _cat in ['swing','surge','tomorrow','smallmid','per']:
+        for _card in scan_result.get(_cat, []):
+            _code = _card.get('code','')
+            if _code in _lp:
+                _lv = _lp[_code]
+                _lv_price = _lv.get('price', 0)
+                if _lv_price > 0:
+                    _card['price']      = f"{_lv_price:,}"
+                    _sign = _lv.get('sign','3')
+                    _chg  = int(_lv.get('change','0') or 0)
+                    _pct  = float(_lv.get('pct','0') or 0)
+                    _neg  = _sign in ('4','5')
+                    _card['change']     = f"{'▼' if _neg else '▲'}{abs(_pct):.2f}%"
+                    _card['live']       = True
 
 # scan_json 최종 안전장치 — scan_result와 동기화
 if scan_result.get('swing') or scan_result.get('surge') or scan_result.get('tomorrow') or scan_result.get('smallmid'):

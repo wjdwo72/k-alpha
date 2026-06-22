@@ -345,6 +345,19 @@ def load_scan_data():
         return json.loads(content) if content else None
     except: return None
 
+@st.cache_data(ttl=10, show_spinner=False)
+def load_live_prices():
+    """관리앱 백그라운드가 10초마다 저장하는 실시간 현재가 데이터"""
+    if not GIST_ID: return {}
+    try:
+        hdrs = {"Accept": "application/vnd.github.v3+json"}
+        if GH_TOKEN: hdrs["Authorization"] = f"token {GH_TOKEN}"
+        r = requests.get(f"https://api.github.com/gists/{GIST_ID}",
+                         headers=hdrs, timeout=8)
+        content = r.json().get("files", {}).get("kalpha_prices.json", {}).get("content", "")
+        return json.loads(content) if content else {}
+    except: return {}
+
 # ── 공통 CSS ───────────────────────────────────────────────────
 def inject_css():
     # Keep-alive: Streamlit Cloud 절전모드 방지 (5분마다 자가 핑)
@@ -1058,6 +1071,13 @@ tick(); setInterval(tick,1000);
 </div></a>
 """, unsafe_allow_html=True)
 
+    # 실시간 현재가 10초 갱신 (관리앱 백그라운드가 Gist에 저장한 데이터 읽기)
+    try:
+        from streamlit_autorefresh import st_autorefresh as _sar
+        _sar(interval=10000, limit=None, key="user_price_refresh")
+    except ImportError:
+        pass
+
     # 스캔 데이터 로드
     data = load_scan_data()
     if not data:
@@ -1074,6 +1094,23 @@ tick(); setInterval(tick,1000);
     MAX_DISPLAY = int(data.get("ui_n_per_cat", 10))
     # Gist 배열 자체가 이미 ui_n_per_cat 기준으로 trim됨 — 추가 slice 불필요
     cat_stocks = {key: data.get(key, []) for key in _all_keys}
+
+    # 실시간 현재가 로드 → cat_stocks 카드에 반영
+    _live_p = load_live_prices()
+    if _live_p:
+        for _cat_key in _all_keys:
+            for _card in cat_stocks.get(_cat_key, []):
+                _code = _card.get("code","")
+                if _code in _live_p:
+                    _lv = _live_p[_code]
+                    _lv_price = _lv.get("price", 0)
+                    if _lv_price > 0:
+                        _card["price"] = f"{_lv_price:,}"
+                        _sign = _lv.get("sign","3")
+                        _pct  = float(_lv.get("pct","0") or 0)
+                        _neg  = _sign in ("4","5")
+                        _card["change"] = f"{'▼' if _neg else '▲'}{abs(_pct):.2f}%"
+                        _card["live"] = True
 
 
 
