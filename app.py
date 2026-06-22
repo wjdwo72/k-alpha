@@ -1871,9 +1871,8 @@ else:
     # 장외/주말/공휴일: 자동 갱신 중단 (수동 ↻ 버튼만 허용)
     _has_gist = bool(_get_secret('GIST_ID'))
 
-# 현재가 실시간 갱신 — KIS 연결 시 1초마다 (WebSocket 수신 데이터 화면 반영)
-if st.session_state.get('auth') and st.session_state.get('kis_token'):
-    st_autorefresh(interval=1000, limit=None, key="price_live_refresh")
+# 현재가 갱신은 app.html 내부 JS가 Gist에서 직접 읽어 DOM 업데이트
+# (st_autorefresh 제거 — iframe 깜빡임·버튼 클릭 씹힘 방지)
 
 # ════ 4. 메인 패널 ════
 if st.session_state.pop('_load_ok',False):
@@ -4105,6 +4104,10 @@ if _lp:
                     _neg  = _sign in ('4','5')
                     _card['change']     = f"{'▼' if _neg else '▲'}{abs(_pct):.2f}%"
                     _card['live']       = True
+
+# app.html JS가 직접 Gist에서 현재가 폴링하기 위한 메타 정보 주입
+scan_result['_gist_id']  = _get_secret('GIST_ID', '')
+scan_result['_ws_status'] = get_server_store().get('_ws_status', '')
 
 # scan_json 최종 안전장치 — scan_result와 동기화
 if scan_result.get('swing') or scan_result.get('surge') or scan_result.get('tomorrow') or scan_result.get('smallmid'):

@@ -6539,5 +6539,49 @@ setTimeout(function() {
   <button id="kab-up" title="맨 위로" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
   <button id="kab-cfg" title="필터 설정" onclick="openSettings(event)">⚙</button>
 </div>
+
+<!-- ── Gist 현재가 자동 폴링 (Streamlit 재렌더 없이 DOM 직접 갱신) ── -->
+<script>
+(function() {
+  var _gistId  = (window.__SCAN_RESULT__ && window.__SCAN_RESULT__._gist_id) || '';
+  var _pollMs  = 5000;   // 5초마다 폴링
+  var _lastEtag = '';
+
+  function _fetchPrices() {
+    if (!_gistId) return;
+    var url = 'https://api.github.com/gists/' + _gistId;
+    var hdrs = {'Accept': 'application/vnd.github.v3+json'};
+    if (_lastEtag) hdrs['If-None-Match'] = _lastEtag;
+    fetch(url, {headers: hdrs, cache: 'no-store'})
+      .then(function(r) {
+        if (r.status === 304) return null;  // 변경 없음
+        var etag = r.headers.get('ETag');
+        if (etag) _lastEtag = etag;
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data) return;
+        var content = ((data.files || {})['kalpha_prices.json'] || {}).content;
+        if (!content) return;
+        var prices = JSON.parse(content);
+        if (prices && typeof applyLivePrices === 'function') {
+          applyLivePrices(prices);
+        }
+      })
+      .catch(function() {});
+  }
+
+  // SCAN_RESULT 로드 완료 후 gist_id 재확인 (postMessage로 나중에 올 수 있음)
+  setTimeout(function() {
+    if (!_gistId && window.__SCAN_RESULT__) {
+      _gistId = window.__SCAN_RESULT__._gist_id || '';
+    }
+    if (_gistId) {
+      _fetchPrices();
+      setInterval(_fetchPrices, _pollMs);
+    }
+  }, 2000);
+})();
+</script>
 </body>
 </html>
