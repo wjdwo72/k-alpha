@@ -1184,11 +1184,20 @@ tick(); setInterval(tick,1000);
     n_tm  = len(cat_stocks.get("tomorrow", []))
     n_sm  = len(cat_stocks.get("smallmid", []))
     n_per = len(cat_stocks.get("per", []))
+    # Gist 저장 시각 계산 (몇 분 전)
+    _upd_at = data.get("updated_at", 0)
+    if _upd_at:
+        _age = int(time.time() - _upd_at)
+        _age_lbl = f"{_age//60}분 {_age%60}초 전" if _age < 3600 else f"{_age//3600}시간 전"
+        _age_color = "#00ff88" if _age < 700 else "#ffc800" if _age < 1800 else "#ff4444"
+    else:
+        _age_lbl = "시각 미상"
+        _age_color = "#64748b"
     st.markdown(f"""
 <div style="font-size:12px;color:#64748b;padding:4px 0 10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
   <span>📡 KOSPI <b style="color:#e2e8f0">{kospi}</b> + KOSDAQ <b style="color:#e2e8f0">{kosdaq}</b>종목 스캔</span>
   <span style="color:#1e3a5f">|</span>
-  <span style="color:#00ff88">{ts} 업데이트</span>
+  <span style="color:{_age_color}">🕐 {ts} 스캔 ({_age_lbl})</span>
   <span style="color:#1e3a5f">|</span>
   <span>🔴 스윙 <b style="color:#00d4ff">{n_sw}</b>
    ⚡ 급등 <b style="color:#00d4ff">{n_su}</b>
@@ -1196,7 +1205,7 @@ tick(); setInterval(tick,1000);
    📦 중소형 <b style="color:#00d4ff">{n_sm}</b>
    💎 PER <b style="color:#00d4ff">{n_per}</b>
   </span>
-  <span style="color:#475569;font-size:11px">· UI표시 최대 {MAX_DISPLAY}개</span>
+  <span style="color:#475569;font-size:11px">· 최대 {MAX_DISPLAY}개</span>
 </div>
 """, unsafe_allow_html=True)
 
