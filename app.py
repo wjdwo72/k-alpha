@@ -3690,6 +3690,17 @@ if _gist_active or st.session_state.kis_token:
     _start_bg_scan_thread()
     iv_min         = st.session_state.get('tg_interval_min', 10)
 
+    # ── K-Alpha 패턴 시그널 버튼 ──
+    _admin_base = _get_secret('ADMIN_APP_URL', '').rstrip('/')
+    _signal_url = f"{_admin_base}/app/static/signal.html" if _admin_base else "/app/static/signal.html"
+    st.markdown(
+        f'<a href="{_signal_url}" target="_blank">'
+        f'<button style="background:linear-gradient(90deg,#7c3aed,#2563eb);color:#fff;border:none;'
+        f'border-radius:6px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:700;'
+        f'margin-bottom:6px;letter-spacing:.5px;">📊 K-Alpha 패턴 시그널</button></a>',
+        unsafe_allow_html=True,
+    )
+
     ca, cb = st.columns([5,1])
     with cb:
         if st.button("↻", key="btn_ref", help="즉시 갱신"):
