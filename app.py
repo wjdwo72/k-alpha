@@ -419,6 +419,7 @@ def _start_bg_scan_thread():
             nonlocal _gist_ts
             _now = _t.time()
             if _now - _gist_ts < 60: return  # 60초마다 (rate limit 방지)
+            _gist_ts = _now  # 실패해도 즉시 업데이트 → tight-retry 방지
             _ss2 = get_server_store()
             _gid = _ss2.get('_gist_id') or _get_secret('GIST_ID')
             _ght = _ss2.get('_gh_token') or _get_secret('GH_TOKEN')
@@ -431,9 +432,7 @@ def _start_bg_scan_thread():
                         json={"files": {"kalpha_prices.json": {
                             "content": _jn.dumps(lp, ensure_ascii=False)}}},
                         timeout=10)
-                    if _r.status_code == 200:
-                        _gist_ts = _now
-                    else:
+                    if _r.status_code != 200:
                         get_server_store()['_price_gist_err'] = f"{_r.status_code}"
                 except Exception as _pe:
                     get_server_store()['_price_gist_err'] = str(_pe)[:80]
@@ -583,6 +582,7 @@ def _start_bg_scan_thread():
                     ss['live_prices'] = lp
                     _now = time.time()
                     if _now - _gist_ts > 60 and lp:  # 60초마다 (rate limit 방지)
+                        _gist_ts = _now  # 실패해도 즉시 업데이트 → tight-retry 방지
                         _gid = ss.get('_gist_id') or _get_secret('GIST_ID')
                         _ght = ss.get('_gh_token') or _get_secret('GH_TOKEN')
                         if _gid and _ght:
@@ -594,8 +594,6 @@ def _start_bg_scan_thread():
                                     json={"files": {"kalpha_prices.json": {
                                         "content": _jn.dumps(lp, ensure_ascii=False)}}},
                                     timeout=10)
-                                if _rp.status_code == 200:
-                                    _gist_ts = _now
                             except: pass
             except: pass
             time.sleep(3)
