@@ -1583,6 +1583,7 @@
         <div class="scan-bar"><div class="scan-bar-fill"></div></div>
         <span id="filter-count">조건 충족: 73 종목</span>
         <button onclick="openSettings(event)" style="margin-left:8px;padding:3px 10px;background:rgba(0,212,255,0.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:10px;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px">⚙ 필터설정</button>
+        <button id="signal-btn" style="margin-left:6px;padding:3px 10px;background:linear-gradient(90deg,rgba(124,58,237,0.2),rgba(37,99,235,0.2));border:1px solid #7c3aed;border-radius:4px;color:#c4b5fd;font-size:10px;cursor:pointer;font-family:'Share Tech Mono',monospace;letter-spacing:1px">📊 패턴시그널</button>
       </div>
 
       <div class="tabs" id="tabs-kr">
@@ -6299,6 +6300,10 @@ window.addEventListener('message', function(e) {
     if (d.SCAN_RSI_MAX !== undefined) {
       window.__SCAN_RSI_MAX__ = d.SCAN_RSI_MAX;
       scanSettings.rsiMax = d.SCAN_RSI_MAX;
+    }
+    if (d.SIGNAL_URL) {
+      var _sb = document.getElementById('signal-btn');
+      if (_sb) _sb.onclick = function(){ window.open(d.SIGNAL_URL, '_blank'); };
     }
     // KIS 토큰 업데이트
     if (d.KIS_TOKEN) {
