@@ -4263,7 +4263,14 @@ def _safe_json(s):
 
 # ── 정적 HTML — 세션 내 한 번만 생성 (React DOM 재조정 완전 차단) ──────
 # HTML 캐시 — 파일 내용 해시 기반 (Streamlit Cloud mtime 고정 문제 해결)
-_STATIC_INJECT = '<script>window.__STREAMLIT_MODE__=true;</script>'
+_inj_sb_url = _get_secret('SUPABASE_URL', '')
+_inj_sb_key = _get_secret('SUPABASE_SERVICE_KEY', '') or _get_secret('SUPABASE_KEY', '')
+_STATIC_INJECT = (
+    f'<script>window.__STREAMLIT_MODE__=true;'
+    f'window.__SB_URL__={json.dumps(_inj_sb_url)};'
+    f'window.__SB_KEY__={json.dumps(_inj_sb_key)};'
+    f'</script>'
+)
 
 import os as _os, hashlib as _hashlib
 
@@ -4271,7 +4278,7 @@ _html_path = "app.html"
 with open(_html_path, "r", encoding="utf-8") as _f:
     _raw_html = _f.read()
 
-_cur_hash = _hashlib.md5(_raw_html.encode()).hexdigest()
+_cur_hash = _hashlib.md5((_raw_html + _inj_sb_url).encode()).hexdigest()
 _cached_hash = st.session_state.get('_cached_html_hash', '')
 
 if '_cached_html' not in st.session_state or _cur_hash != _cached_hash:

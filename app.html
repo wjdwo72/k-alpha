@@ -6262,7 +6262,34 @@ document.addEventListener('DOMContentLoaded', function() {
     var volLabel = document.getElementById('scan-vol-label');
     if (volLabel) volLabel.textContent = fmtNum(scanSettings.volMin) + '억+';
   }, 300);
+  _bindSignalBtn();
 });
+
+// ── 패턴시그널 버튼 바인딩 ──
+function _bindSignalBtn() {
+  var _sb = document.getElementById('signal-btn');
+  if (!_sb) return;
+  _sb.onclick = function() {
+    var sbUrl = window.__SB_URL__ || '';
+    var sbKey = window.__SB_KEY__ || '';
+    // window.top.location으로 앱 기본 URL 읽기 (Streamlit 동일 origin)
+    var appBase = '';
+    try {
+      var h = window.top.location.href || window.parent.location.href;
+      appBase = h.split('?')[0].replace(/\/app\.py$/, '').replace(/\/$/, '');
+    } catch(e) {
+      // cross-origin 차단 시 referrer 시도
+      var ref = document.referrer || '';
+      appBase = ref.split('?')[0].replace(/\/app\.py$/, '').replace(/\/$/, '');
+    }
+    if (!appBase) { alert('패턴시그널 URL을 감지할 수 없습니다.\nStreamlit secrets에 ADMIN_APP_URL을 설정해주세요.'); return; }
+    var q = [];
+    if (sbUrl) q.push('sb_url=' + encodeURIComponent(sbUrl));
+    if (sbKey) q.push('sb_key=' + encodeURIComponent(sbKey));
+    var url = appBase + '/app/static/signal.html' + (q.length ? '?' + q.join('&') : '');
+    window.open(url, '_blank');
+  };
+}
 
 // ── Streamlit postMessage 수신 (동적 데이터 업데이트) ──
 window.addEventListener('message', function(e) {
@@ -6303,24 +6330,7 @@ window.addEventListener('message', function(e) {
     }
     if (d.SB_URL) window.__SB_URL__ = d.SB_URL;
     if (d.SB_KEY) window.__SB_KEY__ = d.SB_KEY;
-    (function(){
-      var _sb = document.getElementById('signal-btn');
-      if (!_sb) return;
-      var base = (d.SIGNAL_URL && d.SIGNAL_URL.startsWith('http')) ? d.SIGNAL_URL
-        : (function(){
-            var ref = document.referrer || '';
-            if (!ref) return '';
-            return ref.split('?')[0].replace(/\/$/, '') + '/app/static/signal.html';
-          })();
-      _sb.onclick = function(){
-        var u = base;
-        if (!u) { alert('ADMIN_APP_URL 시크릿을 설정해주세요.'); return; }
-        var q = [];
-        if (window.__SB_URL__) q.push('sb_url='+encodeURIComponent(window.__SB_URL__));
-        if (window.__SB_KEY__) q.push('sb_key='+encodeURIComponent(window.__SB_KEY__));
-        window.open(u + (q.length ? '?'+q.join('&') : ''), '_blank');
-      };
-    })();
+    _bindSignalBtn();
     // KIS 토큰 업데이트
     if (d.KIS_TOKEN) {
       kisToken     = d.KIS_TOKEN;
