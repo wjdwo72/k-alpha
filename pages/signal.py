@@ -39,40 +39,41 @@ _env  = st.session_state.get('kis_env', '실전투자') or '실전투자'
 _base = st.session_state.get('kis_base_url', '') or ''
 _server_val = 'mock' if '모의' in _env or 'vts' in _base else 'real'
 
-# K-Alpha 동기화 버튼 행 + syncStatus 제거 (프록시 미연결 경고 제거)
-html = html.replace(
-    '<div style="display:flex;gap:4px;margin-top:4px">\n        <button class="btn btn-primary" style="flex:1;background:linear-gradient(90deg,#7c3aed,#06b6d4)" onclick="syncKAlpha(true)">🔄 K-Alpha 동기화</button>\n        <button class="btn btn-primary" style="flex:0 0 auto;background:#2d4a6e;font-size:11px;padding:6px 8px" onclick="openKAlphaEditor()" title="종목 직접 편집">✏️</button>\n      </div>\n      <div id="syncStatus" style="font-size:10px;color:var(--text3);margin-top:4px;text-align:center"></div>',
-    '<div id="syncStatus" style="display:none"></div>'
-)
-
-# 자동 자격증명 주입 스크립트를 </body> 직전에 삽입
-_inject = f"""<script>
+# API 설정 섹션 숨김 + 자동 연결 주입
+_inject = f"""<style>
+/* API 설정 & 종목 패널 숨김 */
+.api-section {{ display:none!important; }}
+.panel-title {{ display:none!important; }}
+</style>
+<script>
 (function() {{
   var ak  = {json.dumps(_ak)};
   var sec = {json.dumps(_sec)};
   var acc = {json.dumps(_acc)};
   var srv = {json.dumps(_server_val)};
-  function _fill() {{
-    var eAk  = document.getElementById('inp-appkey');
-    var eSec = document.getElementById('inp-secret');
-    var eAcc = document.getElementById('inp-account');
+  function _autoConnect() {{
+    // signal.html 의 실제 input ID: appKey, secretKey, acctNo, serverType
+    var eAk  = document.getElementById('appKey');
+    var eSec = document.getElementById('secretKey');
+    var eAcc = document.getElementById('acctNo');
     var eSrv = document.getElementById('serverType');
-    if (!eAk) return setTimeout(_fill, 200);
+    if (!eAk) {{ setTimeout(_autoConnect, 300); return; }}
     if (ak)  eAk.value  = ak;
     if (sec) eSec.value = sec;
     if (acc) eAcc.value = acc;
     if (srv && eSrv) eSrv.value = srv;
-    // 크리덴셜이 있으면 자동 연결
-    if (ak && sec && acc) {{
-      if (typeof connectKIS === 'function') connectKIS();
+    if (ak && sec && acc && typeof connectKIS === 'function') {{
+      connectKIS();
     }}
   }}
   if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', _fill);
-  }} else {{ _fill(); }}
+    document.addEventListener('DOMContentLoaded', _autoConnect);
+  }} else {{
+    setTimeout(_autoConnect, 300);
+  }}
 }})();
 </script>"""
 
-html = html.replace('</body>', _inject + '\n</body>')
+html = html.replace('</head>', _inject + '\n</head>')
 
 components.html(html, height=960, scrolling=True)
