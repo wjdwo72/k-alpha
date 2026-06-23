@@ -363,10 +363,24 @@ def load_market_data():
             result[label] = {"price": 0, "change": 0, "pct": 0}
     return result
 
-# ── Gist 스캔 데이터 ───────────────────────────────────────────
+# ── 스캔 데이터 (Supabase 우선, Gist fallback) ─────────────────
 @st.cache_data(ttl=25, show_spinner=False)
 def load_scan_data():
-    """Gist에서 스캔 데이터 읽기 (TTL=25s, autorefresh=30s → 항상 최신)"""
+    """Supabase scan_cache에서 스캔 데이터 읽기 (TTL=25s)"""
+    # Supabase 우선
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            r = requests.get(
+                f"{SUPABASE_URL}/rest/v1/scan_cache?id=eq.1&select=data",
+                headers={"apikey": SUPABASE_KEY,
+                         "Authorization": f"Bearer {SUPABASE_KEY}"},
+                timeout=8)
+            if r.status_code == 200:
+                rows = r.json()
+                if rows and rows[0].get("data"):
+                    return rows[0]["data"]
+        except: pass
+    # Gist fallback
     if not GIST_ID: return None
     try:
         hdrs = {"Accept": "application/vnd.github.v3+json"}
