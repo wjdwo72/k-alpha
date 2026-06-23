@@ -295,52 +295,14 @@ def _start_bg_scan_thread():
                                         "session": _session,
                                         "session_label": _sess_lbl,
                                     }
-                                sj = _jn.dumps(sr, ensure_ascii=False)
-                                # Supabase 저장 (우선) → 실패시 Gist fallback
-                                _saved = False
-                                if _sb_url and _sb_key:
-                                    try:
-                                        import requests as _rq2
-                                        _sbr = _rq2.patch(
-                                            f"{_sb_url}/rest/v1/scan_cache?id=eq.1",
-                                            headers={"apikey":_sb_key,
-                                                     "Authorization":f"Bearer {_sb_key}",
-                                                     "Content-Type":"application/json",
-                                                     "Prefer":"return=minimal"},
-                                            json={"data": sr, "updated_at": "now()"},
-                                            timeout=10)
-                                        if _sbr.status_code in (200, 204):
-                                            _saved = True
-                                            ss["_last_gist_save"] = _ts
-                                            iv_lbl = f"{_sess_lbl} {iv}분"
-                                            _do_tg_send(ss, sr, iv_lbl)
-                                        else:
-                                            ss["_bg_gist_err"] = f"SB {_sbr.status_code}: {_sbr.text[:80]}"
-                                    except Exception as _sbe:
-                                        ss["_bg_gist_err"] = f"SB오류: {str(_sbe)[:80]}"
-                                if not _saved and gid and ght:
-                                    try:
-                                        r = _req.patch(
-                                            f"https://api.github.com/gists/{gid}",
-                                            headers={"Authorization":f"token {ght}",
-                                                     "Accept":"application/vnd.github.v3+json"},
-                                            json={"files":{"kalpha_scan.json":{"content":sj}}},
-                                            timeout=15)
-                                        if r.status_code == 200:
-                                            _saved = True
-                                            ss["_last_gist_save"] = _ts
-                                            iv_lbl = f"{_sess_lbl} {iv}분"
-                                            _do_tg_send(ss, sr, iv_lbl)
-                                        else:
-                                            ss["_bg_gist_err"] = f"GH {r.status_code}: {r.text[:60]}"
-                                    except Exception as _ge:
-                                        ss["_bg_gist_err"] = str(_ge)[:80]
+                                # 백그라운드는 저장 시도 없이 플래그만 설정
+                                # → 메인 스레드(foreground)가 _get_secret()으로 직접 저장
                                 ss["scan_result"] = sr
                                 ss["scan_ts"] = time.time()
                                 bg["last_scan"] = time.time()
                                 ss["_run_scan_ready"] = True
-                                if not _saved:
-                                    ss["_pending_gist_save"] = sj
+                                iv_lbl = f"{_sess_lbl} {iv}분"
+                                _do_tg_send(ss, sr, iv_lbl)
                         except Exception as _e:
                             ss["_bg_last_err"] = str(_e)
             except Exception as _e:
