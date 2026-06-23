@@ -2679,11 +2679,11 @@ function filterKrStocks(stocks) {
     // smallmid 카테고리는 항상 통과
     if (s.cat === 'smallmid') return true;
     if (s._isLive) {
-      // 실시간 종목: 카테고리별 등락률·거래대금 필터 적용
-      var pct = parseFloat((s.change || '0').replace('%','').replace('+','')) || 0;
-      var vol = parseFloat(s.vol) || 0;
+      // 실시간 종목: Python 스캔 통과 종목 — vol은 Python이 이미 필터링
+      // vol이 "1,234" 형태 문자열일 수 있으므로 콤마 제거 후 파싱
+      var pct = parseFloat((s.change || '0').toString().replace('%','').replace('+','')) || 0;
+      var vol = parseFloat((s.vol || '0').toString().replace(/,/g, '')) || 0;
       if (s.cat === 'swing') {
-        if (vol < scanSettings.swingVolMin) return false;
         if (pct < scanSettings.swingPctMin || pct > scanSettings.swingPctMax) return false;
       }
       if (s.cat === 'tomorrow') {
@@ -6283,10 +6283,7 @@ function _bindSignalBtn() {
       appBase = ref.split('?')[0].replace(/\/app\.py$/, '').replace(/\/$/, '');
     }
     if (!appBase) { alert('패턴시그널 URL을 감지할 수 없습니다.\nStreamlit secrets에 ADMIN_APP_URL을 설정해주세요.'); return; }
-    var q = [];
-    if (sbUrl) q.push('sb_url=' + encodeURIComponent(sbUrl));
-    if (sbKey) q.push('sb_key=' + encodeURIComponent(sbKey));
-    var url = appBase + '/app/static/signal.html' + (q.length ? '?' + q.join('&') : '');
+    var url = appBase + '/signal';
     window.open(url, '_blank');
   };
 }
