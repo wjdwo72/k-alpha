@@ -299,21 +299,33 @@ def _start_bg_scan_thread():
                                         "session_label": _sess_lbl,
                                     }
                                 sj = _jn.dumps(sr, ensure_ascii=False)
-                                r = _req.patch(
-                                    f"https://api.github.com/gists/{gid}",
-                                    headers={"Authorization":f"token {ght}",
-                                             "Accept":"application/vnd.github.v3+json"},
-                                    json={"files":{"kalpha_scan.json":{"content":sj}}},
-                                    timeout=15)
-                                if r.status_code == 200:
-                                    ss["scan_result"] = sr
-                                    ss["scan_ts"] = time.time()
-                                    bg["last_scan"] = time.time()
-                                    try: fetch_gist_scan.clear()
-                                    except: pass
-                                    # 스캔 직후 TG 전송 (세션 레이블 포함)
-                                    iv_lbl = f"{_sess_lbl} {iv}분"
-                                    _do_tg_send(ss, sr, iv_lbl)
+                                # Gist 직접 저장 시도
+                                _gist_ok = False
+                                if gid and ght:
+                                    try:
+                                        r = _req.patch(
+                                            f"https://api.github.com/gists/{gid}",
+                                            headers={"Authorization":f"token {ght}",
+                                                     "Accept":"application/vnd.github.v3+json"},
+                                            json={"files":{"kalpha_scan.json":{"content":sj}}},
+                                            timeout=15)
+                                        if r.status_code == 200:
+                                            _gist_ok = True
+                                            try: fetch_gist_scan.clear()
+                                            except: pass
+                                            iv_lbl = f"{_sess_lbl} {iv}분"
+                                            _do_tg_send(ss, sr, iv_lbl)
+                                        else:
+                                            ss["_bg_gist_err"] = f"{r.status_code}: {r.text[:80]}"
+                                    except Exception as _ge:
+                                        ss["_bg_gist_err"] = str(_ge)[:80]
+                                # 직접 저장 실패해도 메인 스레드가 저장할 수 있도록 플래그 설정
+                                ss["scan_result"] = sr
+                                ss["scan_ts"] = time.time()
+                                bg["last_scan"] = time.time()
+                                if not _gist_ok:
+                                    # 메인 스레드(keepalive 렌더)가 Gist 저장하도록
+                                    ss["_pending_gist_save"] = sj
                         except Exception as _e:
                             ss["_bg_last_err"] = str(_e)
             except Exception as _e:
@@ -324,7 +336,7 @@ def _start_bg_scan_thread():
     def _keepalive():
         _url = _get_secret('ADMIN_APP_URL', '')
         while True:
-            time.sleep(240)
+            time.sleep(90)  # 90초마다 핑 → 최대 2분 이내 메인 스레드 렌더 보장
             if _url:
                 try: _req.get(_url, timeout=15)
                 except: pass
@@ -4109,6 +4121,20 @@ if _gist_active or st.session_state.kis_token:
     _gist_id2 = _get_secret('GIST_ID')
     _gh_tok2  = _get_secret('GH_TOKEN')
     _is_fresh_scan = bool(all_stocks)   # KIS에서 종목 받아왔으면 무조건 저장
+    # 배경 스레드가 저장 실패한 경우 메인 스레드에서 대신 저장
+    _pending = server_store.pop('_pending_gist_save', None)
+    if _pending and _gist_id2 and _gh_tok2 and not _is_fresh_scan:
+        try:
+            _pr = requests.patch(
+                f"https://api.github.com/gists/{_gist_id2}",
+                headers={'Authorization':f'token {_gh_tok2}','Accept':'application/vnd.github.v3+json'},
+                json={"files":{"kalpha_scan.json":{"content":_pending}}},
+                timeout=10)
+            if _pr.status_code == 200:
+                fetch_gist_scan.clear()
+                server_store['_last_gist_save'] = kst_strftime('%H:%M:%S')
+                st.toast("☁️ 자동스캔 Gist 저장", icon="✅")
+        except: pass
     if _gist_id2 and _gh_tok2 and _is_fresh_scan:
         try:
             _scan_json_full = json.dumps(scan_result, ensure_ascii=False)
