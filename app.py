@@ -3789,8 +3789,9 @@ if _gist_active or st.session_state.kis_token:
                 _is_afterhours_scan = not _direct_mkt
 
                 def _do_bg_scan(kt, kb, ka, ks, acc, is_afh):
-                    """백그라운드 스레드: 스캔 → server_store에 저장"""
+                    """백그라운드 스레드: 스캔 → server_store 저장 + Gist 즉시 저장"""
                     import concurrent.futures as _cf
+                    import requests as _req2, json as _jn2
                     _ss = get_server_store()
                     _ss['bg_scan_running'] = True
                     _ss['bg_scan_done']    = False
@@ -3811,6 +3812,46 @@ if _gist_active or st.session_state.kis_token:
                         _ss['bg_scan_total'] = round(time.time()-_t0, 1)
                         _ss['bg_scan_kp']    = len(_kp)
                         _ss['bg_scan_kd']    = len(_kd)
+                        # 스캔 완료 즉시 Gist 저장 (분석 포함)
+                        _all = _kp + _kd
+                        if _all:
+                            try:
+                                _sess = get_market_session()
+                                _sess_lbl = SESSION_SHORT.get(_sess, '')
+                                _blist = _ss.get("scan_blacklist", set())
+                                _vmin  = _ss.get("scan_vol_min") or 50
+                                _rmin  = _ss.get("scan_rsi_min") or 20
+                                _rmax  = _ss.get("scan_rsi_max") or 75
+                                _uin   = _ss.get("ui_n_per_cat") or 10
+                                _cats  = categorize_stocks(_all, _blist, _vmin, _rmin, _rmax, top_n=min(50, _uin*3))
+                                _sr = {
+                                    "swing":    [build_card(s,"swing",_sess)    for s in _cats["swing"]],
+                                    "surge":    [build_card(s,"surge",_sess)    for s in _cats["surge"]],
+                                    "tomorrow": [build_card(s,"tomorrow",_sess) for s in _cats["tomorrow"]],
+                                    "smallmid": [build_card(s,"smallmid",_sess) for s in _cats["smallmid"]],
+                                    "per": [],
+                                    "ui_n_per_cat": _uin,
+                                    "ts": _ts, "total": len(_all),
+                                    "kospi_n": len(_kp), "kosdaq_n": len(_kd),
+                                    "updated_at": time.time(),
+                                    "market_open": _sess == 'regular',
+                                    "session": _sess, "session_label": _sess_lbl,
+                                }
+                                _ss["scan_result"] = _sr
+                                _gid = _ss.get('_gist_id') or _get_secret('GIST_ID')
+                                _ght = _ss.get('_gh_token') or _get_secret('GH_TOKEN')
+                                if _gid and _ght:
+                                    _r = _req2.patch(
+                                        f"https://api.github.com/gists/{_gid}",
+                                        headers={"Authorization":f"token {_ght}","Accept":"application/vnd.github.v3+json"},
+                                        json={"files":{"kalpha_scan.json":{"content":_jn2.dumps(_sr,ensure_ascii=False)}}},
+                                        timeout=15)
+                                    if _r.status_code == 200:
+                                        _ss['_last_gist_save'] = _ts
+                                        try: fetch_gist_scan.clear()
+                                        except: pass
+                            except Exception as _ge:
+                                _ss['_bg_scan_gist_err'] = str(_ge)[:100]
                     except Exception as _e:
                         _ss['bg_scan_err'] = str(_e)
                     finally:
