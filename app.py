@@ -322,7 +322,8 @@ def _start_bg_scan_thread():
                                 ss["scan_result"] = sr
                                 ss["scan_ts"] = time.time()
                                 bg["last_scan"] = time.time()
-                                # 직접 저장 실패 시 메인 스레드(keepalive 핑 렌더)가 저장하도록
+                                # 직접 저장 성공 여부와 관계없이 메인 스레드에도 저장 신호
+                                ss["_run_scan_ready"] = True
                                 if not _gist_ok:
                                     ss["_pending_gist_save"] = sj
                         except Exception as _e:
@@ -4124,6 +4125,11 @@ if _gist_active or st.session_state.kis_token:
     _gist_id2 = _get_secret('GIST_ID')
     _gh_tok2  = _get_secret('GH_TOKEN')
     _is_fresh_scan = bool(all_stocks)   # KIS에서 종목 받아왔으면 무조건 저장
+    # _run() 배경 스레드가 스캔 완료 신호를 보냈으면 scan_result를 Gist에 저장
+    _run_ready = server_store.pop('_run_scan_ready', False)
+    if _run_ready and not _is_fresh_scan and server_store.get('scan_result'):
+        _is_fresh_scan = True
+        scan_result = server_store['scan_result']
     # 배경 스레드가 저장 실패한 경우 메인 스레드에서 대신 저장
     _pending = server_store.pop('_pending_gist_save', None)
     if _pending and _gist_id2 and _gh_tok2 and not _is_fresh_scan:
