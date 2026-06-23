@@ -215,7 +215,7 @@ def _start_bg_scan_thread():
         while True:
             try:
                 ss   = get_server_store()
-                iv   = ss.get("scan_refresh_min") or 10
+                iv   = ss.get("scan_refresh_min") or 2
                 elapsed = time.time() - bg["last_scan"]
 
                 _session = get_market_session()
@@ -670,7 +670,7 @@ DEFAULTS = {
     "kis_ak":"","kis_sec":"","kis_acc":"","kis_env":"실전투자",
     "use_pin":True,"auto_connect":True,
     # 화면 갱신 주기 (Gist 폴링 — 텔레그램과 무관)
-    "scan_refresh_min": 10,
+    "scan_refresh_min": 2,
     # 텔레그램 — 전체 발송 ON/OFF
     "tg_all_enabled": True,
     # 텔레그램 — 개인방
