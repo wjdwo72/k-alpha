@@ -502,9 +502,10 @@
 const PROXY = 'http://localhost:9001';
 
 // K-Alpha Supabase 연동 — signal.html 로드 시 scan_cache 읽어서 종목 자동 갱신
-// __SUPABASE_URL__ / __SUPABASE_KEY__ 는 Streamlit이 주입 (또는 직접 설정 가능)
-const _SB_URL = '__SUPABASE_URL__';
-const _SB_KEY = '__SUPABASE_KEY__';
+// URL 파라미터 ?sb_url=...&sb_key=... 또는 Streamlit 주입 플레이스홀더 사용
+const _urlParams = new URLSearchParams(window.location.search);
+const _SB_URL = _urlParams.get('sb_url') || '__SUPABASE_URL__';
+const _SB_KEY = _urlParams.get('sb_key') || '__SUPABASE_KEY__';
 
 async function loadKalphaFromSupabase() {
   if (!_SB_URL || _SB_URL === '__SUPABASE_URL__') return;

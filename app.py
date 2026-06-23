@@ -4314,7 +4314,9 @@ _data_js = f"""<script>
     SCAN_VOL_MIN: {st.session_state.get('scan_vol_min',50)},
     SCAN_RSI_MIN: {st.session_state.get('scan_rsi_min',20)},
     SCAN_RSI_MAX: {st.session_state.get('scan_rsi_max',75)},
-    SIGNAL_URL:   {json.dumps(_get_secret('ADMIN_APP_URL','').rstrip('/')+'/signal')},
+    SIGNAL_URL:   {json.dumps(_get_secret('ADMIN_APP_URL','').rstrip('/').removesuffix('/app.py')+'/app/static/signal.html')},
+    SB_URL:       {json.dumps(_get_secret('SUPABASE_URL',''))},
+    SB_KEY:       {json.dumps(_get_secret('SUPABASE_SERVICE_KEY','') or _get_secret('SUPABASE_KEY',''))},
   }};
   // 형제 iframe(app.html)에 postMessage 전송
   try{{

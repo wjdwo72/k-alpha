@@ -6301,10 +6301,26 @@ window.addEventListener('message', function(e) {
       window.__SCAN_RSI_MAX__ = d.SCAN_RSI_MAX;
       scanSettings.rsiMax = d.SCAN_RSI_MAX;
     }
-    if (d.SIGNAL_URL) {
+    if (d.SB_URL) window.__SB_URL__ = d.SB_URL;
+    if (d.SB_KEY) window.__SB_KEY__ = d.SB_KEY;
+    (function(){
       var _sb = document.getElementById('signal-btn');
-      if (_sb) _sb.onclick = function(){ window.open(d.SIGNAL_URL, '_blank'); };
-    }
+      if (!_sb) return;
+      var base = (d.SIGNAL_URL && d.SIGNAL_URL.startsWith('http')) ? d.SIGNAL_URL
+        : (function(){
+            var ref = document.referrer || '';
+            if (!ref) return '';
+            return ref.split('?')[0].replace(/\/$/, '') + '/app/static/signal.html';
+          })();
+      _sb.onclick = function(){
+        var u = base;
+        if (!u) { alert('ADMIN_APP_URL 시크릿을 설정해주세요.'); return; }
+        var q = [];
+        if (window.__SB_URL__) q.push('sb_url='+encodeURIComponent(window.__SB_URL__));
+        if (window.__SB_KEY__) q.push('sb_key='+encodeURIComponent(window.__SB_KEY__));
+        window.open(u + (q.length ? '?'+q.join('&') : ''), '_blank');
+      };
+    })();
     // KIS 토큰 업데이트
     if (d.KIS_TOKEN) {
       kisToken     = d.KIS_TOKEN;
