@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>K-Alpha 패턴 매매 시그널</title>
-<style>html,body{background:#0a0e1a!important;color:#e2e8f0!important;margin:0;padding:0}</style>
 <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root {
@@ -501,45 +500,6 @@
 // ============================================================
 // Python 프록시 서버 (KIS_proxy.py 실행 후 사용)
 const PROXY = 'http://localhost:9001';
-
-// K-Alpha Supabase 연동 — signal.html 로드 시 scan_cache 읽어서 종목 자동 갱신
-// URL 파라미터 ?sb_url=...&sb_key=... 또는 Streamlit 주입 플레이스홀더 사용
-const _urlParams = new URLSearchParams(window.location.search);
-const _SB_URL = _urlParams.get('sb_url') || '__SUPABASE_URL__';
-const _SB_KEY = _urlParams.get('sb_key') || '__SUPABASE_KEY__';
-
-async function loadKalphaFromSupabase() {
-  if (!_SB_URL || _SB_URL === '__SUPABASE_URL__') return;
-  try {
-    const r = await fetch(`${_SB_URL}/rest/v1/scan_cache?id=eq.1&select=data`, {
-      headers: { 'apikey': _SB_KEY, 'Authorization': `Bearer ${_SB_KEY}` }
-    });
-    if (!r.ok) return;
-    const rows = await r.json();
-    const d = rows[0]?.data;
-    if (!d) return;
-    const mapCat = cat => (d[cat] || []).map(s => ({
-      code: s.code,
-      name: s.name || s.code
-    }));
-    const fresh = {
-      swing: mapCat('swing'),
-      surge: mapCat('surge'),
-      tmr:   mapCat('tomorrow'),
-      small: mapCat('smallmid'),
-      per:   mapCat('per'),
-    };
-    // 스캔 결과로 항상 덮어쓰기 (0개도 반영)
-    Object.keys(fresh).forEach(k => { KALPHA_STOCKS[k] = fresh[k]; });
-    stockList = buildAllStocks();
-    renderStockList();
-    updateKTabCounts();
-    const ts = d.ts || '';
-    log(`✅ K-Alpha 종목 로드 완료 (스캔: ${ts}) — 스윙 ${fresh.swing.length} 급등 ${fresh.surge.length} 내일 ${fresh.tmr.length} 중소형 ${fresh.small.length} PER ${fresh.per.length}`, 'buy');
-  } catch(e) {
-    log(`K-Alpha 종목 로드 실패: ${e.message}`, 'warn');
-  }
-}
 
 let accessToken = null;
 let tokenExpiry = null;
@@ -2904,13 +2864,6 @@ async function saveKAlphaEdit() {
   document.getElementById('syncStatus').style.color = 'var(--ok)';
   closeKAlphaEditor();
 }
-</script>
-
-<script>
-// K-Alpha 종목 자동 로드 — 페이지 준비 후 실행
-document.addEventListener('DOMContentLoaded', () => {
-  loadKalphaFromSupabase();
-});
 </script>
 
 </body>
