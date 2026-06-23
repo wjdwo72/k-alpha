@@ -6128,10 +6128,17 @@ function applyRealScanData() {
   DEMO.smallmid = sm;
   DEMO.per      = pr;
 
-  // 배지 직접 업데이트 — 전체 카테고리
+  // 배지는 UI 슬라이스 전 실제 스캔 수량으로 표시
+  var _rawCounts = {
+    swing:    (scan.swing    || []).length,
+    surge:    (scan.surge    || []).length,
+    tomorrow: (scan.tomorrow || []).length,
+    smallmid: (scan.smallmid || []).length,
+    per:      (scan.per      || []).length
+  };
   ['swing','surge','tomorrow','smallmid','per'].forEach(function(cat) {
     var el = document.querySelector('#tabs-kr [data-tab="' + cat + '"] .tab-badge');
-    if (el) el.textContent = (DEMO[cat] || []).length;
+    if (el) el.textContent = _rawCounts[cat];
   });
 
   renderCards();
