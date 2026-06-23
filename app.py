@@ -229,6 +229,17 @@ def _start_bg_scan_thread():
                     kb  = ss.get("kis_base_url","https://openapi.kis.or.kr")
                     ka  = ss.get("kis_ak","")
                     ks  = ss.get("kis_sec","")
+                    # tok 없으면 ka/ks로 직접 발급
+                    if not tok and ka and ks:
+                        try:
+                            _tr = _req.post(f"{kb}/oauth2/tokenP",
+                                json={"grant_type":"client_credentials","appkey":ka,"appsecret":ks},
+                                verify=False, timeout=12)
+                            _td = _tr.json()
+                            if _td.get("access_token"):
+                                tok = _td["access_token"]
+                                ss["kis_token"] = tok
+                        except: pass
 
                     if tok and gid and ght:
                         try:
