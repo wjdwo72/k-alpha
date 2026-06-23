@@ -223,8 +223,9 @@ def _start_bg_scan_thread():
                 # 'after' 세션(15:40~20:00)은 스캔만 하고 TG는 시간 체크로 막힘
                 if elapsed >= iv * 60 and _active:
                     tok = ss.get("kis_token")
-                    gid = _get_secret("GIST_ID")
-                    ght = _get_secret("GH_TOKEN")
+                    # 배경 스레드에서 st.secrets 불가 → server_store 캐시 우선
+                    gid = ss.get('_gist_id') or _get_secret("GIST_ID")
+                    ght = ss.get('_gh_token') or _get_secret("GH_TOKEN")
                     kb  = ss.get("kis_base_url","https://openapi.kis.or.kr")
                     ka  = ss.get("kis_ak","")
                     ks  = ss.get("kis_sec","")
@@ -391,8 +392,9 @@ def _start_bg_scan_thread():
             nonlocal _gist_ts
             _now = _t.time()
             if _now - _gist_ts < 60: return  # 60초마다 (rate limit 방지)
-            _gid = _get_secret('GIST_ID')
-            _ght = _get_secret('GH_TOKEN')
+            _ss2 = get_server_store()
+            _gid = _ss2.get('_gist_id') or _get_secret('GIST_ID')
+            _ght = _ss2.get('_gh_token') or _get_secret('GH_TOKEN')
             if _gid and _ght and lp:
                 try:
                     _r = _req.patch(
@@ -554,8 +556,8 @@ def _start_bg_scan_thread():
                     ss['live_prices'] = lp
                     _now = time.time()
                     if _now - _gist_ts > 60 and lp:  # 60초마다 (rate limit 방지)
-                        _gid = _get_secret('GIST_ID')
-                        _ght = _get_secret('GH_TOKEN')
+                        _gid = ss.get('_gist_id') or _get_secret('GIST_ID')
+                        _ght = ss.get('_gh_token') or _get_secret('GH_TOKEN')
                         if _gid and _ght:
                             try:
                                 _rp = _req.patch(
@@ -3625,6 +3627,11 @@ if _gist_active or st.session_state.kis_token:
         _bg["tg_group1_chat"]   = _bg.get("tg_group_chat","")
         _bg["tg_group1_iv_min"] = _bg.get("tg_group_iv_min", 10)
         _bg["tg_group1_en"]     = _bg.get("tg_group_en", False)
+    # 배경 스레드에서 st.secrets 접근 불가 → 메인 스레드에서 캐시
+    _ss_cache = get_server_store()
+    if not _ss_cache.get('_gist_id'):
+        _ss_cache['_gist_id']   = _get_secret('GIST_ID')
+        _ss_cache['_gh_token']  = _get_secret('GH_TOKEN')
     _start_bg_scan_thread()
     iv_min         = st.session_state.get('tg_interval_min', 10)
 
@@ -4046,10 +4053,10 @@ if _gist_active or st.session_state.kis_token:
     else:
         scan_result['per'] = []
 
-    # ── Gist에 scan_result 저장 — KIS 직접 스캔 결과일 때만 (Gist 읽기 데이터 덮어쓰기 방지) ──
+    # ── Gist에 scan_result 저장 — KIS 직접 스캔 결과가 있으면 항상 저장 ──
     _gist_id2 = _get_secret('GIST_ID')
     _gh_tok2  = _get_secret('GH_TOKEN')
-    _is_fresh_scan = _force_kis or (not gist_data and all_stocks)
+    _is_fresh_scan = bool(all_stocks)   # KIS에서 종목 받아왔으면 무조건 저장
     if _gist_id2 and _gh_tok2 and _is_fresh_scan:
         try:
             _scan_json_full = json.dumps(scan_result, ensure_ascii=False)
@@ -4061,11 +4068,14 @@ if _gist_active or st.session_state.kis_token:
                 timeout=10)
             if _gr.status_code == 200:
                 fetch_gist_scan.clear()
+                get_server_store()['_last_gist_save'] = kst_strftime('%H:%M:%S')
                 st.toast("☁️ Gist 저장 완료", icon="✅")
             else:
-                st.caption(f"⚠ Gist 저장 실패: {_gr.status_code}")
+                get_server_store()['_gist_save_err'] = f"HTTP {_gr.status_code}: {_gr.text[:100]}"
+                st.warning(f"⚠ Gist 저장 실패 [{_gr.status_code}]: {_gr.text[:200]}")
         except Exception as _ge:
-            st.caption(f"⚠ Gist 저장 오류: {_ge}")
+            get_server_store()['_gist_save_err'] = str(_ge)[:100]
+            st.warning(f"⚠ Gist 저장 오류: {_ge}")
 
     # 상태 표시
     _dm_sess = get_market_session()
