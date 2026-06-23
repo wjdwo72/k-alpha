@@ -4158,6 +4158,19 @@ if _gist_active or st.session_state.kis_token:
             get_server_store()['_gist_save_err'] = str(_ge)[:100]
             st.warning(f"⚠ Gist 저장 오류: {_ge}")
 
+    # ── 배경 스레드 상태 디버그 표시 ──
+    _dbg_ss = get_server_store()
+    _dbg_parts = []
+    if _dbg_ss.get('_last_gist_save'):   _dbg_parts.append(f"✅ Gist저장: {_dbg_ss['_last_gist_save']}")
+    if _dbg_ss.get('_bg_gist_err'):      _dbg_parts.append(f"❌ BG Gist오류: {_dbg_ss['_bg_gist_err']}")
+    if _dbg_ss.get('_bg_last_err'):      _dbg_parts.append(f"❌ BG스캔오류: {_dbg_ss['_bg_last_err']}")
+    if _dbg_ss.get('_pending_gist_save'): _dbg_parts.append("⏳ pending저장 대기중")
+    if _dbg_ss.get('_gist_id'):          _dbg_parts.append(f"gist_id: {_dbg_ss['_gist_id'][:8]}...")
+    else:                                 _dbg_parts.append("⚠️ gist_id 없음!")
+    if not _dbg_ss.get('kis_token'):     _dbg_parts.append("⚠️ kis_token 없음!")
+    if _dbg_parts:
+        st.caption(" | ".join(_dbg_parts))
+
     # 상태 표시
     _dm_sess = get_market_session()
     _dm_lbl_map = {
