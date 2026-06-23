@@ -319,12 +319,11 @@ def _start_bg_scan_thread():
                                             ss["_bg_gist_err"] = f"{r.status_code}: {r.text[:80]}"
                                     except Exception as _ge:
                                         ss["_bg_gist_err"] = str(_ge)[:80]
-                                # 직접 저장 실패해도 메인 스레드가 저장할 수 있도록 플래그 설정
                                 ss["scan_result"] = sr
                                 ss["scan_ts"] = time.time()
                                 bg["last_scan"] = time.time()
+                                # 직접 저장 실패 시 메인 스레드(keepalive 핑 렌더)가 저장하도록
                                 if not _gist_ok:
-                                    # 메인 스레드(keepalive 렌더)가 Gist 저장하도록
                                     ss["_pending_gist_save"] = sj
                         except Exception as _e:
                             ss["_bg_last_err"] = str(_e)
@@ -334,9 +333,10 @@ def _start_bg_scan_thread():
 
     # ── 셀프 핑: 절전(Zzzz) 방지 — 4분마다 앱 자체 URL 호출 ──────────────────
     def _keepalive():
-        _url = _get_secret('ADMIN_APP_URL', '')
         while True:
             time.sleep(90)  # 90초마다 핑 → 최대 2분 이내 메인 스레드 렌더 보장
+            _ss3 = get_server_store()
+            _url = _ss3.get('_admin_url') or _get_secret('ADMIN_APP_URL', '')
             if _url:
                 try: _req.get(_url, timeout=15)
                 except: pass
@@ -3653,8 +3653,9 @@ if _gist_active or st.session_state.kis_token:
     # 배경 스레드에서 st.secrets 접근 불가 → 메인 스레드에서 캐시
     _ss_cache = get_server_store()
     if not _ss_cache.get('_gist_id'):
-        _ss_cache['_gist_id']   = _get_secret('GIST_ID')
-        _ss_cache['_gh_token']  = _get_secret('GH_TOKEN')
+        _ss_cache['_gist_id']    = _get_secret('GIST_ID')
+        _ss_cache['_gh_token']   = _get_secret('GH_TOKEN')
+        _ss_cache['_admin_url']  = _get_secret('ADMIN_APP_URL', '')
     _start_bg_scan_thread()
     iv_min         = st.session_state.get('tg_interval_min', 10)
 
