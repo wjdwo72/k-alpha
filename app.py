@@ -4173,7 +4173,7 @@ if _gist_active or st.session_state.kis_token:
                 if _sgr.status_code in (200, 204):
                     _fg_saved = True
                     server_store['_last_gist_save'] = kst_strftime('%H:%M:%S')
-                    st.toast("☁️ Supabase 저장 완료", icon="✅")
+                    st.session_state['_toast_msg'] = "☁️ Supabase 저장 완료"
                 else:
                     st.warning(f"⚠ Supabase 저장 실패 [{_sgr.status_code}]: {_sgr.text[:200]}")
             except Exception as _sge:
@@ -4188,7 +4188,7 @@ if _gist_active or st.session_state.kis_token:
                     timeout=10)
                 if _gr.status_code == 200:
                     server_store['_last_gist_save'] = kst_strftime('%H:%M:%S')
-                    st.toast("☁️ Gist 저장 완료", icon="✅")
+                    st.session_state['_toast_msg'] = "☁️ Gist 저장 완료"
                 else:
                     st.warning(f"⚠ Gist 저장 실패 [{_gr.status_code}]: {_gr.text[:200]}")
             except Exception as _ge:
@@ -4293,9 +4293,13 @@ _final_html = st.session_state['_cached_html']
 server_store['ss'] = {k: st.session_state.get(k) for k in _SYNC_KEYS if st.session_state.get(k) is not None}
 
 
+# toast를 components.html 이전에 표시 (React DOM removeChild 오류 방지)
+_toast_msg = st.session_state.pop('_toast_msg', None)
+if _toast_msg:
+    st.toast(_toast_msg, icon="✅")
+
 # 정적 HTML 렌더
-# scrolling=False + 큰 height → React DOM 재조정 없음 (removeChild 오류 방지)
-components.html(_final_html, height=800, scrolling=True)
+components.html(_final_html, height=800, scrolling=False)
 
 # ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
 _data_js = f"""<script>
@@ -4336,5 +4340,5 @@ _data_js = f"""<script>
 
 }})();
 </script>"""
-components.html(_data_js, height=0, scrolling=False)
+components.html(_data_js, height=1, scrolling=False)
 
