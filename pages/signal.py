@@ -68,6 +68,29 @@ _inject = f"""<style>
     if (srv && eSrv) eSrv.value = srv;
     if (ak && sec && acc && typeof connectKIS === 'function') {{
       connectKIS();
+      // 연결 시도 후 상태 배지 삽입
+      setTimeout(function() {{
+        var dot   = document.getElementById('tokenDot');
+        var label = document.getElementById('tokenLabel');
+        var hdr   = document.querySelector('.token-status');
+        if (!hdr) return;
+        // 기존 배지 중복 방지
+        if (document.getElementById('admin-link-badge')) return;
+        var badge = document.createElement('span');
+        badge.id = 'admin-link-badge';
+        badge.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(0,212,255,0.15);border:1px solid #00d4ff;color:#00d4ff;letter-spacing:.5px';
+        badge.textContent = '🔗 K-ALPHA 관리앱 연동';
+        hdr.appendChild(badge);
+        // dot·label 상태 반영
+        if (dot && dot.classList.contains('active')) {{
+          badge.style.background = 'rgba(16,185,129,0.15)';
+          badge.style.borderColor = '#10b981';
+          badge.style.color = '#10b981';
+          badge.textContent = '✅ K-ALPHA 연결됨';
+        }} else {{
+          badge.textContent = '⚠️ K-ALPHA 연결 대기';
+        }}
+      }}, 2500);
     }}
   }}
   if (document.readyState === 'loading') {{
