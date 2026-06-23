@@ -246,18 +246,12 @@ def _start_bg_scan_thread():
                     if tok and (_sb_url or (gid and ght)):
                         try:
                             import concurrent.futures as _cf
-                            with _cf.ThreadPoolExecutor(max_workers=3) as ex:
+                            with _cf.ThreadPoolExecutor(max_workers=2) as ex:
                                 fk = ex.submit(fetch_volume_ranking,tok,kb,ka,ks,"J",200)
                                 fd = ex.submit(fetch_volume_ranking,tok,kb,ka,ks,"Q",100)
-                                _per_en = ss.get("per_scan_enabled", True)
-                                _per_fn = getattr(fetch_per_stocks, "__wrapped__", fetch_per_stocks)
-                                fp = ex.submit(_per_fn,tok,kb,ka,ks,
-                                               ss.get("per_max",15.0),ss.get("per_min",0.1),
-                                               ss.get("pbr_max",3.0),ss.get("roe_min",5.0),
-                                               ss.get("per_vol_min",30),ss.get("per_top_n",20),
-                                               ss.get("trade_period_days",20)) if _per_en else None
                                 kp = fk.result(); kd = fd.result()
-                                _per_list = fp.result() if fp else []
+                            # PER은 foreground 캐시 사용 (백그라운드 독자 스캔 금지 → 갯수 불일치 방지)
+                            _per_list = ss.get("per_stocks") or []
                             all_s = kp + kd
                             if all_s:
                                 ui_n = ss.get("ui_n_per_cat") or 10
@@ -280,7 +274,7 @@ def _start_bg_scan_thread():
                                 _pe = list(_per_list)
 
                                 # 모든 카테고리 0이면 이전 데이터 보존 (장 초반 거래대금 부족 등)
-                                _all_empty = not any([_sw, _su, _tm, _sm, _pe])
+                                _all_empty = not any([_sw, _su, _tm, _sm])  # per는 foreground 캐시라 제외
                                 if _all_empty:
                                     # 타임스탬프·세션만 업데이트하고 종목 데이터는 이전 것 유지
                                     _prev = ss.get("scan_result") or {}
