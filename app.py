@@ -958,16 +958,20 @@ def do_connect(ak, sec, acc, env):
             _ss['kis_sec']        = sec
             _ss['scan_refresh_min'] = st.session_state.get('scan_refresh_min', 10)
             return True, None
-        return False, d.get('msg1','앱키/시크릿 오류')
+        msg = d.get('msg1') or d.get('msg_cd') or d.get('error_description') or '앱키/시크릿 오류'
+        return False, msg
     except Exception as e: return False, str(e)[:100]
 
 if st.session_state.get('_do_auto_connect') and st.session_state.kis_ak:
     del st.session_state['_do_auto_connect']
     if st.session_state.get('_pin_connect_msg'):
         del st.session_state['_pin_connect_msg']
-        st.toast("🔗 저장된 키로 자동 연결 중...", icon="⚡")
-    do_connect(st.session_state.kis_ak, st.session_state.kis_sec,
-               st.session_state.kis_acc, st.session_state.kis_env)
+    _ok, _err = do_connect(st.session_state.kis_ak, st.session_state.kis_sec,
+                           st.session_state.kis_acc, st.session_state.kis_env)
+    if _ok:
+        st.toast("🔗 KIS 자동 연결 완료", icon="✅")
+    else:
+        st.toast(f"⚠️ KIS 자동 연결 실패: {_err}", icon="❌")
     st.session_state.pop('_cached_html', None); st.rerun()
 
 # ── 실시간 거래량 순위 스캔 (KOSPI + KOSDAQ) ──
