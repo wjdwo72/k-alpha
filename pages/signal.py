@@ -41,8 +41,12 @@ _server_val = 'mock' if '모의' in _env or 'vts' in _base else 'real'
 
 # API 설정 섹션 숨김 + 자동 연결 주입
 _inject = f"""<style>
-/* API 설정 & 종목 패널 숨김 */
-.api-section {{ display:none!important; }}
+/* KIS 크리덴셜 입력 부분만 숨김 (텔레그램·자동스캔·스캔주기는 유지) */
+#appKey, #secretKey, #acctNo, #serverType,
+.api-section > label,
+.api-section > button,
+#syncStatus,
+.api-section > div:first-of-type {{ display:none!important; }}
 .panel-title {{ display:none!important; }}
 </style>
 <script>
