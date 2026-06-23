@@ -338,7 +338,9 @@ def _start_bg_scan_thread():
             _ss3 = get_server_store()
             _url = _ss3.get('_admin_url') or _get_secret('ADMIN_APP_URL', '')
             if _url:
-                try: _req.get(_url, timeout=15)
+                # ?no_pin=1&auth=1 : 새 세션이 PIN 없이 스캔 섹션까지 진행
+                _ping_url = _url.rstrip('/') + '/?no_pin=1&auth=1'
+                try: _req.get(_ping_url, timeout=15)
                 except: pass
 
     # ── KIS WebSocket 실시간 현재가 ─────────────────────────────────────────────
