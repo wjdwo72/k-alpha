@@ -3722,7 +3722,8 @@ if _gist_active or st.session_state.kis_token:
         _ss_cache['_gh_token']   = _get_secret('GH_TOKEN')
         _ss_cache['_admin_url']  = _get_secret('ADMIN_APP_URL', '')
         _ss_cache['_sb_url']     = _get_secret('SUPABASE_URL')
-        _ss_cache['_sb_key']     = _get_secret('SUPABASE_SERVICE_KEY')
+        _ss_cache['_sb_key']     = (_get_secret('SUPABASE_SERVICE_KEY')
+                                    or _get_secret('SUPABASE_KEY'))
     _start_bg_scan_thread()
     iv_min         = st.session_state.get('tg_interval_min', 10)
 
@@ -4187,7 +4188,7 @@ if _gist_active or st.session_state.kis_token:
 
     # ── Supabase에 scan_result 저장 (Gist 대체) ──
     _sb_url2  = _get_secret('SUPABASE_URL')
-    _sb_key2  = _get_secret('SUPABASE_SERVICE_KEY')
+    _sb_key2  = _get_secret('SUPABASE_SERVICE_KEY') or _get_secret('SUPABASE_KEY')
     _gist_id2 = _get_secret('GIST_ID')
     _gh_tok2  = _get_secret('GH_TOKEN')
     _is_fresh_scan = bool(all_stocks)
