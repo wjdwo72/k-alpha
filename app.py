@@ -3721,6 +3721,7 @@ if _gist_active or st.session_state.kis_token:
         _ss_cache['_gist_id']    = _get_secret('GIST_ID')
         _ss_cache['_gh_token']   = _get_secret('GH_TOKEN')
         _ss_cache['_admin_url']  = _get_secret('ADMIN_APP_URL', '')
+    if not _ss_cache.get('_sb_url'):  # 별도 체크: gist_id와 무관하게 항상 캐싱
         _ss_cache['_sb_url']     = _get_secret('SUPABASE_URL')
         _ss_cache['_sb_key']     = (_get_secret('SUPABASE_SERVICE_KEY')
                                     or _get_secret('SUPABASE_KEY'))
