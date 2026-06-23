@@ -6271,25 +6271,15 @@ function _bindSignalBtn() {
   var _sb = document.getElementById('signal-btn');
   if (!_sb) return;
   _sb.onclick = function() {
-    var sbUrl = window.__SB_URL__ || '';
-    var sbKey = window.__SB_KEY__ || '';
-    // window.top.location으로 앱 기본 URL 읽기 (Streamlit 동일 origin)
     var appBase = '';
     try {
       var h = window.top.location.href || window.parent.location.href;
-      appBase = h.split('?')[0].replace(/\/app\.py$/, '').replace(/\/$/, '');
+      appBase = h.split('?')[0].replace(/\/$/, '');
     } catch(e) {
-      // cross-origin 차단 시 referrer 시도
       var ref = document.referrer || '';
-      appBase = ref.split('?')[0].replace(/\/app\.py$/, '').replace(/\/$/, '');
+      appBase = ref.split('?')[0].replace(/\/$/, '');
     }
-    if (!appBase) { alert('패턴시그널 URL을 감지할 수 없습니다.\nStreamlit secrets에 ADMIN_APP_URL을 설정해주세요.'); return; }
-    var sbUrl = window.__SB_URL__ || '';
-    var sbKey = window.__SB_KEY__ || '';
-    var q = [];
-    if (sbUrl) q.push('sb_url=' + encodeURIComponent(sbUrl));
-    if (sbKey) q.push('sb_key=' + encodeURIComponent(sbKey));
-    var url = appBase + '/app/static/signal.html' + (q.length ? '?' + q.join('&') : '');
+    var url = appBase ? appBase + '/signal' : '/signal';
     window.open(url, '_blank');
   };
 }
