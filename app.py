@@ -1310,6 +1310,11 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max,
         'surge':    top(surge, top_n),
         'tomorrow': top(tomorrow, top_n),
         'smallmid': top(smallmid, top_n),
+        # 슬라이스 전 원본 수량 (탭 배지용)
+        'total_swing':    len(swing),
+        'total_surge':    len(surge),
+        'total_tomorrow': len(tomorrow),
+        'total_smallmid': len(smallmid),
     }
 
 def _build_analysis_reasons(s, chg, buy_p, stop_p, tgt_p):
@@ -4088,10 +4093,14 @@ if _gist_active or st.session_state.kis_token:
             'surge':    [build_card(s,'surge')    for s in cats['surge']],
             'tomorrow': [build_card(s,'tomorrow') for s in cats['tomorrow']],
             'smallmid': [build_card(s,'smallmid') for s in cats['smallmid']],
-            'per':      [],  # PER 스캔 후 라인 3769/3771에서 업데이트
+            'per':      [],  # PER 스캔 후 채움
             'ui_n_per_cat': _ui_n,
             'ts': price_ts,
             'total': scan_count,
+            'total_swing':    cats.get('total_swing', len(cats['swing'])),
+            'total_surge':    cats.get('total_surge', len(cats['surge'])),
+            'total_tomorrow': cats.get('total_tomorrow', len(cats['tomorrow'])),
+            'total_smallmid': cats.get('total_smallmid', len(cats['smallmid'])),
             'kospi_n': len(kospi_stocks),
             'kosdaq_n': len(kosdaq_stocks),
             'updated_at': time.time(),
@@ -4220,7 +4229,7 @@ if _gist_active or st.session_state.kis_token:
     _lp_cnt = len(get_server_store().get('live_prices') or {})
     st.markdown(f"""<div style="font-family:monospace;font-size:12px;color:#00d4ff;padding:2px 0;line-height:2">
 📊 KOSPI {len(kospi_stocks)}종목 + KOSDAQ {len(kosdaq_stocks)}종목 · <span style="color:#00ff88">{kst_strftime('%H:%M:%S')}</span> · {_dm_lbl} · <span style="color:{_ws_color}">⚡ WS {_ws_stat or '대기중'}</span> ({_lp_cnt}종목 현재가)<br>
-🔍 실시간스윙 {len(scan_result.get('swing',[]))}개 · 급등전야 {len(scan_result.get('surge',[]))}개 · 내일관심 {len(scan_result.get('tomorrow',[]))}개 · 중소형주 {len(scan_result.get('smallmid',[]))}개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
+🔍 실시간스윙 {scan_result.get('total_swing', len(scan_result.get('swing',[]))) }개 · 급등전야 {scan_result.get('total_surge', len(scan_result.get('surge',[]))) }개 · 내일관심 {scan_result.get('total_tomorrow', len(scan_result.get('tomorrow',[]))) }개 · 중소형주 {scan_result.get('total_smallmid', len(scan_result.get('smallmid',[]))) }개 · 💎PER저평가 {len(scan_result.get('per',[]))}개 · <span style='color:#94a3b8'>UI표시 {st.session_state.get('ui_n_per_cat',10)}개설정</span>
 </div>""", unsafe_allow_html=True)
 
 # ════ 6. HTML 터미널 ════
