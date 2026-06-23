@@ -639,18 +639,6 @@ st.set_page_config(page_title="K-ALPHA Terminal", page_icon="📈",
                    layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""<style>
   #MainMenu,header,footer{visibility:hidden}
-  /* Streamlit 기본 UI 숨김 — iframe만 보이게 */
-  [data-testid="stSidebar"],[data-testid="stToolbar"],
-  [data-testid="stDecoration"],[data-testid="stStatusWidget"],
-  div[data-testid="collapsedControl"],.stDeployButton,
-  /* iframe 이외의 Streamlit 위젯 숨김 */
-  [data-testid="stVerticalBlock"]>div:not(:has(iframe)),
-  [data-testid="stVerticalBlock"]>[data-testid="stMarkdownContainer"],
-  [data-testid="stVerticalBlock"]>[data-testid="stAlert"],
-  [data-testid="stVerticalBlock"]>[data-testid="stCaption"],
-  [data-testid="stVerticalBlock"]>[data-testid="stText"],
-  section.main>[data-testid="stVerticalBlock"]>div.stExpander
-  { display:none!important; }
   .block-container{padding:0!important;margin:0!important;max-width:100%!important}
   .stApp{background:#020408}
   div[data-testid="stExpander"]{background:#0a0e1a;border:1px solid #1a2535!important;border-radius:8px;margin-bottom:6px}
