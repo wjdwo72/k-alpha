@@ -4329,7 +4329,36 @@ _toast_msg = st.session_state.pop('_toast_msg', None)
 if _toast_msg:
     st.toast(_toast_msg, icon="✅")
 
-# 정적 HTML 렌더 — 단일 components.html (removeChild React 오류 방지)
-# KIS 크리덴셜/설정은 _STATIC_INJECT로 주입, 스캔 결과는 app.html JS가 Supabase/Gist 폴링
+# 정적 HTML 렌더
 components.html(_final_html, height=800, scrolling=False)
+
+# ── 스캔 결과 전달 (별도 postMessage 컴포넌트)
+# prices/balance 제외 — 매 rerun마다 변하는 데이터를 빼야 React DOM 안정
+# scan_json은 스캔 완료 시만 변경되므로 포함
+_scan_payload_hash = _hashlib.md5(scan_json.encode() if isinstance(scan_json, str) else b'').hexdigest()[:8]
+_data_js = f"""<!DOCTYPE html><html><body><script>
+(function(){{
+  var payload = {{
+    type:'kalpha_data',
+    SCAN_RESULT:  {_safe_json(scan_json)},
+    SCAN_COUNT:   {scan_count},
+    UI_N_CAT:     {st.session_state.get('ui_n_per_cat', 10)},
+    SCAN_VOL_MIN: {st.session_state.get('scan_vol_min', 50)},
+    SCAN_RSI_MIN: {st.session_state.get('scan_rsi_min', 20)},
+    SCAN_RSI_MAX: {st.session_state.get('scan_rsi_max', 75)},
+    TG_TOKEN:     {json.dumps(st.session_state.get('tg_token',''))},
+    TG_CHAT:      {json.dumps(st.session_state.get('tg_chat',''))},
+    TG_INTERVAL:  {st.session_state.get('tg_interval_min',10)*60*1000},
+    TG_AI_COUNT:  {st.session_state.get('tg_ai_count', 5)},
+    GOOGLE_API_KEY:{json.dumps(st.session_state.get('google_api_key',''))},
+  }};
+  try{{
+    var iframes = window.parent.document.querySelectorAll('iframe');
+    iframes.forEach(function(f){{try{{f.contentWindow.postMessage(payload,'*');}}catch(e){{}}}} );
+  }}catch(e){{}}
+  try{{window.parent.postMessage(payload,'*');}}catch(e){{}}
+}})();
+// hash:{_scan_payload_hash}
+</script></body></html>"""
+components.html(_data_js, height=1, scrolling=False)
 
