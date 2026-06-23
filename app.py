@@ -4262,13 +4262,42 @@ def _safe_json(s):
     return s.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
 
 # ── 정적 HTML — 세션 내 한 번만 생성 (React DOM 재조정 완전 차단) ──────
-# HTML 캐시 — 파일 내용 해시 기반 (Streamlit Cloud mtime 고정 문제 해결)
+# HTML 캐시 — 파일 내용 + KIS 크리덴셜 해시 기반
 _inj_sb_url = _get_secret('SUPABASE_URL', '')
 _inj_sb_key = _get_secret('SUPABASE_SERVICE_KEY', '') or _get_secret('SUPABASE_KEY', '')
+# KIS 크리덴셜 + 설정도 주입 (height=1 postMessage 컴포넌트 제거 → removeChild 오류 제거)
+_inj_kis_tok  = st.session_state.get('kis_token', '') or ''
+_inj_kis_base = st.session_state.get('kis_base_url', 'https://openapi.kis.or.kr') or ''
+_inj_kis_ak   = st.session_state.get('kis_ak', '') or ''
+_inj_kis_sec  = st.session_state.get('kis_sec', '') or ''
+_inj_kis_acc  = st.session_state.get('kis_acc', '') or ''
+_inj_tg_token = st.session_state.get('tg_token', '') or ''
+_inj_tg_chat  = st.session_state.get('tg_chat', '') or ''
+_inj_tg_min   = st.session_state.get('tg_interval_min', 10)
+_inj_ui_n     = st.session_state.get('ui_n_per_cat', 10)
+_inj_vol_min  = st.session_state.get('scan_vol_min', 50)
+_inj_rsi_min  = st.session_state.get('scan_rsi_min', 20)
+_inj_rsi_max  = st.session_state.get('scan_rsi_max', 75)
+_inj_gkey     = st.session_state.get('google_api_key', '') or ''
+_inj_ai_cnt   = st.session_state.get('tg_ai_count', 5)
 _STATIC_INJECT = (
     f'<script>window.__STREAMLIT_MODE__=true;'
     f'window.__SB_URL__={json.dumps(_inj_sb_url)};'
     f'window.__SB_KEY__={json.dumps(_inj_sb_key)};'
+    f'window.__KIS_TOKEN__={json.dumps(_inj_kis_tok)};'
+    f'window.__KIS_BASE_URL__={json.dumps(_inj_kis_base)};'
+    f'window.__KIS_AK__={json.dumps(_inj_kis_ak)};'
+    f'window.__KIS_SEC__={json.dumps(_inj_kis_sec)};'
+    f'window.__KIS_ACC__={json.dumps(_inj_kis_acc)};'
+    f'window.__TG_TOKEN__={json.dumps(_inj_tg_token)};'
+    f'window.__TG_CHAT__={json.dumps(_inj_tg_chat)};'
+    f'window.__TG_INTERVAL__={_inj_tg_min * 60 * 1000};'
+    f'window.__UI_N_CAT__={_inj_ui_n};'
+    f'window.__SCAN_VOL_MIN__={_inj_vol_min};'
+    f'window.__SCAN_RSI_MIN__={_inj_rsi_min};'
+    f'window.__SCAN_RSI_MAX__={_inj_rsi_max};'
+    f'window.__GOOGLE_API_KEY__={json.dumps(_inj_gkey)};'
+    f'window.__TG_AI_COUNT__={_inj_ai_cnt};'
     f'</script>'
 )
 
@@ -4278,7 +4307,9 @@ _html_path = "app.html"
 with open(_html_path, "r", encoding="utf-8") as _f:
     _raw_html = _f.read()
 
-_cur_hash = _hashlib.md5((_raw_html + _inj_sb_url).encode()).hexdigest()
+# 캐시 키: HTML + KIS 토큰 변경 시 재생성
+_cache_key = _raw_html + _inj_sb_url + _inj_kis_tok + _inj_kis_ak
+_cur_hash = _hashlib.md5(_cache_key.encode()).hexdigest()
 _cached_hash = st.session_state.get('_cached_html_hash', '')
 
 if '_cached_html' not in st.session_state or _cur_hash != _cached_hash:
@@ -4298,47 +4329,7 @@ _toast_msg = st.session_state.pop('_toast_msg', None)
 if _toast_msg:
     st.toast(_toast_msg, icon="✅")
 
-# 정적 HTML 렌더
+# 정적 HTML 렌더 — 단일 components.html (removeChild React 오류 방지)
+# KIS 크리덴셜/설정은 _STATIC_INJECT로 주입, 스캔 결과는 app.html JS가 Supabase/Gist 폴링
 components.html(_final_html, height=800, scrolling=False)
-
-# ── 동적 데이터는 별도 height=0 컴포넌트로 postMessage 전달 ──
-_data_js = f"""<script>
-(function(){{
-  var payload = {{
-    type:'kalpha_data',
-    KIS_TOKEN:    {json.dumps(st.session_state.kis_token or '')},
-    KIS_BASE_URL: {json.dumps(st.session_state.kis_base_url or '')},
-    KIS_AK:       {json.dumps(st.session_state.kis_ak)},
-    KIS_SEC:      {json.dumps(st.session_state.kis_sec)},
-    KIS_ACC:      {json.dumps(st.session_state.kis_acc)},
-    KIS_PRICES:   {_safe_json(prices_json)},
-    KIS_BALANCE:  {_safe_json(balance_json)},
-    KIS_PRICE_TS: {json.dumps(price_ts)},
-    SCAN_RESULT:  {_safe_json(scan_json)},
-    UI_N_CAT:     {st.session_state.get('ui_n_per_cat', 10)},
-    SCAN_COUNT:   {scan_count},
-    TG_TOKEN:     {json.dumps(st.session_state.get('tg_token',''))},
-    TG_CHAT:      {json.dumps(st.session_state.get('tg_chat',''))},
-    TG_INTERVAL:  {st.session_state.get('tg_interval_min',10)*60*1000},
-    GOOGLE_API_KEY:{json.dumps(st.session_state.get('google_api_key',''))},
-    TG_AI_COUNT:  {st.session_state.get('tg_ai_count', 5)},
-    SCAN_VOL_MIN: {st.session_state.get('scan_vol_min',50)},
-    SCAN_RSI_MIN: {st.session_state.get('scan_rsi_min',20)},
-    SCAN_RSI_MAX: {st.session_state.get('scan_rsi_max',75)},
-    SIGNAL_URL:   {json.dumps(_get_secret('ADMIN_APP_URL','').rstrip('/').removesuffix('/app.py')+'/app/static/signal.html')},
-    SB_URL:       {json.dumps(_get_secret('SUPABASE_URL',''))},
-    SB_KEY:       {json.dumps(_get_secret('SUPABASE_SERVICE_KEY','') or _get_secret('SUPABASE_KEY',''))},
-  }};
-  // 형제 iframe(app.html)에 postMessage 전송
-  try{{
-    var iframes = window.parent.document.querySelectorAll('iframe');
-    iframes.forEach(function(f){{
-      try{{f.contentWindow.postMessage(payload,'*');}}catch(e){{}}
-    }});
-  }}catch(e){{}}
-  try{{window.parent.postMessage(payload,'*');}}catch(e){{}}
-
-}})();
-</script>"""
-components.html(_data_js, height=1, scrolling=False)
 
