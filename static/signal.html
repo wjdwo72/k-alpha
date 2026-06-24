@@ -1497,7 +1497,15 @@ async function fetchKISCandles(code) {
       return direct;
     }
   }
-  log(`KIS 캔들 조회 실패 (프록시 미연결) → 데모 표시`, 'warn');
+  // 3차: Yahoo Finance (로컬 프록시 미연결 시 폴백 — 기업행동 후 가격 차이 있을 수 있음)
+  if (['D','W','M'].includes(currentPeriod)) {
+    const yahoo = await _fetchYahooCandles(code);
+    if (yahoo && yahoo.length > 0) {
+      log(`📈 Yahoo Finance 캔들 (참고용 — 현재가와 다를 수 있음)`, 'warn');
+      return yahoo;
+    }
+  }
+  log(`캔들 조회 실패 (프록시 연결 시 실제 KIS 데이터 표시)`, 'warn');
   return null;
 }
 
