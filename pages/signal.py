@@ -190,8 +190,7 @@ _inject = f"""<script>
 .panel-title {{ display:none!important; }}
 </style>"""
 
-if not _has_creds:
-    st.warning("⚠️ 관리자 앱에서 KIS API를 먼저 연결해 주세요. 연결 후 이 페이지를 새로고침하면 자동으로 연동됩니다.", icon="🔑")
+# 크리덴셜 없으면 헤더 배지에만 표시 (경고창 제거 — iframe이 동작 중)
 
 html = html.replace('</head>', _inject + '\n</head>')
 
