@@ -666,38 +666,47 @@ const NAME_MAP = {
 // ============================================================
 // 전종목 로드 (KRX 경유 프록시)
 // ============================================================
-// 네이버 자동완성 → 종목 검색 (코스피+코스닥 전종목)
-// ── 종목 검색: Yahoo Finance → Naver 순서로 시도 ──
+// ── 종목 검색 (Naver Mobile → ac.stock → corsproxy 순서) ──
 async function _searchNaver(q) {
-  // 1차: Yahoo Finance 검색 (CORS 허용, 한국 종목 지원)
+  // 1차: Naver Mobile 검색 API (CORS 허용됨)
   try {
-    const yurl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&region=KR&lang=ko-KR&quotesCount=20&newsCount=0&enableFuzzyQuery=false`;
-    const yr = await fetch(yurl, { signal: AbortSignal.timeout(5000) });
-    const yd = await yr.json();
-    const quotes = (yd.quotes || []).filter(q => q.symbol && (q.symbol.endsWith('.KS') || q.symbol.endsWith('.KQ')));
-    if (quotes.length) {
-      return quotes.map(q => ({
-        code: q.symbol.replace(/\.(KS|KQ)$/, ''),
-        name: q.longname || q.shortname || q.symbol
-      }));
+    const url = `https://m.stock.naver.com/api/search/hits?keyword=${encodeURIComponent(q)}&market=ALL&count=20`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) {
+      const d = await r.json();
+      const hits = d.hits || d.stocks || [];
+      if (hits.length) {
+        return hits.map(h => ({
+          code: h.symbol || h.itemCode || h.code || '',
+          name: h.name || h.korName || h.symbolName || ''
+        })).filter(h => h.code && h.name);
+      }
     }
   } catch {}
-  // 2차: Naver Finance 자동완성 (CORS 프록시 경유)
+
+  // 2차: Naver 자동완성 API 직접 (CORS 허용되는 경우)
+  try {
+    const url2 = `https://ac.stock.naver.com/ac?q=${encodeURIComponent(q)}&target=stock,index,etf,fund`;
+    const r2 = await fetch(url2, { signal: AbortSignal.timeout(4000) });
+    if (r2.ok) {
+      const d2 = await r2.json();
+      const arr = (d2.items && (d2.items[0] || []));
+      if (arr && arr.length) return arr.map(i => ({ code: i[1] || i[0], name: i[0] }));
+    }
+  } catch {}
+
+  // 3차: ac.finance.naver.com (CORS 프록시 경유)
   const nurl = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&st=111&r=1&nr=20`;
-  const proxies = [
+  for (const mk of [
     `https://corsproxy.io/?url=${encodeURIComponent(nurl)}`,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(nurl)}`,
-  ];
-  for (const pu of proxies) {
+  ]) {
     try {
-      const r = await fetch(pu, { signal: AbortSignal.timeout(5000) });
-      const text = await r.text();
-      // allorigins wraps in {contents: "..."} 처리
+      const r = await fetch(mk, { signal: AbortSignal.timeout(5000) });
       let d;
-      try { d = JSON.parse(text); } catch {}
-      if (!d) continue;
-      if (d.contents) { try { d = JSON.parse(d.contents); } catch { continue; } }
-      const arr = (d.items && d.items[0]) || [];
+      try { const t = await r.text(); d = JSON.parse(t); } catch { continue; }
+      if (d && d.contents) { try { d = JSON.parse(d.contents); } catch { continue; } }
+      const arr = (d && d.items && d.items[0]) || [];
       if (arr.length) return arr.map(i => ({ code: i[1], name: i[0] }));
     } catch {}
   }
@@ -1680,6 +1689,41 @@ function _startRestPolling() {
   }, 3000);
 }
 
+// ── KIS 토큰 브라우저 자동 발급 (CORS 프록시 경유) ──
+let _kisTokenFetching = false;
+async function _ensureKisToken() {
+  if (window.__ADMIN_TOKEN__) return true;
+  if (_kisTokenFetching) return false;
+  const ak  = window.__ADMIN_AK__;
+  const sec = window.__ADMIN_SEC__;
+  if (!ak || !sec) return false;
+  _kisTokenFetching = true;
+  const bu  = window.__ADMIN_BASE_URL__ || 'https://openapi.kis.or.kr';
+  const url = `${bu}/oauth2/tokenP`;
+  const body = JSON.stringify({ grant_type: 'client_credentials', appkey: ak, appsecret: sec });
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(url), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(8000)
+      });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.access_token) {
+          window.__ADMIN_TOKEN__ = d.access_token;
+          log('✅ KIS 토큰 자동 발급 완료 (CORS 프록시)', 'buy');
+          _kisTokenFetching = false;
+          return true;
+        }
+      }
+    } catch {}
+  }
+  _kisTokenFetching = false;
+  return false;
+}
+
 // 실시간 현재가 조회 (KIS API만 사용 — Yahoo Finance 제거)
 async function fetchCurrentPrice(code) {
   // 1차: 로컬 프록시 (KIS_proxy.py 연결 시)
@@ -1689,12 +1733,12 @@ async function fetchCurrentPrice(code) {
     const data = await res.json();
     if (data && !data.error) { _setPriceSrc('KIS 프록시'); return data; }
   } catch {}
-  // 2차: KIS API 직접 — corsproxy.io 경유 (토큰 있을 때)
+  // 2차: KIS 토큰 자동 확보 후 직접 조회
+  await _ensureKisToken();
   if (window.__ADMIN_TOKEN__) {
     const p = await _fetchKisPriceDirect(code);
     if (p) { _setPriceSrc('KIS REST'); return p; }
   }
-  // KIS 연결 불가
   _setPriceSrc(null);
   return null;
 }
