@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import os, json, sys, base64
+import os, json, sys, base64, requests as _req
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from store import get_server_store
@@ -43,6 +43,25 @@ _tok = _ss.get('kis_token','') or st.session_state.get('kis_token','') or ''
 _bu  = _ss.get('kis_base_url','') or st.session_state.get('kis_base_url','') or ''
 _server_val = 'mock' if 'vts' in _bu else 'real'
 _has_creds  = bool(_ak and _sec and _acc)
+_is_mock    = _server_val == 'mock'
+
+# KIS WebSocket approval_key 발급 (서버사이드 — CORS 불필요)
+_api_base = 'https://openapivts.koreainvestment.com:29443' if _is_mock else 'https://openapi.kis.or.kr'
+_ws_base  = 'wss://openapivts.koreainvestment.com:29443'  if _is_mock else 'wss://openapi.kis.or.kr'
+_ws_key   = ''
+_ws_url   = ''
+if _ak and _sec:
+    try:
+        _r = _req.post(
+            f'{_api_base}/oauth2/Approval',
+            json={'grant_type': 'client_credentials', 'appkey': _ak, 'secretkey': _sec},
+            timeout=5
+        )
+        if _r.ok:
+            _ws_key = _r.json().get('approval_key', '')
+            _ws_url = f'{_ws_base}/websocket/domestic-stock/v1/stk-sise'
+    except Exception:
+        pass
 
 # 텔레그램 설정 (관리앱 → signal 페이지 연동)
 # app.py는 server_store['tg']에 base64({t:token,c:chat}) 형태로 저장함
@@ -109,10 +128,14 @@ _inject = f"""<script>
   var _bu  = {json.dumps(_bu or 'https://openapi.kis.or.kr')};
 
   // 1) 관리앱 토큰 + 크리덴셜 전역 보관 (현재가 직접 조회용)
-  if (_tok) window.__ADMIN_TOKEN__  = _tok;
-  if (_srv) window.__ADMIN_SERVER__ = _srv;
+  if (_tok) window.__ADMIN_TOKEN__    = _tok;
+  if (_srv) window.__ADMIN_SERVER__   = _srv;
   if (_bu)  window.__ADMIN_BASE_URL__ = _bu;
-  if (_ak)  window.__ADMIN_AK__ = _ak;
+  if (_ak)  window.__ADMIN_AK__  = _ak;
+
+  // KIS WebSocket (서버사이드 발급 approval_key — CORS 없이 실시간 체결가)
+  window.__KIS_WS_KEY__ = {json.dumps(_ws_key)};
+  window.__KIS_WS_URL__ = {json.dumps(_ws_url)};
   if (_sec) window.__ADMIN_SEC__ = _sec;
 
   // 2) 관리앱 스캔 결과 전역 보관

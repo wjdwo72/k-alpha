@@ -1580,6 +1580,99 @@ async function _fetchYahooCandles(code) {
   return null;
 }
 
+// ══════════════════════════════════════════════
+// KIS WebSocket 실시간 체결가 (CORS 없음)
+// ══════════════════════════════════════════════
+let _kisWs     = null;
+let _kisWsCode = null;
+let _kisWsOk   = false;
+
+function _stopKISWs() {
+  if (_kisWs) {
+    try { _kisWs.close(); } catch {}
+    _kisWs = null;
+  }
+  _kisWsCode = null;
+  _kisWsOk   = false;
+}
+
+function _parseKISWsPrice(data) {
+  // 형식: "0|H0STCNT0|001|code^time^price^sign^diff^rate^...^high^low^..."
+  if (!data || data.startsWith('{')) return null; // 제어 메시지
+  const parts = data.split('|');
+  if (parts.length < 4 || parts[0] !== '0') return null;
+  const f = parts[3].split('^');
+  const price = parseInt(f[2]);
+  if (!price || price <= 0) return null;
+  const sign  = f[3] || '3';
+  const rate  = parseFloat(f[5] || '0');
+  return {
+    price,
+    rate:  ['4','5'].includes(sign) ? -Math.abs(rate) : Math.abs(rate),
+    high:  parseInt(f[8]  || 0),
+    low:   parseInt(f[9]  || 0),
+  };
+}
+
+function startKISWebSocket(code) {
+  _stopKISWs();
+  const wsKey = window.__KIS_WS_KEY__;
+  const wsUrl = window.__KIS_WS_URL__;
+  if (!wsKey || !wsUrl) return false;
+
+  try {
+    const ws = new WebSocket(wsUrl);
+    _kisWs     = ws;
+    _kisWsCode = code;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        header: { approval_key: wsKey, custtype: 'P', tr_type: '1', 'content-type': 'utf-8' },
+        body:   { input: { tr_id: 'H0STCNT0', tr_key: code } }
+      }));
+      _kisWsOk = true;
+      log(`📡 KIS WebSocket 연결 — ${code} 실시간 체결가`, 'buy');
+    };
+
+    ws.onmessage = (e) => {
+      if (!currentStock || currentStock.code !== _kisWsCode) return;
+      const p = _parseKISWsPrice(e.data);
+      if (!p) return;
+      updateHeaderPriceLive(p);
+      // 실시간 라인 차트 업데이트
+      const now = Math.floor(Date.now() / 1000);
+      _realtimePriceHistory.push({ time: now, value: p.price });
+      if (_realtimePriceHistory.length > 300) _realtimePriceHistory.shift();
+      if (realtimeSeries) { try { realtimeSeries.update({ time: now, value: p.price }); } catch {} }
+    };
+
+    ws.onerror = () => { _kisWsOk = false; };
+    ws.onclose = () => {
+      _kisWsOk = false;
+      // 연결 끊기면 REST 폴링으로 폴백
+      if (_kisWsCode === (currentStock && currentStock.code)) {
+        _startRestPolling();
+      }
+    };
+    return true;
+  } catch { return false; }
+}
+
+// REST 폴링 (WebSocket 불가 시 폴백)
+function _startRestPolling() {
+  if (_realtimePriceTimer) return;
+  _realtimePriceTimer = setInterval(async () => {
+    if (!currentStock) { stopRealtimePrice(); return; }
+    const p = await fetchCurrentPrice(currentStock.code);
+    if (!p) return;
+    updateHeaderPriceLive(p);
+    const now = Math.floor(Date.now() / 1000);
+    _realtimePriceHistory.push({ time: now, value: p.price });
+    if (_realtimePriceHistory.length > 300) _realtimePriceHistory.shift();
+    if (realtimeSeries) { try { realtimeSeries.update({ time: now, value: p.price }); } catch {} }
+  }, 3000);
+}
+
 // 실시간 현재가 조회
 async function fetchCurrentPrice(code) {
   // 1차: 로컬 프록시 (연결 시)
@@ -2386,25 +2479,14 @@ function startRealtimePrice() {
   stopRealtimePrice();
   if (!currentStock) return;
   _realtimePriceHistory = [];
-  _realtimePriceTimer = setInterval(async () => {
-    if (!currentStock) return;
-    try {
-      const p = await fetchCurrentPrice(currentStock.code);
-      if (p && p.price) {
-        updateHeaderPriceLive(p);
-        // 실시간 라인 차트에 현재가 추가
-        const now = Math.floor(Date.now() / 1000);
-        _realtimePriceHistory.push({ time: now, value: parseInt(p.price) });
-        if (_realtimePriceHistory.length > 300) _realtimePriceHistory.shift(); // 최대 5분치
-        if (realtimeSeries) {
-          try { realtimeSeries.update({ time: now, value: parseInt(p.price) }); } catch {}
-        }
-      }
-    } catch {}
-  }, 1000);
+  // 1차: KIS WebSocket (실시간 체결가, CORS 없음)
+  if (startKISWebSocket(currentStock.code)) return;
+  // 2차: REST 폴링 (3초 간격)
+  _startRestPolling();
 }
 
 function stopRealtimePrice() {
+  _stopKISWs();
   if (_realtimePriceTimer) { clearInterval(_realtimePriceTimer); _realtimePriceTimer = null; }
 }
 
