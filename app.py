@@ -243,7 +243,7 @@ def _start_bg_scan_thread():
 
                     _sb_url = ss.get('_sb_url') or ''
                     _sb_key = ss.get('_sb_key') or ''
-                    if tok and (_sb_url or (gid and ght)):
+                    if tok:
                         try:
                             import concurrent.futures as _cf
                             with _cf.ThreadPoolExecutor(max_workers=2) as ex:
@@ -255,12 +255,17 @@ def _start_bg_scan_thread():
                             all_s = kp + kd
                             if all_s:
                                 ui_n = ss.get("ui_n_per_cat") or 10
+                                _vol_min = ss.get("scan_vol_min") or 50
+                                # 장 초반(~10시)은 누적 거래대금이 적으므로 스윙 기준 완화
+                                _kst_hr = kst_now().hour
+                                _swing_vol = _vol_min if _kst_hr < 10 else max(_vol_min, 100)
                                 cats = categorize_stocks(
                                     all_s,
                                     ss.get("scan_blacklist", set()),
-                                    ss.get("scan_vol_min") or 50,
+                                    _vol_min,
                                     ss.get("scan_rsi_min") or 20,
                                     ss.get("scan_rsi_max") or 75,
+                                    swing_vol_min=_swing_vol,
                                     top_n=min(50, ui_n*3),
                                 )
                                 _ts = kst_strftime("%H:%M:%S")
@@ -772,12 +777,7 @@ for k,v in DEFAULTS.items():
     if k not in st.session_state: st.session_state[k]=v
 
 # ── 서버 메모리 저장소 (같은 프로세스 내 재시작에도 유지) ──
-@st.cache_resource
-def get_server_store():
-    return {"ck": None, "cp": None, "tg": None, "tg_grp": None,
-            "tg_grp2": None, "tg_grp3": None, "agreed": False,
-            "scan_data": None, "scan_ts": 0, "scan_str": "",
-            "google_key": None}
+from store import get_server_store
 
 server_store = get_server_store()
 # 공유 설정 PC ↔ Mobile 복원
@@ -956,6 +956,7 @@ def do_connect(ak, sec, acc, env):
             _ss['kis_base_url']   = bu
             _ss['kis_ak']         = ak
             _ss['kis_sec']        = sec
+            _ss['kis_acc']        = acc
             _ss['scan_refresh_min'] = st.session_state.get('scan_refresh_min', 10)
             return True, None
         msg = d.get('msg1') or d.get('msg_cd') or d.get('error_description') or '앱키/시크릿 오류'
@@ -1227,11 +1228,10 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max,
         # ════════════════════════════════════════════
         # ① 실시간 스윙 (기술적 지지 + 모멘텀 + 수급)
         #    - MA 근접 상향 돌파 (이격도 100~103 추정)
-        #    - 거래대금 100억 이상 (수급 확인)
+        #    - 거래대금 swing_vol_min 이상 (수급 확인)
         #    - 등락률 +0.3%~+6% (과열 아닌 모멘텀)
         # ════════════════════════════════════════════
-        _sw_vol_grade_min = 1 if swing_vol_min <= 100 else (2 if swing_vol_min <= 300 else 3)
-        if proximity_ok and swing_pct_min <= pct <= swing_pct_max and vol_grade >= _sw_vol_grade_min:
+        if proximity_ok and swing_pct_min <= pct <= swing_pct_max and tr >= swing_vol_min:
             # 점수: 기본 70 + 모멘텀(최대 12) + 수급(최대 16) + RSI보너스(최대 7)
             momentum_sc = min(12, int(pct * 3))
             vol_sc      = min(16, vol_grade * 4)
@@ -1245,10 +1245,10 @@ def categorize_stocks(all_stocks, blacklist, vol_min, rsi_min, rsi_max,
         # ════════════════════════════════════════════
         # ② 급등전야 (거래량 폭발 + 강한 모멘텀)
         #    - 등락률 +4%+ (강한 추세 전환 신호)
-        #    - 거래대금 100억+ (유의미한 수급 진입)
+        #    - 거래대금 vol_min 이상 (유의미한 수급 진입)
         #    - 베타 1.0+ 추정: 고변동 종목 선별
         # ════════════════════════════════════════════
-        if pct >= surge_pct_min and vol_grade >= 1:
+        if pct >= surge_pct_min and tr >= vol_min:
             # 점수: 기본 65 + 모멘텀(최대 18) + 수급(최대 15)
             momentum_sc = min(18, int(pct * 2))
             vol_sc      = min(15, vol_grade * 4)

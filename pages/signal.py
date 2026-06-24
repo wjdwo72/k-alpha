@@ -1,6 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import os, json
+import os, json, sys
+
+# store.py는 k-alpha 루트에 있음
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from store import get_server_store
 
 st.set_page_config(
     page_title="K-Alpha 패턴 매매 시그널",
@@ -31,75 +35,90 @@ except FileNotFoundError:
     st.error("signal.html 파일을 찾을 수 없습니다.")
     st.stop()
 
-# 관리자앱 세션에서 KIS 크리덴셜 읽기
-_ak   = st.session_state.get('kis_ak',  '') or ''
-_sec  = st.session_state.get('kis_sec', '') or ''
-_acc  = st.session_state.get('kis_acc', '') or ''
-_env  = st.session_state.get('kis_env', '실전투자') or '실전투자'
-_base = st.session_state.get('kis_base_url', '') or ''
-_server_val = 'mock' if '모의' in _env or 'vts' in _base else 'real'
+# server_store에서 KIS 크리덴셜 읽기 (관리자앱과 공유, 다른 탭도 OK)
+_ss = get_server_store()
+_ak  = _ss.get('kis_ak',  '') or st.session_state.get('kis_ak',  '') or ''
+_sec = _ss.get('kis_sec', '') or st.session_state.get('kis_sec', '') or ''
+_acc = _ss.get('kis_acc', '') or st.session_state.get('kis_acc', '') or ''
+_tok = _ss.get('kis_token','') or st.session_state.get('kis_token','') or ''
+_bu  = _ss.get('kis_base_url','') or st.session_state.get('kis_base_url','') or ''
+_server_val = 'mock' if 'vts' in _bu else 'real'
+_has_creds  = bool(_ak and _sec and _acc)
 
-# API 설정 섹션 숨김 + 자동 연결 주입
-_inject = f"""<style>
-/* KIS 크리덴셜 입력 부분만 숨김 (텔레그램·자동스캔·스캔주기는 유지) */
+_inject = f"""<script>
+// ── K-ALPHA 관리앱 연동 주입 ──
+(function() {{
+  var _ak  = {json.dumps(_ak)};
+  var _sec = {json.dumps(_sec)};
+  var _acc = {json.dumps(_acc)};
+  var _tok = {json.dumps(_tok)};
+  var _srv = {json.dumps(_server_val)};
+  var _has = {json.dumps(_has_creds)};
+
+  // 1) 관리앱 토큰 전역 보관 (window.onload 이전 실행)
+  if (_tok) window.__ADMIN_TOKEN__  = _tok;
+  if (_srv) window.__ADMIN_SERVER__ = _srv;
+
+  // 2) fetch 가로채기: 프록시 /token 요청에 크리덴셜 자동 주입
+  if (_has) {{
+    var _origFetch = window.fetch;
+    window.fetch = function(url, opts) {{
+      try {{
+        if (typeof url === 'string' && /localhost:9001\/token/.test(url)) {{
+          var u = new URL(url);
+          if (!u.searchParams.get('appkey'))    u.searchParams.set('appkey',    _ak);
+          if (!u.searchParams.get('appsecret')) u.searchParams.set('appsecret', _sec);
+          if (!u.searchParams.get('acct'))      u.searchParams.set('acct',      _acc);
+          if (!u.searchParams.get('_server'))   u.searchParams.set('_server',   _srv);
+          url = u.toString();
+        }}
+      }} catch(e) {{}}
+      return _origFetch.apply(this, [url, opts]);
+    }};
+  }}
+
+  // 3) DOM 로드 후: 입력 필드 채우기 + 연동 배지 삽입
+  function _onReady() {{
+    var eAk  = document.getElementById('appKey');
+    var eSec = document.getElementById('secretKey');
+    var eAcc = document.getElementById('acctNo');
+    var eSrv = document.getElementById('serverType');
+    if (eAk  && _ak)  eAk.value  = _ak;
+    if (eSec && _sec) eSec.value = _sec;
+    if (eAcc && _acc) eAcc.value = _acc;
+    if (eSrv && _srv) eSrv.value = _srv;
+
+    var hdr = document.querySelector('.token-status');
+    if (hdr && !document.getElementById('admin-link-badge')) {{
+      var badge = document.createElement('span');
+      badge.id = 'admin-link-badge';
+      badge.style.cssText = [
+        'margin-left:10px','padding:2px 10px','border-radius:10px',
+        'font-size:10px','font-weight:700','letter-spacing:.5px',
+        _has
+          ? 'background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981'
+          : 'background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#f59e0b'
+      ].join(';');
+      badge.textContent = _has ? '✅ K-ALPHA 관리앱 연동됨' : '⚠️ 관리앱 미연결';
+      hdr.insertBefore(badge, hdr.firstChild);
+    }}
+  }}
+
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', _onReady);
+  }} else {{
+    setTimeout(_onReady, 100);
+  }}
+}})();
+</script>
+<style>
 #appKey, #secretKey, #acctNo, #serverType,
 .api-section > label,
 .api-section > button,
 #syncStatus,
 .api-section > div:first-of-type {{ display:none!important; }}
 .panel-title {{ display:none!important; }}
-</style>
-<script>
-(function() {{
-  var ak  = {json.dumps(_ak)};
-  var sec = {json.dumps(_sec)};
-  var acc = {json.dumps(_acc)};
-  var srv = {json.dumps(_server_val)};
-  function _autoConnect() {{
-    // signal.html 의 실제 input ID: appKey, secretKey, acctNo, serverType
-    var eAk  = document.getElementById('appKey');
-    var eSec = document.getElementById('secretKey');
-    var eAcc = document.getElementById('acctNo');
-    var eSrv = document.getElementById('serverType');
-    if (!eAk) {{ setTimeout(_autoConnect, 300); return; }}
-    if (ak)  eAk.value  = ak;
-    if (sec) eSec.value = sec;
-    if (acc) eAcc.value = acc;
-    if (srv && eSrv) eSrv.value = srv;
-    if (ak && sec && acc && typeof connectKIS === 'function') {{
-      connectKIS();
-      // 연결 시도 후 상태 배지 삽입
-      setTimeout(function() {{
-        var dot   = document.getElementById('tokenDot');
-        var label = document.getElementById('tokenLabel');
-        var hdr   = document.querySelector('.token-status');
-        if (!hdr) return;
-        // 기존 배지 중복 방지
-        if (document.getElementById('admin-link-badge')) return;
-        var badge = document.createElement('span');
-        badge.id = 'admin-link-badge';
-        badge.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(0,212,255,0.15);border:1px solid #00d4ff;color:#00d4ff;letter-spacing:.5px';
-        badge.textContent = '🔗 K-ALPHA 관리앱 연동';
-        hdr.appendChild(badge);
-        // dot·label 상태 반영
-        if (dot && dot.classList.contains('active')) {{
-          badge.style.background = 'rgba(16,185,129,0.15)';
-          badge.style.borderColor = '#10b981';
-          badge.style.color = '#10b981';
-          badge.textContent = '✅ K-ALPHA 연결됨';
-        }} else {{
-          badge.textContent = '⚠️ K-ALPHA 연결 대기';
-        }}
-      }}, 2500);
-    }}
-  }}
-  if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', _autoConnect);
-  }} else {{
-    setTimeout(_autoConnect, 300);
-  }}
-}})();
-</script>"""
+</style>"""
 
 html = html.replace('</head>', _inject + '\n</head>')
 
