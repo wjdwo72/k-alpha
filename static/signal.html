@@ -1447,16 +1447,71 @@ async function fetchKISCandles(code) {
   }
 }
 
-// 실시간 현재가 조회 (프록시)
+// ── CORS 프록시 via 퍼블릭 서비스 (app.html 동일 방식) ──
+const _SIG_CORS = [
+  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+];
+async function _fetchWithCors(url, opts) {
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(url), { ...opts, signal: AbortSignal.timeout(6000) });
+      if (r.ok) return r;
+    } catch {}
+  }
+  return null;
+}
+
+// KIS API 직접 현재가 조회 (CORS 프록시 경유)
+async function _fetchKisPriceDirect(code) {
+  const tok = window.__ADMIN_TOKEN__;
+  const ak  = window.__ADMIN_AK__;
+  const sec = window.__ADMIN_SEC__;
+  const bu  = window.__ADMIN_BASE_URL__ || 'https://openapi.kis.or.kr';
+  if (!tok || !ak || !sec) return null;
+  const isMock = bu.includes('vts');
+  const trId = isMock ? 'VHKST01010100' : 'FHKST01010100';
+  const url = `${bu}/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=${code}`;
+  try {
+    const r = await _fetchWithCors(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'authorization': `Bearer ${tok}`,
+        'appkey': ak, 'appsecret': sec,
+        'tr_id': trId, 'custtype': 'P',
+      }
+    });
+    if (!r) return null;
+    const d = await r.json();
+    const o = d?.output;
+    if (!o?.stck_prpr) return null;
+    const sign = o.prdy_vrss_sign || '3';
+    const isUp = ['1','2'].includes(sign);
+    const isDown = ['4','5'].includes(sign);
+    const changePctAbs = parseFloat(o.prdy_ctrt || 0);
+    return {
+      price: parseInt(o.stck_prpr),
+      rate:  isDown ? -changePctAbs : changePctAbs,
+      high:  parseInt(o.stck_hgpr || 0),
+      low:   parseInt(o.stck_lwpr || 0),
+    };
+  } catch { return null; }
+}
+
+// 실시간 현재가 조회 (프록시 → KIS 직접 순서로 시도)
 async function fetchCurrentPrice(code) {
   if (accessToken === 'DEMO') return null;
   const server = document.getElementById('serverType').value;
+  // 1차: 로컬 프록시
   try {
-    const res  = await fetch(`${PROXY}/price?code=${code}&_server=${server}`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${PROXY}/price?code=${code}&_server=${server}`, { signal: AbortSignal.timeout(2000) });
     const data = await res.json();
-    if (data.error) return null;
-    return data;
-  } catch { return null; }
+    if (data && !data.error) return data;
+  } catch {}
+  // 2차: KIS API 직접 (CORS 프록시 경유)
+  return await _fetchKisPriceDirect(code);
 }
 
 // ============================================================
@@ -2065,11 +2120,15 @@ function startRealtimePrice() {
   _realtimePriceTimer = setInterval(async () => {
     if (!currentStock || !accessToken || accessToken === 'DEMO') return;
     try {
-      const server = (document.getElementById('serverType') || {value:'real'}).value;
-      const res = await fetch(`${PROXY}/price?code=${currentStock.code}&_server=${server}`, {
-        signal: AbortSignal.timeout(2000)
-      });
-      const p = await res.json();
+      // 로컬 프록시 → KIS 직접 순서
+      let p = null;
+      try {
+        const server = (document.getElementById('serverType') || {value:'real'}).value;
+        const res = await fetch(`${PROXY}/price?code=${currentStock.code}&_server=${server}`, { signal: AbortSignal.timeout(1500) });
+        const d = await res.json();
+        if (d && !d.error) p = d;
+      } catch {}
+      if (!p) p = await _fetchKisPriceDirect(currentStock.code);
       if (p && p.price) {
         updateHeaderPriceLive(p);
         // 실시간 라인 차트에 현재가 추가

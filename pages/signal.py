@@ -106,10 +106,14 @@ _inject = f"""<script>
   var _tok = {json.dumps(_tok)};
   var _srv = {json.dumps(_server_val)};
   var _has = {json.dumps(_has_creds)};
+  var _bu  = {json.dumps(_bu or 'https://openapi.kis.or.kr')};
 
-  // 1) 관리앱 토큰 전역 보관
+  // 1) 관리앱 토큰 + 크리덴셜 전역 보관 (현재가 직접 조회용)
   if (_tok) window.__ADMIN_TOKEN__  = _tok;
   if (_srv) window.__ADMIN_SERVER__ = _srv;
+  if (_bu)  window.__ADMIN_BASE_URL__ = _bu;
+  if (_ak)  window.__ADMIN_AK__ = _ak;
+  if (_sec) window.__ADMIN_SEC__ = _sec;
 
   // 2) 관리앱 스캔 결과 전역 보관
   window.__ADMIN_SCAN__ = {json.dumps(_admin_scan)};
