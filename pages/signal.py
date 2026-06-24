@@ -116,6 +116,14 @@ _admin_scan = {
 _has_scan = any(len(v) > 0 for v in [_admin_scan['swing'], _admin_scan['surge'],
                                       _admin_scan['tmr'], _admin_scan['small']])
 
+_hide_api_css = """
+#appKey, #secretKey, #acctNo, #serverType,
+.api-section > label,
+.api-section > button,
+#syncStatus,
+.api-section > div:first-of-type { display:none!important; }
+""" if _has_creds else ""
+
 _inject = f"""<script>
 // ── K-ALPHA 관리앱 연동 주입 ──
 (function() {{
@@ -223,19 +231,44 @@ _inject = f"""<script>
   }} else {{
     setTimeout(_onReady, 100);
   }}
+
+  // ── KIS API 설정 버튼 삽입 (항상 표시) ──
+  function _insertSettingsBar() {{
+    if (document.getElementById('_kisSettingsBar')) return;
+    var bar = document.createElement('div');
+    bar.id = '_kisSettingsBar';
+    bar.style.cssText = 'background:#0d1526;border-bottom:1px solid #1a2a45;padding:6px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+    bar.innerHTML = '<button onclick="openSettings()" style="background:linear-gradient(90deg,#1d4ed8,#0891b2);color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:13px;font-weight:700">⚙️ KIS API 설정</button>'
+      + '<span style="font-size:11px;color:#60a5fa">비밀번호: <b>4545</b> · 앱키/시크릿 입력 후 실시간 현재가·차트 사용</span>'
+      + '<span id="kisSettingStatus" style="font-size:11px;color:#10b981;margin-left:auto"></span>';
+    var searchBar = document.querySelector('.search-bar');
+    if (searchBar && searchBar.parentNode) {{
+      searchBar.parentNode.insertBefore(bar, searchBar);
+    }} else {{
+      document.body.insertBefore(bar, document.body.firstChild);
+    }}
+  }}
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', _insertSettingsBar);
+  }} else {{
+    setTimeout(_insertSettingsBar, 50);
+  }}
 }})();
 </script>
 <style>
-#appKey, #secretKey, #acctNo, #serverType,
-.api-section > label,
-.api-section > button,
-#syncStatus,
-.api-section > div:first-of-type {{ display:none!important; }}
+{_hide_api_css}
 .panel-title {{ display:none!important; }}
 </style>"""
 
-# 크리덴셜 없으면 헤더 배지에만 표시 (경고창 제거 — iframe이 동작 중)
+# 크리덴셜 없으면 헤더 배지에만 표시 (경고창 제거 — iframe이 동작 중) v3
 
 html = html.replace('</head>', _inject + '\n</head>')
 
-components.html(html, height=960, scrolling=True)
+# ── KIS API 설정 버튼 바 직접 삽입 (헤더 바로 다음) ──
+_settings_bar = """<div id="_kisSettingsBar" style="background:#0d1526;border-bottom:2px solid #1d4ed8;padding:8px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <button onclick="openSettings()" style="background:linear-gradient(90deg,#1d4ed8,#0891b2);color:#fff;border:none;border-radius:7px;padding:9px 22px;cursor:pointer;font-size:13px;font-weight:800;letter-spacing:.3px;box-shadow:0 2px 10px rgba(29,78,216,0.5)">⚙️ KIS API 설정</button>
+  <span style="font-size:12px;color:#93c5fd">비밀번호 <b style="color:#fff">4545</b> · KIS 앱키/시크릿 입력 후 실시간 현재가·차트 사용 가능</span>
+</div>"""
+html = html.replace('<div class="header">', _settings_bar + '\n<div class="header">')
+
+components.html(html, height=980, scrolling=True)

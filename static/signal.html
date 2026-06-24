@@ -317,6 +317,27 @@
   .section-title:first-child { margin-top: 0; }
 
   .loading { text-align: center; padding: 20px; color: var(--text3); font-size: 11px; }
+
+  /* 설정 모달 */
+  .settings-overlay { position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:30000;display:none;align-items:center;justify-content:center; }
+  .settings-overlay.open { display:flex; }
+  .settings-box { background:#111827;border:1px solid #2a3550;border-radius:14px;padding:28px 24px;width:420px;max-width:96vw;position:relative; }
+  .settings-box h3 { font-size:16px;font-weight:700;color:#f0f4fa;margin-bottom:18px;display:flex;align-items:center;gap:8px; }
+  .settings-close { position:absolute;top:14px;right:16px;background:none;border:none;color:#6b7a99;font-size:18px;cursor:pointer; }
+  .settings-close:hover { color:#f0f4fa; }
+  .set-pwd-phase { display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center; }
+  .set-pwd-phase p { font-size:12px;color:#8fa3bb; }
+  .set-pwd-input { width:100%;background:#1a2236;border:2px solid #2a3550;color:#f0f4fa;padding:12px 14px;border-radius:8px;font-size:22px;text-align:center;letter-spacing:8px;outline:none;transition:border .15s; }
+  .set-pwd-input:focus { border-color:#3b82f6; }
+  .set-pwd-err { font-size:11px;color:#ef4444;min-height:16px; }
+  .set-form-phase { display:none;flex-direction:column;gap:8px; }
+  .set-label { font-size:10px;color:#8fa3bb;margin-top:6px;display:block; }
+  .set-input { width:100%;background:#1a2236;border:1px solid #2a3550;color:#f0f4fa;padding:8px 10px;border-radius:6px;font-size:12px;outline:none; }
+  .set-input:focus { border-color:#3b82f6; }
+  .set-hint { font-size:10px;color:#475569;margin-top:2px; }
+  .set-save-btn { width:100%;padding:10px;background:linear-gradient(90deg,#1d4ed8,#0891b2);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px;transition:opacity .15s; }
+  .set-save-btn:hover { opacity:.88; }
+  .set-divider { border:none;border-top:1px solid #1e2d45;margin:14px 0; }
   .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -334,7 +355,18 @@
     <span id="tokenLabel">미연결</span>
     <span id="priceSrcBadge" style="display:none;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700"></span>
     <span class="refresh-indicator">새로고침: <span id="countdown">-</span>s</span>
+    <button onclick="openSettings()" title="KIS API 설정" style="background:rgba(59,130,246,0.15);border:1px solid #2a3550;color:#8fa3bb;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;transition:all .15s" onmouseover="this.style.borderColor='#3b82f6';this.style.color='#f0f4fa'" onmouseout="this.style.borderColor='#2a3550';this.style.color='#8fa3bb'">⚙️ 설정</button>
   </div>
+</div>
+
+<!-- KIS API 설정 버튼 바 -->
+<div style="background:#0d1526;border-bottom:1px solid #1a2a45;padding:6px 14px;display:flex;align-items:center;gap:10px">
+  <button onclick="openSettings()"
+    style="background:linear-gradient(90deg,#1d4ed8,#0891b2);color:#fff;border:none;border-radius:6px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:700;letter-spacing:.3px">
+    ⚙️ KIS API 설정
+  </button>
+  <span style="font-size:11px;color:#475569">비밀번호: <b style="color:#60a5fa">4545</b> · KIS 앱키/시크릿 입력 후 실시간 현재가·차트 사용</span>
+  <span id="kisSettingStatus" style="font-size:11px;color:#475569;margin-left:auto"></span>
 </div>
 
 <!-- 검색바 -->
@@ -509,6 +541,19 @@
 
 <div class="alert-box" id="alertBox"></div>
 
+<!-- ⚙️ 고정 설정 버튼 (항상 보임) -->
+<button onclick="openSettings()" id="fixedSettingsBtn" title="KIS API 설정 (비번: 4545)"
+  style="position:fixed;bottom:18px;left:18px;z-index:9999;
+    background:linear-gradient(135deg,#1e3a5f,#0f2340);
+    border:2px solid #3b82f6;color:#60a5fa;border-radius:50px;
+    padding:8px 16px;cursor:pointer;font-size:13px;font-weight:700;
+    box-shadow:0 4px 20px rgba(59,130,246,0.4);
+    transition:all .2s;white-space:nowrap"
+  onmouseover="this.style.background='linear-gradient(135deg,#1d4ed8,#0891b2)';this.style.color='#fff';this.style.boxShadow='0 4px 28px rgba(59,130,246,0.7)'"
+  onmouseout="this.style.background='linear-gradient(135deg,#1e3a5f,#0f2340)';this.style.color='#60a5fa';this.style.boxShadow='0 4px 20px rgba(59,130,246,0.4)'">
+  ⚙️ KIS API 설정
+</button>
+
 <script>
 // ============================================================
 // 상수 & 전역 변수
@@ -668,46 +713,78 @@ const NAME_MAP = {
 // ============================================================
 // ── 종목 검색 (Naver Mobile → ac.stock → corsproxy 순서) ──
 async function _searchNaver(q) {
-  // 1차: Naver Mobile 검색 API (CORS 허용됨)
-  try {
-    const url = `https://m.stock.naver.com/api/search/hits?keyword=${encodeURIComponent(q)}&market=ALL&count=20`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (r.ok) {
+  // 1차: Naver Mobile 검색 API (여러 엔드포인트 순서대로 시도)
+  const naverUrls = [
+    `https://m.stock.naver.com/api/search/all?keyword=${encodeURIComponent(q)}&page=1&pageSize=20`,
+    `https://m.stock.naver.com/api/search/hits?keyword=${encodeURIComponent(q)}&market=ALL&count=20`,
+  ];
+  for (const url of naverUrls) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) continue;
       const d = await r.json();
-      const hits = d.hits || d.stocks || [];
-      if (hits.length) {
-        return hits.map(h => ({
-          code: h.symbol || h.itemCode || h.code || '',
-          name: h.name || h.korName || h.symbolName || ''
+      // all API: {stocks:[{itemCode,itemName,...}]}, hits API: {hits:[{symbol,name,...}]}
+      const list = d.stocks || d.hits || d.items || [];
+      if (list.length) {
+        const mapped = list.map(h => ({
+          code: h.itemCode || h.symbol || h.code || '',
+          name: h.itemName || h.name || h.korName || h.symbolName || ''
         })).filter(h => h.code && h.name);
+        if (mapped.length) return mapped;
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  // 2차: Naver 자동완성 API 직접 (CORS 허용되는 경우)
+  // 2차: Naver 주식 자동완성 API (items = [[name, code, ...], ...])
   try {
     const url2 = `https://ac.stock.naver.com/ac?q=${encodeURIComponent(q)}&target=stock,index,etf,fund`;
     const r2 = await fetch(url2, { signal: AbortSignal.timeout(4000) });
     if (r2.ok) {
       const d2 = await r2.json();
-      const arr = (d2.items && (d2.items[0] || []));
-      if (arr && arr.length) return arr.map(i => ({ code: i[1] || i[0], name: i[0] }));
+      const items = d2.items || [];
+      if (items.length) {
+        // items = [[name, code, ...], ...] 형식
+        const mapped = items.map(i => Array.isArray(i)
+          ? { code: i[1] || i[0], name: i[0] }
+          : { code: i.code || i.symbol, name: i.name || i.korName }
+        ).filter(i => i.code && i.name);
+        if (mapped.length) return mapped;
+      }
     }
   } catch {}
 
-  // 3차: ac.finance.naver.com (CORS 프록시 경유)
-  const nurl = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&st=111&r=1&nr=20`;
-  for (const mk of [
-    `https://corsproxy.io/?url=${encodeURIComponent(nurl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(nurl)}`,
-  ]) {
+  // 3차: KIS 토큰 있으면 KIS 종목 검색 API
+  if (window.__ADMIN_TOKEN__ && window.__ADMIN_AK__ && window.__ADMIN_SEC__) {
     try {
-      const r = await fetch(mk, { signal: AbortSignal.timeout(5000) });
+      const bu  = window.__ADMIN_BASE_URL__ || 'https://openapi.kis.or.kr';
+      const tok = window.__ADMIN_TOKEN__;
+      const ak  = window.__ADMIN_AK__;
+      const sec = window.__ADMIN_SEC__;
+      const isMock = bu.includes('vts');
+      const url3 = `${bu}/uapi/domestic-stock/v1/quotations/search-stock-info?PRDT_TYPE_CD=300&MKET_ID_CD=STK&SCHB_PRDT_NM=${encodeURIComponent(q)}&SRT_PRDT_NM=${encodeURIComponent(q)}&END_PRDT_NM=&PDNO=&COND_MRKT_DIV_CODE=J`;
+      const r3 = await _fetchWithCors(url3, {
+        headers: { authorization:`Bearer ${tok}`, appkey:ak, appsecret:sec,
+                   tr_id: isMock ? 'CTPF1604R' : 'CTPF1604R', custtype:'P' }
+      });
+      if (r3) {
+        const d3 = await r3.json();
+        const out3 = (d3.output || []).map(s => ({ code: s.pdno || s.PDNO, name: s.prdt_abrv_name || s.PRDT_ABRV_NAME || s.prdt_name })).filter(s => s.code && s.name);
+        if (out3.length) return out3;
+      }
+    } catch {}
+  }
+
+  // 4차: corsproxy.io 경유 Naver Finance 검색
+  const nurl = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&st=111&r=1&nr=20`;
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(nurl), { signal: AbortSignal.timeout(5000) });
       let d;
       try { const t = await r.text(); d = JSON.parse(t); } catch { continue; }
       if (d && d.contents) { try { d = JSON.parse(d.contents); } catch { continue; } }
-      const arr = (d && d.items && d.items[0]) || [];
-      if (arr.length) return arr.map(i => ({ code: i[1], name: i[0] }));
+      const arr = (d && d.items) || [];
+      const mapped = arr.map(i => Array.isArray(i) ? { code: i[1], name: i[0] } : i).filter(i => i.code && i.name);
+      if (mapped.length) return mapped;
     } catch {}
   }
   return [];
@@ -1012,7 +1089,7 @@ function switchKTab(tab, el) {
 function getFilteredStocks() {
   if (currentKTab === 'all') return stockList;
   if (currentKTab === 'signal') {
-    return stockList.filter(s => s.signal === 'buy' || s.signal === 'sell')
+    return stockList.filter(s => s.categories?.length > 0 && (s.signal === 'buy' || s.signal === 'sell'))
                     .sort((a, b) => (b.signalStrength||0) - (a.signalStrength||0));
   }
   if (currentKTab === 'user') {
@@ -1105,41 +1182,179 @@ function clearLog() { document.getElementById('logBox').innerHTML = ''; }
 // KIS API 연결 (프록시 서버 경유)
 // ============================================================
 async function connectKIS() {
-  const server  = document.getElementById('serverType').value;
-  const appKey  = (document.getElementById('appKey')    || {}).value || '';
-  const secret  = (document.getElementById('secretKey') || {}).value || '';
-  const acct    = (document.getElementById('acctNo')    || {}).value || '';
-  log('KIS 프록시 서버 연결 중... (KIS_proxy.py 실행 필요)', 'info');
+  const server = document.getElementById('serverType').value;
+  const ak     = (document.getElementById('appKey')    || {}).value?.trim() || window.__ADMIN_AK__  || '';
+  const sec    = (document.getElementById('secretKey') || {}).value?.trim() || window.__ADMIN_SEC__ || '';
+  const acct   = (document.getElementById('acctNo')    || {}).value?.trim() || '';
+  if (!ak || !sec) { log('❌ 앱키와 시크릿키를 입력하세요', 'err'); return; }
+
   setTokenStatus('loading');
+  log('KIS API 연결 중...', 'info');
+
+  // 1차: 로컬 프록시 (KIS_proxy.py 실행 시)
   try {
-    // 앱키/시크릿키를 쿼리 파라미터로 전달 (프록시가 이 값으로 KIS 토큰 발급)
-    const params = new URLSearchParams({ _server: server });
-    if (appKey) params.set('appkey', appKey);
-    if (secret) params.set('appsecret', secret);
-    if (acct)   params.set('acct', acct);
-    const res = await fetch(`${PROXY}/token?${params}`, { signal: AbortSignal.timeout(15000) });
+    const params = new URLSearchParams({ _server: server, appkey: ak, appsecret: sec });
+    if (acct) params.set('acct', acct);
+    const res = await fetch(`${PROXY}/token?${params}`, { signal: AbortSignal.timeout(5000) });
     const data = await res.json();
     if (data.ok && data.access_token) {
       accessToken = data.access_token;
+      window.__ADMIN_TOKEN__ = accessToken;
+      window.__ADMIN_AK__    = ak;
+      window.__ADMIN_SEC__   = sec;
       _proxyConnected = true;
       setTokenStatus('active');
-      log('✅ KIS 실전 연결 성공 (프록시 서버)', 'buy');
-      renderStockList();
-      startAutoRefresh();
-      if (currentStock) loadChartData();
-    } else {
-      throw new Error(data.error || '토큰 발급 실패 - 장외시간이거나 API키 오류');
+      log('✅ KIS 연결 성공 (로컬 프록시)', 'buy');
+      _afterKisConnect();
+      return;
     }
-  } catch (e) {
-    if (e.name === 'TimeoutError' || e.message.includes('Failed to fetch') || e.message.includes('fetch')) {
-      log('⚠️ 프록시 서버 미실행 → 데모 모드로 전환', 'warn');
-      log('실제 데이터: 바탕화면의 KIS_proxy.py 를 먼저 실행하세요', 'warn');
-    } else {
-      log(`❌ KIS 연결 실패: ${e.message}`, 'err');
-    }
-    setTokenStatus('demo');
-    startDemoMode();
+  } catch {}
+
+  // 2차: KIS API 직접 (CORS 프록시 경유 — 클라우드 환경)
+  const isMock = server === 'mock';
+  const bu = isMock ? 'https://openapivts.koreainvestment.com:29443' : 'https://openapi.kis.or.kr';
+  const tokenUrl = `${bu}/oauth2/tokenP`;
+  const body = JSON.stringify({ grant_type: 'client_credentials', appkey: ak, appsecret: sec });
+
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(tokenUrl), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.access_token) {
+        accessToken = d.access_token;
+        window.__ADMIN_TOKEN__    = accessToken;
+        window.__ADMIN_AK__       = ak;
+        window.__ADMIN_SEC__      = sec;
+        window.__ADMIN_BASE_URL__ = bu;
+        setTokenStatus('active');
+        log('✅ KIS API 직접 연결 성공', 'buy');
+        _afterKisConnect();
+        return;
+      }
+    } catch {}
   }
+
+  log('❌ KIS 연결 실패 — API키 확인 또는 장외시간', 'err');
+  setTokenStatus('demo');
+  startDemoMode();
+}
+
+async function _afterKisConnect() {
+  renderStockList();
+  startAutoRefresh();
+  if (currentStock) loadChartData();
+  // WebSocket approval_key 발급 (없을 때만)
+  if (!window.__KIS_WS_KEY__) {
+    await _fetchWsApprovalKey();
+  }
+  if (window.__KIS_WS_KEY__ && currentStock) startKISWebSocket(currentStock.code);
+}
+
+// KIS WebSocket approval_key 브라우저 측 발급 (CORS 프록시 경유)
+async function _fetchWsApprovalKey() {
+  const ak  = window.__ADMIN_AK__;
+  const sec = window.__ADMIN_SEC__;
+  const bu  = window.__ADMIN_BASE_URL__ || 'https://openapi.kis.or.kr';
+  if (!ak || !sec) return false;
+  const url  = `${bu}/oauth2/Approval`;
+  const body = JSON.stringify({ grant_type: 'client_credentials', appkey: ak, secretkey: sec });
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(url), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.approval_key) {
+        window.__KIS_WS_KEY__ = d.approval_key;
+        const wsBase = bu.replace('https://', 'wss://');
+        window.__KIS_WS_URL__ = `${wsBase}/websocket/domestic-stock/v1/stk-sise`;
+        log('📡 KIS WebSocket 키 발급 완료', 'buy');
+        return true;
+      }
+    } catch {}
+  }
+  return false;
+}
+
+// ── 설정 모달 함수들 ──
+function openSettings() {
+  const ov = document.getElementById('settingsOverlay');
+  ov.classList.add('open');
+  document.getElementById('setPwdInput').value = '';
+  document.getElementById('setPwdErr').textContent = '';
+  document.getElementById('setPwdPhase').style.display  = 'flex';
+  document.getElementById('setFormPhase').style.display = 'none';
+  setTimeout(() => document.getElementById('setPwdInput').focus(), 120);
+}
+
+function closeSettings() {
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+
+function verifySettingsPwd() {
+  const pwd = document.getElementById('setPwdInput').value;
+  if (pwd === '4545') {
+    document.getElementById('setPwdPhase').style.display  = 'none';
+    document.getElementById('setFormPhase').style.display = 'flex';
+    // 저장된 값 로드
+    const saved = JSON.parse(localStorage.getItem('kisSettings') || '{}');
+    document.getElementById('setAppKey').value  = saved.ak   || window.__ADMIN_AK__  || '';
+    document.getElementById('setSecKey').value  = saved.sec  || window.__ADMIN_SEC__ || '';
+    document.getElementById('setAcct').value    = saved.acct || '';
+    document.getElementById('setServer').value  = saved.server || 'real';
+  } else {
+    document.getElementById('setPwdErr').textContent = '❌ 비밀번호가 맞지 않습니다.';
+    document.getElementById('setPwdInput').value = '';
+    document.getElementById('setPwdInput').focus();
+  }
+}
+
+async function saveKisSettings() {
+  const ak     = document.getElementById('setAppKey').value.trim();
+  const sec    = document.getElementById('setSecKey').value.trim();
+  const acct   = document.getElementById('setAcct').value.trim();
+  const server = document.getElementById('setServer').value;
+  if (!ak || !sec) { alert('앱키와 시크릿키를 입력하세요.'); return; }
+
+  localStorage.setItem('kisSettings', JSON.stringify({ ak, sec, acct, server }));
+
+  // 전역 변수 갱신
+  window.__ADMIN_AK__       = ak;
+  window.__ADMIN_SEC__      = sec;
+  window.__ADMIN_BASE_URL__ = server === 'mock'
+    ? 'https://openapivts.koreainvestment.com:29443'
+    : 'https://openapi.kis.or.kr';
+  window.__ADMIN_TOKEN__    = '';  // 재발급
+  window.__KIS_WS_KEY__     = '';  // 재발급
+  _kisTokenFetching = false;
+
+  // 숨겨진 입력 필드도 채우기
+  const fld = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+  fld('appKey', ak); fld('secretKey', sec); fld('acctNo', acct); fld('serverType', server);
+
+  closeSettings();
+  log('🔑 KIS API 설정 저장 완료 — 연결 시도 중...', 'info');
+  await connectKIS();
+}
+
+function clearKisSettings() {
+  if (!confirm('저장된 KIS API 설정을 삭제할까요?')) return;
+  localStorage.removeItem('kisSettings');
+  document.getElementById('setAppKey').value = '';
+  document.getElementById('setSecKey').value = '';
+  document.getElementById('setAcct').value   = '';
+  log('🗑️ KIS API 설정 삭제됨', 'warn');
+  closeSettings();
 }
 
 function setTokenStatus(state) {
@@ -2628,6 +2843,23 @@ window.onload = async () => {
   const rng = document.getElementById('scanIntervalRange');
   if (rng) { rng.value = savedSec; updateScanInterval(savedSec); }
 
+  // ── localStorage 저장 KIS 설정 자동 로드 ──
+  (function _loadSavedKis() {
+    const saved = JSON.parse(localStorage.getItem('kisSettings') || '{}');
+    if (saved.ak && saved.sec && !window.__ADMIN_TOKEN__) {
+      window.__ADMIN_AK__       = saved.ak;
+      window.__ADMIN_SEC__      = saved.sec;
+      window.__ADMIN_BASE_URL__ = saved.server === 'mock'
+        ? 'https://openapivts.koreainvestment.com:29443'
+        : 'https://openapi.kis.or.kr';
+      const fld = (id, v) => { const e = document.getElementById(id); if (e && v) e.value = v; };
+      fld('appKey', saved.ak); fld('secretKey', saved.sec);
+      fld('acctNo', saved.acct || ''); fld('serverType', saved.server || 'real');
+      log('🔑 저장된 KIS API 설정 로드됨 — 자동 연결 시도 중...', 'info');
+      setTimeout(() => connectKIS(), 800);
+    }
+  })();
+
   // ── K-ALPHA 관리앱 연동 토큰 자동 사용 ──
   if (window.__ADMIN_TOKEN__ && window.__ADMIN_TOKEN__.length > 10) {
     accessToken = window.__ADMIN_TOKEN__;
@@ -3304,6 +3536,56 @@ window._showAnalyzeBtn = function() {
 </div>
 
 <!-- 텔레그램 설정 모달 -->
+<!-- ⚙️ 설정 모달 (비밀번호 잠금) -->
+<div class="settings-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+  <div class="settings-box">
+    <button class="settings-close" onclick="closeSettings()">✕</button>
+    <h3>⚙️ K-Alpha 설정</h3>
+
+    <!-- 비밀번호 단계 -->
+    <div class="set-pwd-phase" id="setPwdPhase">
+      <p>설정에 접근하려면 비밀번호를 입력하세요.</p>
+      <input class="set-pwd-input" type="password" id="setPwdInput" maxlength="10" placeholder="••••"
+        onkeydown="if(event.key==='Enter')verifySettingsPwd()">
+      <div class="set-pwd-err" id="setPwdErr"></div>
+      <button class="set-save-btn" onclick="verifySettingsPwd()" style="width:160px;padding:8px">확인</button>
+    </div>
+
+    <!-- 설정 폼 단계 -->
+    <div class="set-form-phase" id="setFormPhase">
+      <div style="font-size:12px;color:#10b981;font-weight:700;margin-bottom:8px">🔑 KIS 한국투자증권 API 설정</div>
+      <div class="set-hint">KIS 개발자센터(apiportal.koreainvestment.com)에서 발급한 앱키를 입력하세요.</div>
+
+      <label class="set-label">앱키 (App Key)</label>
+      <input class="set-input" type="text" id="setAppKey" placeholder="PSxxxxxxxxxxxxxxxxx">
+
+      <label class="set-label">시크릿키 (Secret Key)</label>
+      <input class="set-input" type="password" id="setSecKey" placeholder="시크릿키 입력">
+      <div style="margin-top:3px">
+        <label style="font-size:10px;color:#475569;cursor:pointer;user-select:none">
+          <input type="checkbox" onchange="document.getElementById('setSecKey').type=this.checked?'text':'password'" style="margin-right:4px">
+          시크릿키 표시
+        </label>
+      </div>
+
+      <label class="set-label">계좌번호 (선택)</label>
+      <input class="set-input" type="text" id="setAcct" placeholder="12345678-01">
+
+      <label class="set-label">서버 종류</label>
+      <select class="set-input" id="setServer">
+        <option value="real">실전투자 (openapi.kis.or.kr)</option>
+        <option value="mock">모의투자 (openapivts.koreainvestment.com)</option>
+      </select>
+
+      <hr class="set-divider">
+      <div class="set-hint" style="color:#f59e0b">⚠️ 설정은 이 브라우저의 localStorage에 저장됩니다. 공용 PC에서 사용 후 반드시 삭제하세요.</div>
+
+      <button class="set-save-btn" onclick="saveKisSettings()">💾 저장 후 KIS 연결</button>
+      <button onclick="clearKisSettings()" style="width:100%;padding:8px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:6px;cursor:pointer;font-size:12px;margin-top:6px">🗑️ 저장된 설정 삭제</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="tgModal" onclick="if(event.target===this)closeTgModal()">
   <div class="modal-box" style="width:580px">
     <button class="modal-close" onclick="closeTgModal()">✕</button>
