@@ -2,7 +2,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 import os, json, sys
 
-# store.py는 k-alpha 루트에 있음
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from store import get_server_store
 
@@ -35,7 +34,7 @@ except FileNotFoundError:
     st.error("signal.html 파일을 찾을 수 없습니다.")
     st.stop()
 
-# server_store에서 KIS 크리덴셜 읽기 (관리자앱과 공유, 다른 탭도 OK)
+# server_store에서 KIS 크리덴셜 + 스캔 결과 읽기 (관리앱과 공유)
 _ss = get_server_store()
 _ak  = _ss.get('kis_ak',  '') or st.session_state.get('kis_ak',  '') or ''
 _sec = _ss.get('kis_sec', '') or st.session_state.get('kis_sec', '') or ''
@@ -44,6 +43,30 @@ _tok = _ss.get('kis_token','') or st.session_state.get('kis_token','') or ''
 _bu  = _ss.get('kis_base_url','') or st.session_state.get('kis_base_url','') or ''
 _server_val = 'mock' if 'vts' in _bu else 'real'
 _has_creds  = bool(_ak and _sec and _acc)
+
+# 관리앱 스캔 결과 → signal.html KALPHA_STOCKS 포맷으로 변환
+def _to_stock_list(items):
+    seen, out = set(), []
+    for s in (items or []):
+        c = s.get('code','')
+        n = s.get('name','')
+        if c and c not in seen:
+            seen.add(c)
+            out.append({'code': c, 'name': n})
+    return out
+
+_scan = _ss.get('scan_result') or {}
+_admin_scan = {
+    'swing': _to_stock_list(_scan.get('swing', [])),
+    'surge': _to_stock_list(_scan.get('surge', [])),
+    'tmr':   _to_stock_list(_scan.get('tomorrow', [])),
+    'small': _to_stock_list(_scan.get('smallmid', [])),
+    'per':   _to_stock_list(_scan.get('per', [])),
+    'ts':    _scan.get('ts', ''),
+    'total': _scan.get('total', 0),
+}
+_has_scan = any(len(v) > 0 for v in [_admin_scan['swing'], _admin_scan['surge'],
+                                      _admin_scan['tmr'], _admin_scan['small']])
 
 _inject = f"""<script>
 // ── K-ALPHA 관리앱 연동 주입 ──
@@ -55,11 +78,14 @@ _inject = f"""<script>
   var _srv = {json.dumps(_server_val)};
   var _has = {json.dumps(_has_creds)};
 
-  // 1) 관리앱 토큰 전역 보관 (window.onload 이전 실행)
+  // 1) 관리앱 토큰 전역 보관
   if (_tok) window.__ADMIN_TOKEN__  = _tok;
   if (_srv) window.__ADMIN_SERVER__ = _srv;
 
-  // 2) fetch 가로채기: 프록시 /token 요청에 크리덴셜 자동 주입
+  // 2) 관리앱 스캔 결과 전역 보관
+  window.__ADMIN_SCAN__ = {json.dumps(_admin_scan)};
+
+  // 3) fetch 가로채기: 프록시 /token 요청에 크리덴셜 자동 주입
   if (_has) {{
     var _origFetch = window.fetch;
     window.fetch = function(url, opts) {{
@@ -77,8 +103,9 @@ _inject = f"""<script>
     }};
   }}
 
-  // 3) DOM 로드 후: 입력 필드 채우기 + 연동 배지 삽입
+  // 4) DOM 로드 후: 입력 채우기 + 관리앱 스캔 데이터로 KALPHA_STOCKS 덮어쓰기
   function _onReady() {{
+    // 입력 필드
     var eAk  = document.getElementById('appKey');
     var eSec = document.getElementById('secretKey');
     var eAcc = document.getElementById('acctNo');
@@ -88,6 +115,25 @@ _inject = f"""<script>
     if (eAcc && _acc) eAcc.value = _acc;
     if (eSrv && _srv) eSrv.value = _srv;
 
+    // 관리앱 스캔 결과로 KALPHA_STOCKS 업데이트
+    var sc = window.__ADMIN_SCAN__;
+    if (sc && typeof KALPHA_STOCKS !== 'undefined') {{
+      var _hasScan = (sc.swing && sc.swing.length > 0) ||
+                     (sc.surge && sc.surge.length > 0) ||
+                     (sc.tmr   && sc.tmr.length   > 0) ||
+                     (sc.small && sc.small.length  > 0);
+      if (_hasScan) {{
+        if (sc.swing && sc.swing.length > 0) KALPHA_STOCKS.swing = sc.swing;
+        if (sc.surge && sc.surge.length > 0) KALPHA_STOCKS.surge = sc.surge;
+        if (sc.tmr   && sc.tmr.length   > 0) KALPHA_STOCKS.tmr   = sc.tmr;
+        if (sc.small && sc.small.length > 0) KALPHA_STOCKS.small = sc.small;
+        if (sc.per   && sc.per.length   > 0) KALPHA_STOCKS.per   = sc.per;
+        if (typeof updateKTabCounts === 'function') updateKTabCounts();
+        if (typeof renderStockList  === 'function') renderStockList();
+      }}
+    }}
+
+    // 연동 배지 삽입
     var hdr = document.querySelector('.token-status');
     if (hdr && !document.getElementById('admin-link-badge')) {{
       var badge = document.createElement('span');
