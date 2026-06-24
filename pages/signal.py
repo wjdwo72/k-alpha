@@ -190,6 +190,9 @@ _inject = f"""<script>
 .panel-title {{ display:none!important; }}
 </style>"""
 
+if not _has_creds:
+    st.warning("⚠️ 관리자 앱에서 KIS API를 먼저 연결해 주세요. 연결 후 이 페이지를 새로고침하면 자동으로 연동됩니다.", icon="🔑")
+
 html = html.replace('</head>', _inject + '\n</head>')
 
 components.html(html, height=960, scrolling=True)
