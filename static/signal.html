@@ -332,6 +332,7 @@
   <div class="token-status">
     <div class="dot" id="tokenDot"></div>
     <span id="tokenLabel">미연결</span>
+    <span id="priceSrcBadge" style="display:none;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700"></span>
     <span class="refresh-indicator">새로고침: <span id="countdown">-</span>s</span>
   </div>
 </div>
@@ -1488,18 +1489,15 @@ async function fetchKISCandles(code) {
     log(`📈 ${code} ${candles.length}개 캔들 수신`, 'info');
     return candles;
   } catch {}
-  // 2차: Yahoo Finance (CORS 불필요, 실제 시세)
-  const yahoo = await _fetchYahooCandles(code);
-  if (yahoo && yahoo.length > 0) return yahoo;
-  // 3차: KIS API 직접 (일봉만 — CORS 프록시 경유)
+  // 2차: KIS API 직접 (일봉만 — corsproxy.io 경유)
   if (['D','W','M'].includes(currentPeriod)) {
     const direct = await _fetchKisCandles(code);
     if (direct && direct.length > 0) {
-      log(`📈 KIS 직접 연결 — ${code} ${direct.length}개 캔들`, 'buy');
+      log(`📈 KIS 직접 — ${code} ${direct.length}개 캔들`, 'buy');
       return direct;
     }
   }
-  log(`캔들 조회 실패 → 데모 표시`, 'warn');
+  log(`KIS 캔들 조회 실패 (프록시 미연결) → 데모 표시`, 'warn');
   return null;
 }
 
@@ -1631,6 +1629,7 @@ function startKISWebSocket(code) {
         body:   { input: { tr_id: 'H0STCNT0', tr_key: code } }
       }));
       _kisWsOk = true;
+      _setPriceSrc('KIS WebSocket');
       log(`📡 KIS WebSocket 연결 — ${code} 실시간 체결가`, 'buy');
     };
 
@@ -1673,22 +1672,36 @@ function _startRestPolling() {
   }, 3000);
 }
 
-// 실시간 현재가 조회
+// 실시간 현재가 조회 (KIS API만 사용 — Yahoo Finance 제거)
 async function fetchCurrentPrice(code) {
-  // 1차: 로컬 프록시 (연결 시)
+  // 1차: 로컬 프록시 (KIS_proxy.py 연결 시)
   try {
     const server = (document.getElementById('serverType') || {value:'real'}).value;
     const res = await fetch(`${PROXY}/price?code=${code}&_server=${server}`, { signal: AbortSignal.timeout(2000) });
     const data = await res.json();
-    if (data && !data.error) return data;
+    if (data && !data.error) { _setPriceSrc('KIS 프록시'); return data; }
   } catch {}
-  // 2차: KIS API 직접 (CORS 프록시 경유, 토큰 있을 때)
+  // 2차: KIS API 직접 — corsproxy.io 경유 (토큰 있을 때)
   if (window.__ADMIN_TOKEN__) {
     const p = await _fetchKisPriceDirect(code);
-    if (p) return p;
+    if (p) { _setPriceSrc('KIS REST'); return p; }
   }
-  // 3차: Yahoo Finance (CORS 불필요, 항상 시도)
-  return await _fetchYahooPriceDirect(code);
+  // KIS 연결 불가
+  _setPriceSrc(null);
+  return null;
+}
+
+// 가격 소스 배지 표시
+function _setPriceSrc(src) {
+  const el = document.getElementById('priceSrcBadge');
+  if (!el) return;
+  if (!src) { el.style.display = 'none'; return; }
+  el.style.display = 'inline';
+  el.textContent = src;
+  el.style.background = src.includes('WebSocket') || src.includes('WS')
+    ? 'rgba(16,185,129,0.2)' : 'rgba(59,130,246,0.2)';
+  el.style.color = src.includes('WebSocket') || src.includes('WS') ? '#10b981' : '#60a5fa';
+  el.style.border = `1px solid ${src.includes('WebSocket') || src.includes('WS') ? '#10b981' : '#3b82f6'}`;
 }
 
 // KIS API 직접 현재가 (CORS 프록시 경유 — 폴백용 유지)
