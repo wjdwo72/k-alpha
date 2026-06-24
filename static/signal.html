@@ -295,6 +295,7 @@
   .log-line.err { color: var(--danger); }
 
   /* 신호 모니터 */
+  .sm-rs { position:absolute;z-index:10; }
   .smf-tab { flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
     color:#475569;border-radius:4px;padding:3px 0;cursor:pointer;font-size:9px;font-weight:700;transition:all .15s }
   .smf-tab.active,.smf-tab:hover { background:rgba(96,165,250,0.15);border-color:rgba(96,165,250,0.4);color:#60a5fa }
@@ -1471,7 +1472,10 @@ async function fetchKISCandles(code) {
     log(`📈 ${code} ${candles.length}개 캔들 수신`, 'info');
     return candles;
   } catch {}
-  // 2차: KIS API 직접 (일봉만 — CORS 프록시 경유)
+  // 2차: Yahoo Finance (CORS 불필요, 실제 시세)
+  const yahoo = await _fetchYahooCandles(code);
+  if (yahoo && yahoo.length > 0) return yahoo;
+  // 3차: KIS API 직접 (일봉만 — CORS 프록시 경유)
   if (['D','W','M'].includes(currentPeriod)) {
     const direct = await _fetchKisCandles(code);
     if (direct && direct.length > 0) {
@@ -1483,13 +1487,17 @@ async function fetchKISCandles(code) {
   return null;
 }
 
-// ── CORS 프록시 via 퍼블릭 서비스 (app.html 동일 방식) ──
+// ── CORS 프록시 (헤더 포워딩 지원)
 const _SIG_CORS = [
   u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://thingproxy.freeboard.io/fetch/${u}`,
 ];
 async function _fetchWithCors(url, opts) {
+  // 직접 시도 (KIS API가 CORS 허용 시)
+  try {
+    const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(4000) });
+    if (r.ok) return r;
+  } catch {}
   for (const mk of _SIG_CORS) {
     try {
       const r = await fetch(mk(url), { ...opts, signal: AbortSignal.timeout(6000) });
@@ -1499,7 +1507,77 @@ async function _fetchWithCors(url, opts) {
   return null;
 }
 
-// KIS API 직접 현재가 조회 (CORS 프록시 경유)
+// ── Yahoo Finance 현재가 (CORS 없이 직접 접근 가능) ──
+const _YF_SUFFIXES = ['.KS', '.KQ'];  // KOSPI, KOSDAQ
+async function _fetchYahooPriceDirect(code) {
+  for (const sfx of _YF_SUFFIXES) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${sfx}?interval=1d&range=2d`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const res = d?.chart?.result?.[0];
+      if (!res) continue;
+      const meta = res.meta;
+      const price = meta.regularMarketPrice || meta.previousClose;
+      if (!price) continue;
+      const prev  = meta.chartPreviousClose || meta.previousClose || price;
+      const rate  = prev ? ((price - prev) / prev * 100) : 0;
+      return {
+        price: Math.round(price),
+        rate:  parseFloat(rate.toFixed(2)),
+        high:  Math.round(meta.regularMarketDayHigh || price),
+        low:   Math.round(meta.regularMarketDayLow  || price),
+      };
+    } catch {}
+  }
+  return null;
+}
+
+// ── Yahoo Finance 일봉 캔들 ──
+async function _fetchYahooCandles(code) {
+  for (const sfx of _YF_SUFFIXES) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${sfx}?interval=1d&range=6mo`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const res = d?.chart?.result?.[0];
+      if (!res) continue;
+      const ts = res.timestamps || [];
+      const q  = res.indicators?.quote?.[0] || {};
+      if (!ts.length) continue;
+      const candles = ts.map((t, i) => ({
+        time:   t,
+        open:   Math.round(q.open?.[i]  || 0),
+        high:   Math.round(q.high?.[i]  || 0),
+        low:    Math.round(q.low?.[i]   || 0),
+        close:  Math.round(q.close?.[i] || 0),
+        volume: Math.round(q.volume?.[i]|| 0),
+      })).filter(c => c.open && c.close);
+      if (candles.length > 0) {
+        log(`📈 Yahoo Finance — ${code}${sfx} ${candles.length}개 캔들`, 'buy');
+        return candles;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// 실시간 현재가 조회 (프록시 → Yahoo Finance 순서)
+async function fetchCurrentPrice(code) {
+  // 1차: 로컬 프록시
+  try {
+    const server = (document.getElementById('serverType') || {value:'real'}).value;
+    const res = await fetch(`${PROXY}/price?code=${code}&_server=${server}`, { signal: AbortSignal.timeout(2000) });
+    const data = await res.json();
+    if (data && !data.error) return data;
+  } catch {}
+  // 2차: Yahoo Finance (CORS 불필요)
+  return await _fetchYahooPriceDirect(code);
+}
+
+// KIS API 직접 현재가 (CORS 프록시 경유 — 폴백용 유지)
 async function _fetchKisPriceDirect(code) {
   const tok = window.__ADMIN_TOKEN__;
   const ak  = window.__ADMIN_AK__;
@@ -1512,42 +1590,19 @@ async function _fetchKisPriceDirect(code) {
   try {
     const r = await _fetchWithCors(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'authorization': `Bearer ${tok}`,
-        'appkey': ak, 'appsecret': sec,
-        'tr_id': trId, 'custtype': 'P',
-      }
+      headers: { 'Content-Type':'application/json', 'authorization':`Bearer ${tok}`,
+                 'appkey':ak, 'appsecret':sec, 'tr_id':trId, 'custtype':'P' }
     });
     if (!r) return null;
     const d = await r.json();
     const o = d?.output;
     if (!o?.stck_prpr) return null;
     const sign = o.prdy_vrss_sign || '3';
-    const isUp = ['1','2'].includes(sign);
     const isDown = ['4','5'].includes(sign);
     const changePctAbs = parseFloat(o.prdy_ctrt || 0);
-    return {
-      price: parseInt(o.stck_prpr),
-      rate:  isDown ? -changePctAbs : changePctAbs,
-      high:  parseInt(o.stck_hgpr || 0),
-      low:   parseInt(o.stck_lwpr || 0),
-    };
+    return { price: parseInt(o.stck_prpr), rate: isDown ? -changePctAbs : changePctAbs,
+             high: parseInt(o.stck_hgpr||0), low: parseInt(o.stck_lwpr||0) };
   } catch { return null; }
-}
-
-// 실시간 현재가 조회 (프록시 → KIS 직접 순서로 시도)
-async function fetchCurrentPrice(code) {
-  if (accessToken === 'DEMO') return null;
-  const server = document.getElementById('serverType').value;
-  // 1차: 로컬 프록시
-  try {
-    const res = await fetch(`${PROXY}/price?code=${code}&_server=${server}`, { signal: AbortSignal.timeout(2000) });
-    const data = await res.json();
-    if (data && !data.error) return data;
-  } catch {}
-  // 2차: KIS API 직접 (CORS 프록시 경유)
-  return await _fetchKisPriceDirect(code);
 }
 
 // ============================================================
@@ -2158,24 +2213,58 @@ function _renderSigMon() {
   }).join('');
 }
 
-// 드래그 이동
+// 드래그 이동 + 8방향 리사이즈
 function _initSigMonDrag() {
   const win = document.getElementById('sigMonWin');
   const hdr = document.getElementById('sigMonHdr');
   if (!win || !hdr) return;
-  let dx=0,dy=0,mx=0,my=0;
+
+  // 이동 드래그
+  let mx=0,my=0;
   hdr.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
     e.preventDefault();
     mx=e.clientX; my=e.clientY;
-    document.addEventListener('mousemove', _onDrag);
-    document.addEventListener('mouseup', () => document.removeEventListener('mousemove',_onDrag), {once:true});
+    function onMove(e) {
+      const dx=e.clientX-mx, dy=e.clientY-my; mx=e.clientX; my=e.clientY;
+      win.style.left  = Math.max(0, win.offsetLeft + dx) + 'px';
+      win.style.top   = Math.max(0, win.offsetTop  + dy) + 'px';
+      win.style.right = 'auto';
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), {once:true});
   });
-  function _onDrag(e) {
-    dx=mx-e.clientX; dy=my-e.clientY; mx=e.clientX; my=e.clientY;
-    win.style.top  = Math.max(0, win.offsetTop  - dy) + 'px';
-    win.style.left = Math.max(0, win.offsetLeft - dx) + 'px';
-    win.style.right = 'auto';
-  }
+
+  // 8방향 리사이즈
+  const MIN_W = 240, MIN_H = 180;
+  win.querySelectorAll('.sm-rs').forEach(handle => {
+    handle.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      const dir  = handle.dataset.dir;
+      const startX = e.clientX, startY = e.clientY;
+      const r    = win.getBoundingClientRect();
+      const origW = r.width, origH = r.height;
+      const origL = r.left,  origT = r.top;
+
+      function onMove(e) {
+        const dx = e.clientX - startX, dy = e.clientY - startY;
+        let newW = origW, newH = origH, newL = origL, newT = origT;
+        if (dir.includes('e')) newW = Math.max(MIN_W, origW + dx);
+        if (dir.includes('s')) newH = Math.max(MIN_H, origH + dy);
+        if (dir.includes('w')) { newW = Math.max(MIN_W, origW - dx); newL = origL + origW - newW; }
+        if (dir.includes('n')) { newH = Math.max(MIN_H, origH - dy); newT = origT + origH - newH; }
+        win.style.width  = newW + 'px';
+        win.style.height = newH + 'px';
+        win.style.left   = newL + 'px';
+        win.style.top    = newT + 'px';
+        win.style.right  = 'auto';
+        win.style.bottom = 'auto';
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), {once:true});
+    });
+  });
 }
 
 // ── PC 브라우저 알림 ──
@@ -2283,6 +2372,7 @@ function startRealtimePrice() {
         const d = await res.json();
         if (d && !d.error) p = d;
       } catch {}
+      if (!p) p = await _fetchYahooPriceDirect(currentStock.code);
       if (!p) p = await _fetchKisPriceDirect(currentStock.code);
       if (p && p.price) {
         updateHeaderPriceLive(p);
@@ -3018,7 +3108,16 @@ window._showAnalyzeBtn = function() {
 <!-- ══ 신호 모니터 플로팅 창 ══ -->
 <div id="sigMonWin" style="display:none;position:fixed;top:80px;right:20px;width:340px;min-width:240px;min-height:200px;
   background:#0d1117;border:1px solid rgba(99,179,237,0.3);border-radius:10px;
-  box-shadow:0 8px 32px rgba(0,0,0,0.7);z-index:8000;display:none;flex-direction:column;overflow:hidden;resize:both">
+  box-shadow:0 8px 32px rgba(0,0,0,0.7);z-index:8000;flex-direction:column;overflow:hidden">
+  <!-- 8방향 리사이즈 핸들 -->
+  <div class="sm-rs" data-dir="n"  style="top:-4px;left:12px;right:12px;height:8px;cursor:n-resize"></div>
+  <div class="sm-rs" data-dir="s"  style="bottom:-4px;left:12px;right:12px;height:8px;cursor:s-resize"></div>
+  <div class="sm-rs" data-dir="e"  style="right:-4px;top:12px;bottom:12px;width:8px;cursor:e-resize"></div>
+  <div class="sm-rs" data-dir="w"  style="left:-4px;top:12px;bottom:12px;width:8px;cursor:w-resize"></div>
+  <div class="sm-rs" data-dir="nw" style="top:-4px;left:-4px;width:16px;height:16px;cursor:nw-resize"></div>
+  <div class="sm-rs" data-dir="ne" style="top:-4px;right:-4px;width:16px;height:16px;cursor:ne-resize"></div>
+  <div class="sm-rs" data-dir="sw" style="bottom:-4px;left:-4px;width:16px;height:16px;cursor:sw-resize"></div>
+  <div class="sm-rs" data-dir="se" style="bottom:-4px;right:-4px;width:16px;height:16px;cursor:se-resize"></div>
   <!-- 드래그 핸들 헤더 -->
   <div id="sigMonHdr" style="display:flex;align-items:center;gap:8px;padding:8px 12px;
     background:#111827;border-bottom:1px solid rgba(255,255,255,0.06);cursor:move;user-select:none">
