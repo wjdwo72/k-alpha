@@ -6128,13 +6128,13 @@ function applyRealScanData() {
   DEMO.smallmid = sm;
   DEMO.per      = pr;
 
-  // 배지는 total_* 원본 수량 우선, 없으면 배열 길이
+  // 배지 = 실제 표시 종목 수량 (슬라이싱 후)
   var _rawCounts = {
-    swing:    scan.total_swing    != null ? scan.total_swing    : (scan.swing    || []).length,
-    surge:    scan.total_surge    != null ? scan.total_surge    : (scan.surge    || []).length,
-    tomorrow: scan.total_tomorrow != null ? scan.total_tomorrow : (scan.tomorrow || []).length,
-    smallmid: scan.total_smallmid != null ? scan.total_smallmid : (scan.smallmid || []).length,
-    per:      (scan.per || []).length
+    swing:    sw.length,
+    surge:    su.length,
+    tomorrow: tm.length,
+    smallmid: sm.length,
+    per:      pr.length
   };
   ['swing','surge','tomorrow','smallmid','per'].forEach(function(cat) {
     var el = document.querySelector('#tabs-kr [data-tab="' + cat + '"] .tab-badge');

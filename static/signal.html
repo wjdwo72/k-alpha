@@ -367,6 +367,9 @@
         <button class="btn btn-primary" style="flex:1;background:#1a5276;font-size:11px" onclick="openTgModal()">📡 텔레그램 설정</button>
         <button class="btn btn-primary" id="scanBtn" style="flex:1;background:#145a32;font-size:11px" onclick="toggleAutoScan()">⚡ 자동스캔 OFF</button>
       </div>
+      <div style="margin-top:4px">
+        <button class="btn btn-primary" id="notiBtn" style="width:100%;background:#4a235a;font-size:11px" onclick="togglePcNoti()">🔔 PC 알림 OFF</button>
+      </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;background:rgba(255,255,255,0.04);border-radius:6px">
         <span style="font-size:10px;color:#8899aa;white-space:nowrap">스캔주기</span>
         <input type="range" id="scanIntervalRange" min="1" max="600" step="1" value="300"
@@ -1965,16 +1968,62 @@ function updateStats() {
 // ============================================================
 // 알림
 // ============================================================
+// ── PC 브라우저 알림 ──
+let _pcNotiOn = localStorage.getItem('pcNotiOn') === '1';
+
+function _updateNotiBtn() {
+  const btn = document.getElementById('notiBtn');
+  if (!btn) return;
+  if (!('Notification' in window)) {
+    btn.textContent = '🔔 PC 알림 미지원';
+    btn.style.opacity = '0.4';
+    btn.disabled = true;
+    return;
+  }
+  if (_pcNotiOn && Notification.permission === 'granted') {
+    btn.textContent = '🔔 PC 알림 ON';
+    btn.style.background = '#1a6b2a';
+  } else {
+    btn.textContent = '🔔 PC 알림 OFF';
+    btn.style.background = '#4a235a';
+  }
+}
+
+async function togglePcNoti() {
+  if (!('Notification' in window)) return;
+  if (!_pcNotiOn || Notification.permission !== 'granted') {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { alert('브라우저에서 알림 권한을 허용해 주세요.'); return; }
+    _pcNotiOn = true;
+  } else {
+    _pcNotiOn = false;
+  }
+  localStorage.setItem('pcNotiOn', _pcNotiOn ? '1' : '0');
+  _updateNotiBtn();
+}
+
 function showAlert(pattern) {
   const box = document.getElementById('alertBox');
   const alert = document.createElement('div');
   alert.className = `alert ${pattern.type === 'buy' ? 'buy-alert' : pattern.type === 'sell' ? 'sell-alert' : ''}`;
+  const title = pattern.type === 'buy' ? '🟢 매수 신호' : pattern.type === 'sell' ? '🔴 매도 신호' : '🟡 관찰 신호';
   alert.innerHTML = `
-    <div class="alert-title">${pattern.type === 'buy' ? '🟢 매수 신호' : pattern.type === 'sell' ? '🔴 매도 신호' : '🟡 관찰 신호'} · ${currentStock?.code}</div>
+    <div class="alert-title">${title} · ${currentStock?.code}</div>
     <div class="alert-msg">${pattern.name}</div>
   `;
   box.appendChild(alert);
   setTimeout(() => alert.remove(), 5000);
+
+  // PC 브라우저 팝업 알림
+  if (_pcNotiOn && Notification.permission === 'granted') {
+    const n = new Notification(`${title} · ${currentStock?.name || currentStock?.code}`, {
+      body: `${pattern.name}\n신뢰도: ${pattern.confidence}%`,
+      icon: 'https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f4ca.png',
+      tag: currentStock?.code,
+      renotify: true,
+    });
+    setTimeout(() => n.close(), 8000);
+  }
 }
 
 // ============================================================
@@ -2103,6 +2152,7 @@ window.onload = async () => {
   updateKTabCounts();
   renderStockList();
   renderPatternDocs();
+  _updateNotiBtn();
   log('K-Alpha 패턴 시그널 시스템 시작', 'info');
   try { initChart(); } catch(e) { log('차트 초기화 오류: ' + e.message, 'err'); }
   // 스캔주기 슬라이더 초기화
