@@ -666,20 +666,36 @@ const NAME_MAP = {
 // 전종목 로드 (KRX 경유 프록시)
 // ============================================================
 // 네이버 자동완성 → 종목 검색 (코스피+코스닥 전종목)
+// ── 종목 검색: Yahoo Finance → Naver 순서로 시도 ──
 async function _searchNaver(q) {
-  const url = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&st=111&r=1&nr=20`;
-  // 직접 시도
+  // 1차: Yahoo Finance 검색 (CORS 허용, 한국 종목 지원)
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    const d = await r.json();
-    const arr = (d.items && d.items[0]) || [];
-    if (arr.length) return arr.map(i => ({ code: i[1], name: i[0] }));
+    const yurl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&region=KR&lang=ko-KR&quotesCount=20&newsCount=0&enableFuzzyQuery=false`;
+    const yr = await fetch(yurl, { signal: AbortSignal.timeout(5000) });
+    const yd = await yr.json();
+    const quotes = (yd.quotes || []).filter(q => q.symbol && (q.symbol.endsWith('.KS') || q.symbol.endsWith('.KQ')));
+    if (quotes.length) {
+      return quotes.map(q => ({
+        code: q.symbol.replace(/\.(KS|KQ)$/, ''),
+        name: q.longname || q.shortname || q.symbol
+      }));
+    }
   } catch {}
-  // CORS 프록시 경유
-  for (const mk of _SIG_CORS) {
+  // 2차: Naver Finance 자동완성 (CORS 프록시 경유)
+  const nurl = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&st=111&r=1&nr=20`;
+  const proxies = [
+    `https://corsproxy.io/?url=${encodeURIComponent(nurl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(nurl)}`,
+  ];
+  for (const pu of proxies) {
     try {
-      const r = await fetch(mk(url), { signal: AbortSignal.timeout(4000) });
-      const d = await r.json();
+      const r = await fetch(pu, { signal: AbortSignal.timeout(5000) });
+      const text = await r.text();
+      // allorigins wraps in {contents: "..."} 처리
+      let d;
+      try { d = JSON.parse(text); } catch {}
+      if (!d) continue;
+      if (d.contents) { try { d = JSON.parse(d.contents); } catch { continue; } }
       const arr = (d.items && d.items[0]) || [];
       if (arr.length) return arr.map(i => ({ code: i[1], name: i[0] }));
     } catch {}
@@ -1418,24 +1434,23 @@ async function selectStock(code, name) {
 async function loadChartData() {
   if (!currentStock) return;
   const { code } = currentStock;
-
-  if (accessToken !== 'DEMO') {
-    const p = await fetchCurrentPrice(code);
-    if (p) updateHeaderPriceLive(p);
-  }
-
-  let candles = null;
   const isMinute = !['D','W','M'].includes(currentPeriod);
 
-  if (accessToken !== 'DEMO') {
-    candles = await fetchKISCandles(code);
+  // 현재가: KIS 토큰 있으면 KIS 우선, 없으면 Yahoo Finance
+  const p = await fetchCurrentPrice(code);
+  if (p) updateHeaderPriceLive(p);
+
+  // 캔들: KIS 토큰 있으면 KIS 우선, 없으면 Yahoo Finance (분봉은 불가 → 데모)
+  let candles = null;
+  if (!isMinute) {
+    candles = await fetchKISCandles(code);  // 내부에서 Yahoo Finance 폴백 처리
   }
 
-  // KIS 실패 또는 DEMO 모드 → 데모 캔들 (분봉/일봉 구분)
+  // 분봉이거나 모두 실패 → 데모 캔들
   if (!candles || candles.length === 0) {
     candles = isMinute ? generateDemoMinuteCandles(code, parseInt(currentPeriod))
                        : generateDemoCandles(code);
-    if (accessToken !== 'DEMO') log('실제 데이터 없음 (장 마감?) → 데모 표시', 'warn');
+    if (!isMinute) log('실제 캔들 없음 → 데모 표시 (장 마감 또는 API 미연결)', 'warn');
   }
 
   // 모든 time 값을 Unix timestamp로 통일 (날짜 문자열 → 숫자)
@@ -1564,16 +1579,21 @@ async function _fetchYahooCandles(code) {
   return null;
 }
 
-// 실시간 현재가 조회 (프록시 → Yahoo Finance 순서)
+// 실시간 현재가 조회
 async function fetchCurrentPrice(code) {
-  // 1차: 로컬 프록시
+  // 1차: 로컬 프록시 (연결 시)
   try {
     const server = (document.getElementById('serverType') || {value:'real'}).value;
     const res = await fetch(`${PROXY}/price?code=${code}&_server=${server}`, { signal: AbortSignal.timeout(2000) });
     const data = await res.json();
     if (data && !data.error) return data;
   } catch {}
-  // 2차: Yahoo Finance (CORS 불필요)
+  // 2차: KIS API 직접 (CORS 프록시 경유, 토큰 있을 때)
+  if (window.__ADMIN_TOKEN__) {
+    const p = await _fetchKisPriceDirect(code);
+    if (p) return p;
+  }
+  // 3차: Yahoo Finance (CORS 불필요, 항상 시도)
   return await _fetchYahooPriceDirect(code);
 }
 
@@ -2359,21 +2379,12 @@ let _realtimePriceHistory = [];   // {time, value} 배열 (라인차트용)
 
 function startRealtimePrice() {
   stopRealtimePrice();
-  if (!currentStock || !accessToken || accessToken === 'DEMO') return;
+  if (!currentStock) return;
   _realtimePriceHistory = [];
   _realtimePriceTimer = setInterval(async () => {
-    if (!currentStock || !accessToken || accessToken === 'DEMO') return;
+    if (!currentStock) return;
     try {
-      // 로컬 프록시 → KIS 직접 순서
-      let p = null;
-      try {
-        const server = (document.getElementById('serverType') || {value:'real'}).value;
-        const res = await fetch(`${PROXY}/price?code=${currentStock.code}&_server=${server}`, { signal: AbortSignal.timeout(1500) });
-        const d = await res.json();
-        if (d && !d.error) p = d;
-      } catch {}
-      if (!p) p = await _fetchYahooPriceDirect(currentStock.code);
-      if (!p) p = await _fetchKisPriceDirect(currentStock.code);
+      const p = await fetchCurrentPrice(currentStock.code);
       if (p && p.price) {
         updateHeaderPriceLive(p);
         // 실시간 라인 차트에 현재가 추가
