@@ -1446,10 +1446,11 @@ async function loadChartData() {
     candles = await fetchKISCandles(code);  // 내부에서 Yahoo Finance 폴백 처리
   }
 
-  // 분봉이거나 모두 실패 → 데모 캔들
+  // 분봉이거나 모두 실패 → 데모 캔들 (실제 현재가 기준으로 생성)
   if (!candles || candles.length === 0) {
-    candles = isMinute ? generateDemoMinuteCandles(code, parseInt(currentPeriod))
-                       : generateDemoCandles(code);
+    const realPrice = p ? p.price : null;
+    candles = isMinute ? generateDemoMinuteCandles(code, parseInt(currentPeriod), realPrice)
+                       : generateDemoCandles(code, realPrice);
     if (!isMinute) log('실제 캔들 없음 → 데모 표시 (장 마감 또는 API 미연결)', 'warn');
   }
 
@@ -1559,7 +1560,7 @@ async function _fetchYahooCandles(code) {
       const d = await r.json();
       const res = d?.chart?.result?.[0];
       if (!res) continue;
-      const ts = res.timestamps || [];
+      const ts = res.timestamp || res.timestamps || [];
       const q  = res.indicators?.quote?.[0] || {};
       if (!ts.length) continue;
       const candles = ts.map((t, i) => ({
@@ -1628,13 +1629,15 @@ async function _fetchKisPriceDirect(code) {
 // ============================================================
 // 데모 캔들 생성 (패턴 시뮬레이션 포함)
 // ============================================================
-function generateDemoCandles(code) {
+function generateDemoCandles(code, basePrice) {
   const seed = code.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   let rng = seed;
   const rand = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0xffffffff; };
 
   const candles = [];
-  let price = 30000 + rand() * 70000;
+  // 실제 현재가를 기준으로 6개월 전 시작가 역산 (±20% 범위)
+  const endPrice = basePrice && basePrice > 0 ? basePrice : (30000 + rand() * 70000);
+  let price = endPrice * (0.85 + rand() * 0.3);
   const baseDate = new Date('2025-01-02');
 
   // 다양한 패턴 시뮬레이션
@@ -1709,7 +1712,7 @@ function generateDemoCandles(code) {
 }
 
 // 분봉 데모 캔들 생성 (오늘 09:00~15:30 KST를 UTC처럼 취급)
-function generateDemoMinuteCandles(code, intervalMin) {
+function generateDemoMinuteCandles(code, intervalMin, basePrice) {
   const seed = code.split('').reduce((a, c) => a + c.charCodeAt(0), 0) + intervalMin;
   let rng = seed;
   const rand = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0xffffffff; };
@@ -1720,7 +1723,9 @@ function generateDemoMinuteCandles(code, intervalMin) {
   const marketEndMin = 390; // 09:00 ~ 15:30 = 390분
   const totalMinutes = Math.floor(marketEndMin / intervalMin) * intervalMin;
 
-  let price = 30000 + rand() * 70000;
+  // 실제 현재가 기준으로 장 시작가 역산
+  const endPrice = basePrice && basePrice > 0 ? basePrice : (30000 + rand() * 70000);
+  let price = endPrice * (0.97 + rand() * 0.06);
   const candles = [];
 
   for (let m = 0; m < totalMinutes; m += intervalMin) {
