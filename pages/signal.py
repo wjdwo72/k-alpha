@@ -34,7 +34,7 @@ except FileNotFoundError:
     st.error("signal.html 파일을 찾을 수 없습니다.")
     st.stop()
 
-# server_store에서 KIS 크리덴셜 + 스캔 결과 읽기 (관리앱과 공유)
+# server_store에서 KIS 크리덴셜 + 텔레그램 + 스캔 결과 읽기 (관리앱과 공유)
 _ss = get_server_store()
 _ak  = _ss.get('kis_ak',  '') or st.session_state.get('kis_ak',  '') or ''
 _sec = _ss.get('kis_sec', '') or st.session_state.get('kis_sec', '') or ''
@@ -43,6 +43,18 @@ _tok = _ss.get('kis_token','') or st.session_state.get('kis_token','') or ''
 _bu  = _ss.get('kis_base_url','') or st.session_state.get('kis_base_url','') or ''
 _server_val = 'mock' if 'vts' in _bu else 'real'
 _has_creds  = bool(_ak and _sec and _acc)
+
+# 텔레그램 설정 (관리앱 → signal 페이지 연동)
+_tg_token = _ss.get('tg_token','') or st.session_state.get('tg_token','') or ''
+_tg_chat  = _ss.get('tg_chat', '') or st.session_state.get('tg_chat', '') or ''
+_tg_chat2 = st.session_state.get('tg_group_chat','') or ''
+# signal.html TG_CFG 포맷: {token, channels:[{id, label, enabled}]}
+_tg_channels = []
+if _tg_chat:
+    _tg_channels.append({'id': _tg_chat,  'label': '관리앱 개인방', 'enabled': True})
+if _tg_chat2 and _tg_chat2 != _tg_chat:
+    _tg_channels.append({'id': _tg_chat2, 'label': '관리앱 그룹방', 'enabled': True})
+_tg_cfg = {'token': _tg_token, 'channels': _tg_channels}
 
 # 관리앱 스캔 결과 → signal.html KALPHA_STOCKS 포맷으로 변환
 def _to_stock_list(items):
@@ -84,6 +96,18 @@ _inject = f"""<script>
 
   // 2) 관리앱 스캔 결과 전역 보관
   window.__ADMIN_SCAN__ = {json.dumps(_admin_scan)};
+
+  // 3-a) 텔레그램 설정 주입 (관리앱 설정 → signal.html TG_CFG)
+  (function() {{
+    var _tgCfg = {json.dumps(_tg_cfg)};
+    if (_tgCfg.token) {{
+      // localStorage 선점 (TG_CFG 변수 초기화 전에 세팅)
+      try {{
+        localStorage.setItem('tgCfg', JSON.stringify(_tgCfg));
+        localStorage.setItem('TG_CFG', JSON.stringify(_tgCfg));
+      }} catch(e) {{}}
+    }}
+  }})();
 
   // 3) fetch 가로채기: 프록시 /token 요청에 크리덴셜 자동 주입
   if (_has) {{
