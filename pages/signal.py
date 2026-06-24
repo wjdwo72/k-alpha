@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import os, json, sys
+import os, json, sys, base64
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from store import get_server_store
@@ -45,9 +45,26 @@ _server_val = 'mock' if 'vts' in _bu else 'real'
 _has_creds  = bool(_ak and _sec and _acc)
 
 # 텔레그램 설정 (관리앱 → signal 페이지 연동)
-_tg_token = _ss.get('tg_token','') or st.session_state.get('tg_token','') or ''
-_tg_chat  = _ss.get('tg_chat', '') or st.session_state.get('tg_chat', '') or ''
-_tg_chat2 = st.session_state.get('tg_group_chat','') or ''
+# app.py는 server_store['tg']에 base64({t:token,c:chat}) 형태로 저장함
+def _decode_tg(enc):
+    try:
+        if enc:
+            d = json.loads(base64.b64decode(enc).decode())
+            return d.get('t',''), d.get('c','')
+    except: pass
+    return '', ''
+
+_tg_enc   = _ss.get('tg','') or ''
+_tg_token, _tg_chat = _decode_tg(_tg_enc)
+if not _tg_token:  # server_store에 없으면 session_state 폴백
+    _tg_token = st.session_state.get('tg_token','') or ''
+    _tg_chat  = st.session_state.get('tg_chat', '') or ''
+
+# 그룹방
+_tg_grp_enc = _ss.get('tg_grp','') or ''
+_, _tg_chat2 = _decode_tg(_tg_grp_enc)
+if not _tg_chat2:
+    _tg_chat2 = st.session_state.get('tg_group_chat','') or ''
 # signal.html TG_CFG 포맷: {token, channels:[{id, label, enabled}]}
 _tg_channels = []
 if _tg_chat:
