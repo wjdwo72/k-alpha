@@ -294,6 +294,15 @@
   .log-line.warn { color: var(--warn); }
   .log-line.err { color: var(--danger); }
 
+  /* 신호 모니터 */
+  .smf-tab { flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+    color:#475569;border-radius:4px;padding:3px 0;cursor:pointer;font-size:9px;font-weight:700;transition:all .15s }
+  .smf-tab.active,.smf-tab:hover { background:rgba(96,165,250,0.15);border-color:rgba(96,165,250,0.4);color:#60a5fa }
+  .sm-sig-card { border-radius:6px;padding:7px 9px;border-left:3px solid transparent;background:#111827;cursor:pointer;transition:background .15s }
+  .sm-sig-card:hover { background:#1e293b }
+  .sm-sig-card.buy  { border-left-color:#10b981 }
+  .sm-sig-card.sell { border-left-color:#ef4444 }
+  .sm-sig-card.watch{ border-left-color:#f59e0b }
   /* 알림 */
   .alert-box { position: fixed; top: 60px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 1000; pointer-events: none; }
   .alert { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; min-width: 220px; pointer-events: all; animation: slideIn .3s ease; }
@@ -367,8 +376,9 @@
         <button class="btn btn-primary" style="flex:1;background:#1a5276;font-size:11px" onclick="openTgModal()">📡 텔레그램 설정</button>
         <button class="btn btn-primary" id="scanBtn" style="flex:1;background:#145a32;font-size:11px" onclick="toggleAutoScan()">⚡ 자동스캔 OFF</button>
       </div>
-      <div style="margin-top:4px">
-        <button class="btn btn-primary" id="notiBtn" style="width:100%;background:#4a235a;font-size:11px" onclick="togglePcNoti()">🔔 PC 알림 OFF</button>
+      <div style="display:flex;gap:4px;margin-top:4px">
+        <button class="btn btn-primary" id="notiBtn" style="flex:1;background:#4a235a;font-size:11px" onclick="togglePcNoti()">🔔 PC 알림 OFF</button>
+        <button class="btn btn-primary" id="sigMonBtn" style="flex:1;background:#1a3a5c;font-size:11px" onclick="toggleSigMon()">📺 신호모니터 OFF</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;background:rgba(255,255,255,0.04);border-radius:6px">
         <span style="font-size:10px;color:#8899aa;white-space:nowrap">스캔주기</span>
@@ -1451,18 +1461,26 @@ async function loadChartData() {
 async function fetchKISCandles(code) {
   const server = (document.getElementById('serverType') || {value:'real'}).value;
   const url = `${PROXY}/candles?code=${code}&period=${currentPeriod}&_server=${server}&_t=${Date.now()}`;
+  // 1차: 로컬 프록시
   try {
-    const res  = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    const res  = await fetch(url, { signal: AbortSignal.timeout(5000) });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     const candles = (data.candles || []).filter(c => c.open && c.close);
-    if (candles.length === 0) throw new Error('데이터 없음 (장 마감 또는 해당 기간 없음)');
+    if (candles.length === 0) throw new Error('데이터 없음');
     log(`📈 ${code} ${candles.length}개 캔들 수신`, 'info');
     return candles;
-  } catch(e) {
-    log(`캔들 조회 실패: ${e.message} → 데모 모드`, 'warn');
-    return null;   // null = 데모 폴백 신호
+  } catch {}
+  // 2차: KIS API 직접 (일봉만 — CORS 프록시 경유)
+  if (['D','W','M'].includes(currentPeriod)) {
+    const direct = await _fetchKisCandles(code);
+    if (direct && direct.length > 0) {
+      log(`📈 KIS 직접 연결 — ${code} ${direct.length}개 캔들`, 'buy');
+      return direct;
+    }
   }
+  log(`캔들 조회 실패 → 데모 표시`, 'warn');
+  return null;
 }
 
 // ── CORS 프록시 via 퍼블릭 서비스 (app.html 동일 방식) ──
@@ -1976,13 +1994,23 @@ function updateStockSignal(code, detected) {
     stock.signal = 'none';
     stock.signalStrength = 0;
   }
-  // 신호 변경 시 텔레그램 자동전송
+  // 신호 변경 시 모니터 + 텔레그램 자동전송
   if (stock.signal !== 'none' && stock.signal !== prevSignal) {
     const emoji = stock.signal === 'buy' ? '🔴 매수신호' : stock.signal === 'sell' ? '🔵 매도신호' : '🟡 관망';
     const strengthBar = '█'.repeat(stock.signalStrength) + '░'.repeat(5 - stock.signalStrength);
     const pats = detected.filter(p => p.type === stock.signal);
     const patNames = pats.map(p => p.name).join(', ');
-    const msg = `${emoji}\n종목: ${stock.name} (${code})\n강도: [${strengthBar}] ${stock.signalStrength}/5\n패턴: ${patNames || '-'}\n시간: ${new Date().toLocaleTimeString('ko-KR')}`;
+    const timeStr = new Date().toLocaleTimeString('ko-KR');
+    // 신호 모니터에 추가
+    const curPrice = document.getElementById('currentPrice');
+    pushSigMonItem({
+      sig: stock.signal, str: stock.signalStrength,
+      code, name: stock.name || code,
+      pattern: patNames || '-',
+      price: curPrice ? curPrice.textContent.replace(/[^0-9]/g,'') : '',
+      time: timeStr,
+    });
+    const msg = `${emoji}\n종목: ${stock.name} (${code})\n강도: [${strengthBar}] ${stock.signalStrength}/5\n패턴: ${patNames || '-'}\n시간: ${timeStr}`;
     const tgCfg = JSON.parse(localStorage.getItem('TG_CFG') || '{}');
     (tgCfg.channels || []).forEach(ch => {
       if (ch.id) sendTelegram(ch.id, msg).catch(() => {});
@@ -2041,6 +2069,115 @@ function updateStats() {
 // ============================================================
 // 알림
 // ============================================================
+// ══════════════════════════════════════════
+// 신호 모니터
+// ══════════════════════════════════════════
+const SIG_MON_MAX = 10;
+let _sigMonOn     = localStorage.getItem('sigMonOn') === '1';
+let _sigMonFilter = 'all';
+let _sigMonItems  = JSON.parse(localStorage.getItem('sigMonItems') || '[]');
+
+function _initSigMon() {
+  const win = document.getElementById('sigMonWin');
+  const btn = document.getElementById('sigMonBtn');
+  if (!win || !btn) return;
+  if (_sigMonOn) {
+    win.style.display = 'flex';
+    btn.textContent = '📺 신호모니터 ON';
+    btn.style.background = '#1a4a6b';
+  }
+  _renderSigMon();
+  _initSigMonDrag();
+}
+
+function toggleSigMon() {
+  _sigMonOn = !_sigMonOn;
+  localStorage.setItem('sigMonOn', _sigMonOn ? '1' : '0');
+  const win = document.getElementById('sigMonWin');
+  const btn = document.getElementById('sigMonBtn');
+  win.style.display = _sigMonOn ? 'flex' : 'none';
+  btn.textContent  = _sigMonOn ? '📺 신호모니터 ON'  : '📺 신호모니터 OFF';
+  btn.style.background = _sigMonOn ? '#1a4a6b' : '#1a3a5c';
+  if (_sigMonOn) _renderSigMon();
+}
+
+function setSigMonFilter(f, el) {
+  _sigMonFilter = f;
+  document.querySelectorAll('.smf-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  _renderSigMon();
+}
+
+function clearSigMon() {
+  _sigMonItems = [];
+  localStorage.setItem('sigMonItems', '[]');
+  _renderSigMon();
+}
+
+function pushSigMonItem(item) {
+  // FIFO: 10개 초과 시 가장 오래된 것 제거
+  _sigMonItems.unshift(item);
+  if (_sigMonItems.length > SIG_MON_MAX) _sigMonItems = _sigMonItems.slice(0, SIG_MON_MAX);
+  localStorage.setItem('sigMonItems', JSON.stringify(_sigMonItems));
+  _renderSigMon();
+}
+
+function _renderSigMon() {
+  const list = document.getElementById('sigMonList');
+  const cnt  = document.getElementById('sigMonCount');
+  if (!list) return;
+  const filtered = _sigMonFilter === 'all'
+    ? _sigMonItems
+    : _sigMonItems.filter(i => i.sig === _sigMonFilter);
+  if (cnt) cnt.textContent = _sigMonItems.length;
+  if (!filtered.length) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:#334155;font-size:11px">신호 없음</div>';
+    return;
+  }
+  list.innerHTML = filtered.map((item, idx) => {
+    const cls   = item.sig === 'buy' ? 'buy' : item.sig === 'sell' ? 'sell' : 'watch';
+    const lbl   = item.sig === 'buy' ? '▲ 매수' : item.sig === 'sell' ? '▼ 매도' : '● 관심';
+    const col   = item.sig === 'buy' ? '#10b981' : item.sig === 'sell' ? '#ef4444' : '#f59e0b';
+    const bars  = Array.from({length:5}, (_,i) =>
+      `<span style="display:inline-block;width:3px;height:${5+i*3}px;border-radius:1px;background:${i<(item.str||0)?col:'rgba(255,255,255,0.1)'}"></span>`
+    ).join('');
+    return `<div class="sm-sig-card ${cls}" onclick="selectStock('${item.code}','${item.name.replace(/'/g,"\\'")}')">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+        <span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:${col}22;color:${col}">${lbl}</span>
+        <span style="font-size:11px;font-weight:700;color:#e2e8f0">${item.name}</span>
+        <span style="font-size:9px;color:#475569">${item.code}</span>
+        <div style="flex:1"></div>
+        <span style="display:inline-flex;gap:2px;align-items:flex-end">${bars}</span>
+      </div>
+      <div style="font-size:10px;color:#64748b">${item.pattern || ''}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:9px;color:#334155">
+        <span>${item.price ? parseInt(item.price).toLocaleString()+'원' : ''}</span>
+        <span>${item.time || ''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 드래그 이동
+function _initSigMonDrag() {
+  const win = document.getElementById('sigMonWin');
+  const hdr = document.getElementById('sigMonHdr');
+  if (!win || !hdr) return;
+  let dx=0,dy=0,mx=0,my=0;
+  hdr.addEventListener('mousedown', e => {
+    e.preventDefault();
+    mx=e.clientX; my=e.clientY;
+    document.addEventListener('mousemove', _onDrag);
+    document.addEventListener('mouseup', () => document.removeEventListener('mousemove',_onDrag), {once:true});
+  });
+  function _onDrag(e) {
+    dx=mx-e.clientX; dy=my-e.clientY; mx=e.clientX; my=e.clientY;
+    win.style.top  = Math.max(0, win.offsetTop  - dy) + 'px';
+    win.style.left = Math.max(0, win.offsetLeft - dx) + 'px';
+    win.style.right = 'auto';
+  }
+}
+
 // ── PC 브라우저 알림 ──
 let _pcNotiOn = localStorage.getItem('pcNotiOn') === '1';
 
@@ -2230,6 +2367,7 @@ window.onload = async () => {
   renderStockList();
   renderPatternDocs();
   _updateNotiBtn();
+  _initSigMon();
   log('K-Alpha 패턴 시그널 시스템 시작', 'info');
   try { initChart(); } catch(e) { log('차트 초기화 오류: ' + e.message, 'err'); }
   // 스캔주기 슬라이더 초기화
@@ -2876,6 +3014,32 @@ window._showAnalyzeBtn = function() {
   document.getElementById('analyzeBtn').style.display = currentStock ? '' : 'none';
 };
 </script>
+
+<!-- ══ 신호 모니터 플로팅 창 ══ -->
+<div id="sigMonWin" style="display:none;position:fixed;top:80px;right:20px;width:340px;min-width:240px;min-height:200px;
+  background:#0d1117;border:1px solid rgba(99,179,237,0.3);border-radius:10px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.7);z-index:8000;display:none;flex-direction:column;overflow:hidden;resize:both">
+  <!-- 드래그 핸들 헤더 -->
+  <div id="sigMonHdr" style="display:flex;align-items:center;gap:8px;padding:8px 12px;
+    background:#111827;border-bottom:1px solid rgba(255,255,255,0.06);cursor:move;user-select:none">
+    <span style="font-size:12px;font-weight:700;color:#60a5fa">📺 신호 모니터</span>
+    <span id="sigMonCount" style="font-size:9px;background:rgba(96,165,250,0.2);color:#60a5fa;padding:1px 6px;border-radius:3px">0</span>
+    <div style="flex:1"></div>
+    <button onclick="clearSigMon()" style="background:none;border:1px solid rgba(255,255,255,0.1);color:#64748b;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:9px">초기화</button>
+    <button onclick="toggleSigMon()" style="background:none;border:none;color:#64748b;font-size:14px;cursor:pointer;padding:0 2px">✕</button>
+  </div>
+  <!-- 필터 -->
+  <div style="display:flex;gap:3px;padding:6px 10px 3px;background:#0f172a">
+    <button class="smf-tab active" data-f="all"   onclick="setSigMonFilter('all',this)"  >전체</button>
+    <button class="smf-tab"        data-f="buy"   onclick="setSigMonFilter('buy',this)"  >매수</button>
+    <button class="smf-tab"        data-f="sell"  onclick="setSigMonFilter('sell',this)" >매도</button>
+    <button class="smf-tab"        data-f="watch" onclick="setSigMonFilter('watch',this)">관심</button>
+  </div>
+  <!-- 신호 목록 -->
+  <div id="sigMonList" style="overflow-y:auto;flex:1;padding:6px 8px;display:flex;flex-direction:column;gap:4px;max-height:500px">
+    <div style="text-align:center;padding:20px;color:#334155;font-size:11px">자동스캔 ON 후 패턴 감지 시 표시</div>
+  </div>
+</div>
 
 <!-- 텔레그램 설정 모달 -->
 <div class="modal-overlay" id="tgModal" onclick="if(event.target===this)closeTgModal()">
