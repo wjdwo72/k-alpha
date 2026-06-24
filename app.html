@@ -739,6 +739,20 @@
   .oht-modify { background:rgba(130,100,255,0.15); color:#a78bfa; }
   .oht-pnl-pos { color:var(--accent3); }   /* 수익=빨간 */
   .oht-pnl-neg { color:#4fa3e0; }          /* 손실=파란 */
+  /* ── 신호 모니터 ── */
+  .sm-tab { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#64748b;border-radius:5px;padding:4px 0;cursor:pointer;font-size:10px;font-weight:700;transition:all .15s }
+  .sm-tab.active,.sm-tab:hover { background:rgba(251,191,36,0.15);border-color:rgba(251,191,36,0.4);color:#fbbf24 }
+  .sm-card { background:#111827;border-radius:8px;padding:10px 12px;border-left:3px solid transparent;transition:background .15s }
+  .sm-card:hover { background:#1e293b }
+  .sm-card.buy  { border-left-color:#10b981 }
+  .sm-card.sell { border-left-color:#ef4444 }
+  .sm-card.watch{ border-left-color:#f59e0b }
+  .sm-badge { font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.5px }
+  .sm-badge.buy  { background:rgba(16,185,129,0.2);color:#10b981 }
+  .sm-badge.sell { background:rgba(239,68,68,0.2);color:#ef4444 }
+  .sm-badge.watch{ background:rgba(245,158,11,0.2);color:#f59e0b }
+  .sm-bars { display:inline-flex;gap:2px;vertical-align:middle }
+  .sm-bar { width:4px;border-radius:1px }
   /* ── 자동매매 글로벌 토글 버튼 (탑바) ── */
   #global-at-topbar {
     padding: 4px 12px; font-family:'Share Tech Mono',monospace; font-size:10px;
@@ -1531,7 +1545,36 @@
     <button class="refresh-btn" id="topbar-refresh-btn" onclick="fullRefresh()" title="전체 새로고침">
       <span class="spin">↻</span> 새로고침
     </button>
+    <button id="sig-monitor-btn" onclick="toggleSigMonitor()" title="신호 모니터"
+      style="padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid rgba(251,191,36,0.4);background:rgba(251,191,36,0.08);color:#fbbf24;letter-spacing:0.3px">
+      📡 신호 모니터
+    </button>
     <span id="clock">--:--:--</span>
+  </div>
+</div>
+
+<!-- ══ 신호 모니터 플로팅 패널 ══ -->
+<div id="sig-monitor" style="display:none;position:fixed;top:60px;right:16px;width:420px;max-height:80vh;
+  background:#0d1117;border:1px solid rgba(251,191,36,0.3);border-radius:10px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);z-index:9000;display:none;flex-direction:column;overflow:hidden">
+  <!-- 헤더 -->
+  <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);background:#111827">
+    <span style="font-size:13px;font-weight:700;color:#fbbf24">📡 신호 모니터</span>
+    <span id="sig-mon-time" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#64748b;margin-left:4px"></span>
+    <div style="flex:1"></div>
+    <button onclick="refreshSigMonitor()" style="background:none;border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px">↻ 새로고침</button>
+    <button onclick="toggleSigMonitor()" style="background:none;border:none;color:#64748b;font-size:16px;cursor:pointer;padding:0 4px">✕</button>
+  </div>
+  <!-- 필터 탭 -->
+  <div style="display:flex;gap:4px;padding:8px 12px 4px;border-bottom:1px solid rgba(255,255,255,0.05)">
+    <button class="sm-tab active" data-filter="all"   onclick="setSigFilter('all',this)"   style="flex:1">전체</button>
+    <button class="sm-tab"        data-filter="buy"   onclick="setSigFilter('buy',this)"   style="flex:1">매수만</button>
+    <button class="sm-tab"        data-filter="sell"  onclick="setSigFilter('sell',this)"  style="flex:1">매도만</button>
+    <button class="sm-tab"        data-filter="watch" onclick="setSigFilter('watch',this)" style="flex:1">관심만</button>
+  </div>
+  <!-- 카드 목록 -->
+  <div id="sig-mon-list" style="overflow-y:auto;flex:1;padding:8px 10px;display:flex;flex-direction:column;gap:6px;max-height:calc(80vh - 110px)">
+    <div style="text-align:center;padding:30px;color:#475569;font-size:12px">스캔 대기 중...</div>
   </div>
 </div>
 
@@ -6272,6 +6315,148 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 300);
   _bindSignalBtn();
 });
+
+// ══════════════════════════════════════════
+// 신호 모니터
+// ══════════════════════════════════════════
+var _sigMonOpen = false;
+var _sigFilter  = 'all';
+var _sigMonTimer = null;
+
+function toggleSigMonitor() {
+  var el = document.getElementById('sig-monitor');
+  _sigMonOpen = !_sigMonOpen;
+  el.style.display = _sigMonOpen ? 'flex' : 'none';
+  var btn = document.getElementById('sig-monitor-btn');
+  if (btn) {
+    btn.style.background  = _sigMonOpen ? 'rgba(251,191,36,0.2)'  : 'rgba(251,191,36,0.08)';
+    btn.style.borderColor = _sigMonOpen ? 'rgba(251,191,36,0.7)'  : 'rgba(251,191,36,0.4)';
+  }
+  if (_sigMonOpen) { refreshSigMonitor(); _sigMonTimer = setInterval(refreshSigMonitor, 30000); }
+  else { clearInterval(_sigMonTimer); }
+}
+
+function setSigFilter(f, el) {
+  _sigFilter = f;
+  document.querySelectorAll('.sm-tab').forEach(function(t){ t.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  renderSigMonitor();
+}
+
+function refreshSigMonitor() {
+  var ts = document.getElementById('sig-mon-time');
+  if (ts) ts.textContent = new Date().toLocaleTimeString('ko-KR');
+  renderSigMonitor();
+}
+
+function _smBars(n, color) {
+  var html = '';
+  for (var i = 0; i < 5; i++) {
+    var h = 6 + i * 3;
+    html += '<div class="sm-bar" style="height:' + h + 'px;background:' + (i < n ? color : 'rgba(255,255,255,0.1)') + '"></div>';
+  }
+  return '<span class="sm-bars">' + html + '</span>';
+}
+
+function renderSigMonitor() {
+  var list = document.getElementById('sig-mon-list');
+  if (!list) return;
+
+  // 스캔 결과에서 종목 수집
+  var sr = window.__SCAN_RESULT__ || {};
+  var lp = window.__KIS_PRICES__ || {};
+  var cards = [];
+
+  var catMap = [
+    { key:'swing',    sig:'buy',   label:'실시간스윙', str:4, color:'#10b981' },
+    { key:'surge',    sig:'buy',   label:'급등전야',   str:5, color:'#10b981' },
+    { key:'tomorrow', sig:'watch', label:'내일관심',   str:2, color:'#f59e0b' },
+    { key:'smallmid', sig:'buy',   label:'중소형주',   str:3, color:'#10b981' },
+    { key:'per',      sig:'watch', label:'PER저평가',  str:2, color:'#f59e0b' },
+  ];
+
+  // DEMO 배열 가격 맵 (applyInjectedPrices/refreshOnePrice로 이미 업데이트됨)
+  var demoMap = {};
+  ['swing','surge','tomorrow','smallmid','per'].forEach(function(k) {
+    (DEMO[k]||[]).forEach(function(s){ if(s&&s.code) demoMap[s.code]=s; });
+  });
+
+  var seen = {};
+  catMap.forEach(function(cat) {
+    var items = sr[cat.key] || [];
+    items.forEach(function(s) {
+      if (!s || !s.code || seen[s.code]) return;
+      seen[s.code] = true;
+      var ds    = demoMap[s.code] || s;
+      var price = (lp[s.code] && lp[s.code].price) ? parseInt(lp[s.code].price)
+                : (ds.price ? parseInt(ds.price) : (parseInt(s.price)||0));
+      var chg   = (lp[s.code] && lp[s.code].changePct != null) ? lp[s.code].changePct
+                : parseFloat(ds.change || s.change || 0);
+      var isUp  = chg >= 0;
+      // 매입/손절/목표 기본 계산
+      var entry  = price > 0 ? Math.round(price * 1.001) : 0;
+      var stop   = price > 0 ? Math.round(price * 0.92)  : 0;
+      var target = price > 0 ? Math.round(price * 1.08)  : 0;
+      cards.push({
+        code: s.code, name: s.name || s.code,
+        sig: cat.sig, label: cat.label, str: cat.str, color: cat.color,
+        price: price, chg: chg, isUp: isUp,
+        entry: entry, stop: stop, target: target,
+        mkt: s.mkt || (s.code[0]==='0'?'KOSPI':'KOSDAQ'),
+        ts: sr.ts || '',
+      });
+    });
+  });
+
+  if (!cards.length) {
+    list.innerHTML = '<div style="text-align:center;padding:30px;color:#475569;font-size:12px">스캔 결과가 없습니다<br><span style="font-size:10px">관리앱에서 KIS 연결 후 스캔 실행</span></div>';
+    return;
+  }
+
+  // 필터 적용
+  var filtered = cards.filter(function(c) {
+    if (_sigFilter === 'all')   return true;
+    if (_sigFilter === 'buy')   return c.sig === 'buy';
+    if (_sigFilter === 'sell')  return c.sig === 'sell';
+    if (_sigFilter === 'watch') return c.sig === 'watch';
+    return true;
+  });
+
+  if (!filtered.length) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:12px">해당 신호 없음</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(function(c) {
+    var badgeCls  = c.sig === 'buy' ? 'buy' : c.sig === 'sell' ? 'sell' : 'watch';
+    var sigLabel  = c.sig === 'buy' ? '▲ 매수' : c.sig === 'sell' ? '▼ 매도' : '● 관심';
+    var chgStr    = (c.isUp ? '+' : '') + (c.chg || 0).toFixed(2) + '%';
+    var chgColor  = c.isUp ? '#10b981' : '#ef4444';
+    var priceStr  = c.price > 0 ? c.price.toLocaleString() + '원' : '-';
+    return '<div class="sm-card ' + badgeCls + '">' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+        '<span class="sm-badge ' + badgeCls + '">' + sigLabel + '</span>' +
+        '<span style="font-size:12px;font-weight:700;color:#e2e8f0">' + c.name + '</span>' +
+        '<span style="font-size:10px;color:#475569">' + c.code + '</span>' +
+        '<span style="font-size:9px;color:#334155;background:#1e293b;border-radius:3px;padding:1px 5px">' + c.mkt + '</span>' +
+        '<div style="flex:1"></div>' +
+        _smBars(c.str, c.color) +
+      '</div>' +
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">' +
+        '<span style="font-size:15px;font-weight:700;color:#f1f5f9;font-family:\'Share Tech Mono\',monospace">' + priceStr + '</span>' +
+        '<span style="font-size:11px;font-weight:700;color:' + chgColor + '">' + chgStr + '</span>' +
+        '<span style="font-size:9px;color:#475569;margin-left:auto">' + c.label + '</span>' +
+      '</div>' +
+      (c.price > 0 ?
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:10px">' +
+          '<div style="background:#0f172a;border-radius:4px;padding:4px 6px"><div style="color:#475569;font-size:9px">진입</div><div style="color:#60a5fa;font-weight:700">' + c.entry.toLocaleString() + '</div></div>' +
+          '<div style="background:#0f172a;border-radius:4px;padding:4px 6px"><div style="color:#475569;font-size:9px">손절</div><div style="color:#ef4444;font-weight:700">' + c.stop.toLocaleString() + '</div></div>' +
+          '<div style="background:#0f172a;border-radius:4px;padding:4px 6px"><div style="color:#475569;font-size:9px">목표</div><div style="color:#10b981;font-weight:700">' + c.target.toLocaleString() + '</div></div>' +
+        '</div>' : '') +
+      (c.ts ? '<div style="font-size:9px;color:#334155;margin-top:5px">⏱ ' + c.ts + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
 
 // ── 패턴시그널 버튼 바인딩 ──
 function _bindSignalBtn() {
