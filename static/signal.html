@@ -654,10 +654,33 @@ const NAME_MAP = {
 // ============================================================
 // 전종목 로드 (KRX 경유 프록시)
 // ============================================================
+// 네이버 자동완성 → 종목 검색 (코스피+코스닥 전종목)
+async function _searchNaver(q) {
+  const url = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&st=111&r=1&nr=20`;
+  // 직접 시도
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    const arr = (d.items && d.items[0]) || [];
+    if (arr.length) return arr.map(i => ({ code: i[1], name: i[0] }));
+  } catch {}
+  // CORS 프록시 경유
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(url), { signal: AbortSignal.timeout(4000) });
+      const d = await r.json();
+      const arr = (d.items && d.items[0]) || [];
+      if (arr.length) return arr.map(i => ({ code: i[1], name: i[0] }));
+    } catch {}
+  }
+  return [];
+}
+
 async function loadAllStocks() {
   const badge = document.getElementById('totalStockBadge');
+  // 로컬 프록시 시도
   try {
-    const res  = await fetch(`${PROXY}/allstocks`, { signal: AbortSignal.timeout(20000) });
+    const res  = await fetch(`${PROXY}/allstocks`, { signal: AbortSignal.timeout(5000) });
     const data = await res.json();
     if (data.stocks) {
       Object.entries(data.stocks).forEach(([code, name]) => { NAME_MAP[code] = name; });
@@ -665,10 +688,13 @@ async function loadAllStocks() {
       badge.textContent = `전종목 ${cnt.toLocaleString()}개`;
       badge.style.display = 'inline';
       log(`📋 전종목 ${cnt.toLocaleString()}개 로드 완료`, 'buy');
+      return;
     }
-  } catch {
-    log('전종목 로드 실패 (프록시 미연결)', 'warn');
-  }
+  } catch {}
+  // 네이버 기반 — 검색 시 동적 보완 (badge만 안내)
+  badge.textContent = '네이버 실시간 검색';
+  badge.style.display = 'inline';
+  log('📋 전종목 로드: 네이버 실시간 검색 모드 (코스피+코스닥)', 'info');
 }
 
 function clearSearch() {
@@ -690,18 +716,14 @@ function onSearchInput() {
     .slice(0, 10);
   renderSearchDrop(local.map(([code, name]) => ({ code, name })), box);
 
-  // 프록시 보완 (300ms 디바운스)
+  // 네이버 실시간 검색 보완 (300ms 디바운스)
   clearTimeout(_searchMainTimer);
   _searchMainTimer = setTimeout(async () => {
-    try {
-      const server = document.getElementById('serverType').value;
-      const res  = await fetch(`${PROXY}/search?q=${encodeURIComponent(q)}&_server=${server}`, { signal: AbortSignal.timeout(4000) });
-      const data = await res.json();
-      if (data.results?.length) {
-        data.results.forEach(r => { NAME_MAP[r.code] = r.name; });
-        renderSearchDrop(data.results, box);
-      }
-    } catch {}
+    const results = await _searchNaver(q);
+    if (results.length) {
+      results.forEach(r => { NAME_MAP[r.code] = r.name; });
+      renderSearchDrop(results, box);
+    }
   }, 300);
 }
 
@@ -1173,16 +1195,12 @@ function onAddInput() {
 }
 
 async function searchViaProxy(q, drop) {
-  try {
-    const server = document.getElementById('serverType').value;
-    const res  = await fetch(`${PROXY}/search?q=${encodeURIComponent(q)}&_server=${server}`, { signal: AbortSignal.timeout(4000) });
-    const data = await res.json();
-    if (data.results && data.results.length > 0) {
-      // NAME_MAP 업데이트
-      data.results.forEach(r => { NAME_MAP[r.code] = r.name; });
-      renderAddDrop(data.results, drop);
-    }
-  } catch { /* 프록시 없으면 로컬 결과만 유지 */ }
+  // 네이버 실시간 검색 (코스피+코스닥 전종목)
+  const results = await _searchNaver(q);
+  if (results.length) {
+    results.forEach(r => { NAME_MAP[r.code] = r.name; });
+    renderAddDrop(results, drop);
+  }
 }
 
 function renderAddDrop(results, drop) {
@@ -2541,19 +2559,57 @@ ${(a.opinion||'').slice(0,200)}${(a.opinion||'').length>200?'..':''}
   if (btn) { btn.textContent = ok>0?'✅ 전송됨':'❌ 실패'; setTimeout(()=>{ btn.textContent='📡 텔레그램 전송'; }, 2000); }
 }
 
+// KIS 일봉 직접 조회 (CORS 프록시 경유)
+async function _fetchKisCandles(code) {
+  const tok = window.__ADMIN_TOKEN__;
+  const ak  = window.__ADMIN_AK__;
+  const sec = window.__ADMIN_SEC__;
+  const bu  = window.__ADMIN_BASE_URL__ || 'https://openapi.kis.or.kr';
+  if (!tok || !ak || !sec) return [];
+  const isMock = bu.includes('vts');
+  const trId = isMock ? 'VHKST03010100' : 'FHKST03010100';
+  const today = new Date();
+  const end = today.toISOString().slice(0,10).replace(/-/g,'');
+  const start = new Date(today - 120*24*3600*1000).toISOString().slice(0,10).replace(/-/g,'');
+  const url = `${bu}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice`
+    + `?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=${code}`
+    + `&FID_INPUT_DATE_1=${start}&FID_INPUT_DATE_2=${end}`
+    + `&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=0`;
+  const opts = { method:'GET', headers:{
+    'Content-Type':'application/json',
+    'authorization':`Bearer ${tok}`,
+    'appkey':ak, 'appsecret':sec,
+    'tr_id':trId, 'custtype':'P',
+  }};
+  try {
+    const r = await _fetchWithCors(url, opts);
+    if (!r) return [];
+    const d = await r.json();
+    return (d.output2||[]).filter(o=>o.stck_clpr&&o.stck_clpr!=='0').map(o=>({
+      time: Math.floor(new Date(o.stck_bsop_date.replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3')+'T00:00:00Z').getTime()/1000),
+      open:   parseInt(o.stck_oprc),
+      high:   parseInt(o.stck_hgpr),
+      low:    parseInt(o.stck_lwpr),
+      close:  parseInt(o.stck_clpr),
+      volume: parseInt(o.acml_vol||0),
+    })).reverse();
+  } catch { return []; }
+}
+
 async function runAnalysis_modal(code, name) {
   const rightEl = document.getElementById('anaRight');
   rightEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">분석 중...</div>';
 
-  // ── 캔들 데이터 로드 ──
+  // ── 캔들 데이터 로드 (프록시 → KIS 직접 → 데모)
   let candles = [];
   try {
     const server = (document.getElementById('serverType')||{value:'real'}).value;
     const res = await fetch(`${PROXY}/candles?code=${code}&period=D&_server=${server}&_t=${Date.now()}`,
-                            { signal: AbortSignal.timeout(15000) });
+                            { signal: AbortSignal.timeout(5000) });
     const data = await res.json();
     candles = (data.candles||[]).filter(c=>c.open&&c.close);
   } catch {}
+  if (!candles.length) candles = await _fetchKisCandles(code);
   if (!candles.length) candles = generateDemoCandles(code);
   candles = candles.map(c=>({
     ...c, time: typeof c.time==='string'
