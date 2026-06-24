@@ -2192,7 +2192,7 @@ function _renderSigMon() {
   list.innerHTML = filtered.map((item, idx) => {
     const cls   = item.sig === 'buy' ? 'buy' : item.sig === 'sell' ? 'sell' : 'watch';
     const lbl   = item.sig === 'buy' ? '▲ 매수' : item.sig === 'sell' ? '▼ 매도' : '● 관심';
-    const col   = item.sig === 'buy' ? '#10b981' : item.sig === 'sell' ? '#ef4444' : '#f59e0b';
+    const col   = item.sig === 'buy' ? '#ef4444' : item.sig === 'sell' ? '#4a9eff' : '#f59e0b';
     const bars  = Array.from({length:5}, (_,i) =>
       `<span style="display:inline-block;width:3px;height:${5+i*3}px;border-radius:1px;background:${i<(item.str||0)?col:'rgba(255,255,255,0.1)'}"></span>`
     ).join('');
