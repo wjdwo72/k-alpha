@@ -116,28 +116,55 @@ _admin_scan = {
 _has_scan = any(len(v) > 0 for v in [_admin_scan['swing'], _admin_scan['surge'],
                                       _admin_scan['tmr'], _admin_scan['small']])
 
-# ── 서버사이드 전체 종목 리스트 (CORS 없이 Python에서 직접 fetch) ──
+# ── 서버사이드 전체 종목 리스트 (KRX 데이터 포털 API) ──
 @st.cache_data(ttl=3600)
 def _fetch_all_stocks():
     """KRX 전체 종목 코드+이름 딕셔너리 반환 (KOSPI + KOSDAQ)"""
+    import datetime
     name_map = {}
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    markets = ['KOSPI', 'KOSDAQ', 'KONEX']
-    for mkt in markets:
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd',
+    }
+    trd_dd = datetime.date.today().strftime('%Y%m%d')
+    for mkt_id in ['STK', 'KSQ']:  # STK=KOSPI, KSQ=KOSDAQ
         try:
-            r = _req.get(
-                f'https://m.stock.naver.com/api/stocks/all?market={mkt}&type=STOCK',
-                headers=headers, timeout=10
+            r = _req.post(
+                'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd',
+                headers=headers,
+                data={
+                    'bld': 'dbms/MDC/STAT/standard/MDCSTAT01901',
+                    'locale': 'ko_KR',
+                    'mktId': mkt_id,
+                    'trdDd': trd_dd,
+                    'money': '1',
+                    'csvxls_isNo': 'false',
+                },
+                timeout=15
             )
             if r.ok:
-                for item in r.json():
-                    code = item.get('itemCode') or item.get('code') or ''
-                    name = item.get('itemName') or item.get('name') or ''
+                for item in r.json().get('output', []):
+                    code = item.get('ISU_SRT_CD', '')
+                    name = item.get('ISU_ABBRV', '')
                     if code and name:
                         name_map[code] = name
         except Exception:
             pass
-    # 최소 보장 (fetch 실패 시 빈 dict 반환해도 기존 NAME_MAP 유지됨)
+    # KRX 실패 시 Naver 폴백
+    if not name_map:
+        try:
+            r2 = _req.get(
+                'https://ac.stock.naver.com/ac?q=&target=stock,etf',
+                headers={'User-Agent': 'Mozilla/5.0'}, timeout=10
+            )
+            if r2.ok:
+                for item in r2.json().get('items', []):
+                    code = item[1] if isinstance(item, list) and len(item) > 1 else item.get('code','')
+                    name = item[0] if isinstance(item, list) else item.get('name','')
+                    if code and name:
+                        name_map[code] = name
+        except Exception:
+            pass
     return name_map
 
 _all_stocks = _fetch_all_stocks()
