@@ -116,55 +116,74 @@ _admin_scan = {
 _has_scan = any(len(v) > 0 for v in [_admin_scan['swing'], _admin_scan['surge'],
                                       _admin_scan['tmr'], _admin_scan['small']])
 
-# ── 서버사이드 전체 종목 리스트 (KRX 데이터 포털 API) ──
+# ── 서버사이드 전체 종목 리스트 (KRX + Naver 복수 폴백) ──
 @st.cache_data(ttl=3600)
 def _fetch_all_stocks():
-    """KRX 전체 종목 코드+이름 딕셔너리 반환 (KOSPI + KOSDAQ)"""
+    """KOSPI+KOSDAQ 전체 종목 코드+이름 딕셔너리 반환"""
     import datetime
     name_map = {}
-    headers = {
+    hdrs_krx = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd',
     }
-    trd_dd = datetime.date.today().strftime('%Y%m%d')
-    for mkt_id in ['STK', 'KSQ']:  # STK=KOSPI, KSQ=KOSDAQ
-        try:
-            r = _req.post(
-                'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd',
-                headers=headers,
-                data={
-                    'bld': 'dbms/MDC/STAT/standard/MDCSTAT01901',
-                    'locale': 'ko_KR',
-                    'mktId': mkt_id,
-                    'trdDd': trd_dd,
-                    'money': '1',
-                    'csvxls_isNo': 'false',
-                },
-                timeout=15
-            )
-            if r.ok:
-                for item in r.json().get('output', []):
+
+    # 최근 거래일 탐색 (오늘 포함 최대 7일 전까지)
+    def _recent_trd_dd():
+        d = datetime.date.today()
+        for _ in range(10):
+            if d.weekday() < 5:  # 월~금
+                return d.strftime('%Y%m%d')
+            d -= datetime.timedelta(days=1)
+        return datetime.date.today().strftime('%Y%m%d')
+
+    trd_dd = _recent_trd_dd()
+
+    # 1차: KRX 데이터포털 API (KOSPI + KOSDAQ)
+    for mkt_id in ['STK', 'KSQ']:
+        for attempt_dd in [trd_dd, (datetime.date.today() - datetime.timedelta(days=3)).strftime('%Y%m%d')]:
+            try:
+                r = _req.post(
+                    'http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd',
+                    headers=hdrs_krx,
+                    data={'bld': 'dbms/MDC/STAT/standard/MDCSTAT01901', 'locale': 'ko_KR',
+                          'mktId': mkt_id, 'trdDd': attempt_dd, 'money': '1', 'csvxls_isNo': 'false'},
+                    timeout=15
+                )
+                items = r.json().get('output', []) if r.ok else []
+                for item in items:
                     code = item.get('ISU_SRT_CD', '')
                     name = item.get('ISU_ABBRV', '')
                     if code and name:
                         name_map[code] = name
-        except Exception:
-            pass
-    # KRX 실패 시 Naver 폴백
-    if not name_map:
-        try:
-            r2 = _req.get(
-                'https://ac.stock.naver.com/ac?q=&target=stock,etf',
-                headers={'User-Agent': 'Mozilla/5.0'}, timeout=10
-            )
-            if r2.ok:
-                for item in r2.json().get('items', []):
-                    code = item[1] if isinstance(item, list) and len(item) > 1 else item.get('code','')
-                    name = item[0] if isinstance(item, list) else item.get('name','')
-                    if code and name:
-                        name_map[code] = name
-        except Exception:
-            pass
+                if items:
+                    break
+            except Exception:
+                pass
+
+    # 2차: Naver 주식 전체 목록 (KOSPI/KOSDAQ 페이지별 fetch)
+    if len(name_map) < 100:
+        hdrs_nv = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://m.stock.naver.com'}
+        for mkt in ['KOSPI', 'KOSDAQ']:
+            for page in range(1, 30):
+                try:
+                    r2 = _req.get(
+                        f'https://m.stock.naver.com/api/stocks?market={mkt}&type=STOCK&page={page}&pageSize=100',
+                        headers=hdrs_nv, timeout=10
+                    )
+                    if not r2.ok:
+                        break
+                    data = r2.json()
+                    items2 = data if isinstance(data, list) else data.get('stocks', data.get('items', []))
+                    if not items2:
+                        break
+                    for s in items2:
+                        code = s.get('itemCode') or s.get('code') or ''
+                        name = s.get('itemName') or s.get('name') or ''
+                        if code and name:
+                            name_map[code] = name
+                except Exception:
+                    break
+
     return name_map
 
 _all_stocks = _fetch_all_stocks()
@@ -203,17 +222,12 @@ _inject = f"""<script>
   window.__ADMIN_SCAN__ = {json.dumps(_admin_scan)};
 
   // 서버사이드 전체 종목 리스트 → NAME_MAP 주입 (KOSPI+KOSDAQ 전종목 검색 가능)
-  (function() {{
-    var _sm = {json.dumps(_all_stocks)};
-    if (typeof NAME_MAP !== 'undefined' && Object.keys(_sm).length > 0) {{
-      Object.assign(NAME_MAP, _sm);
-    }} else {{
-      window.__SERVER_NAME_MAP__ = _sm;
-      document.addEventListener('DOMContentLoaded', function() {{
-        if (typeof NAME_MAP !== 'undefined') Object.assign(NAME_MAP, _sm);
-      }});
+  window.__SERVER_NAME_MAP__ = {json.dumps(_all_stocks)};
+  window.addEventListener('load', function() {{
+    if (typeof NAME_MAP !== 'undefined' && window.__SERVER_NAME_MAP__) {{
+      Object.assign(NAME_MAP, window.__SERVER_NAME_MAP__);
     }}
-  }})();
+  }});
 
   // 3-a) 텔레그램 설정 주입 (관리앱 설정 → signal.html TG_CFG)
   (function() {{
