@@ -691,45 +691,39 @@ const NAME_MAP = {
 // ============================================================
 // ── 종목 검색 (Naver Mobile → ac.stock → corsproxy 순서) ──
 async function _searchNaver(q) {
-  // 1차: Naver Mobile 검색 API (여러 엔드포인트 순서대로 시도)
-  const naverUrls = [
+  const naverTargets = [
     `https://m.stock.naver.com/api/search/all?keyword=${encodeURIComponent(q)}&page=1&pageSize=20`,
     `https://m.stock.naver.com/api/search/hits?keyword=${encodeURIComponent(q)}&market=ALL&count=20`,
+    `https://ac.stock.naver.com/ac?q=${encodeURIComponent(q)}&target=stock,etf`,
   ];
-  for (const url of naverUrls) {
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
-      if (!r.ok) continue;
-      const d = await r.json();
-      // all API: {stocks:[{itemCode,itemName,...}]}, hits API: {hits:[{symbol,name,...}]}
-      const list = d.stocks || d.hits || d.items || [];
-      if (list.length) {
-        const mapped = list.map(h => ({
-          code: h.itemCode || h.symbol || h.code || '',
-          name: h.itemName || h.name || h.korName || h.symbolName || ''
-        })).filter(h => h.code && h.name);
-        if (mapped.length) return mapped;
-      }
-    } catch {}
+
+  function _parseNaver(d, url) {
+    if (url.includes('ac.stock.naver.com')) {
+      const items = d.items || [];
+      return items.map(i => Array.isArray(i)
+        ? { code: i[1] || '', name: i[0] || '' }
+        : { code: i.code || i.symbol || '', name: i.name || i.korName || '' }
+      ).filter(i => i.code && i.name);
+    }
+    const list = d.stocks || d.hits || d.items || [];
+    return list.map(h => ({
+      code: h.itemCode || h.symbol || h.code || '',
+      name: h.itemName || h.name || h.korName || h.symbolName || ''
+    })).filter(h => h.code && h.name);
   }
 
-  // 2차: Naver 주식 자동완성 API (items = [[name, code, ...], ...])
-  try {
-    const url2 = `https://ac.stock.naver.com/ac?q=${encodeURIComponent(q)}&target=stock,index,etf,fund`;
-    const r2 = await fetch(url2, { signal: AbortSignal.timeout(4000) });
-    if (r2.ok) {
-      const d2 = await r2.json();
-      const items = d2.items || [];
-      if (items.length) {
-        // items = [[name, code, ...], ...] 형식
-        const mapped = items.map(i => Array.isArray(i)
-          ? { code: i[1] || i[0], name: i[0] }
-          : { code: i.code || i.symbol, name: i.name || i.korName }
-        ).filter(i => i.code && i.name);
+  // CORS 프록시를 통해 네이버 API 호출
+  for (const targetUrl of naverTargets) {
+    for (const mk of _SIG_CORS) {
+      try {
+        const r = await fetch(mk(targetUrl), { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) continue;
+        const d = await r.json();
+        const mapped = _parseNaver(d, targetUrl);
         if (mapped.length) return mapped;
-      }
+      } catch {}
     }
-  } catch {}
+  }
 
   // 3차: KIS 토큰 있으면 KIS 종목 검색 API
   if (window.__ADMIN_TOKEN__ && window.__ADMIN_AK__ && window.__ADMIN_SEC__) {
