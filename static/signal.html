@@ -355,19 +355,9 @@
     <span id="tokenLabel">미연결</span>
     <span id="priceSrcBadge" style="display:none;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700"></span>
     <span class="refresh-indicator">새로고침: <span id="countdown">-</span>s</span>
-    <button onclick="openSettings()" title="KIS API 설정" style="background:rgba(59,130,246,0.15);border:1px solid #2a3550;color:#8fa3bb;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;transition:all .15s" onmouseover="this.style.borderColor='#3b82f6';this.style.color='#f0f4fa'" onmouseout="this.style.borderColor='#2a3550';this.style.color='#8fa3bb'">⚙️ 설정</button>
   </div>
 </div>
 
-<!-- KIS API 설정 버튼 바 -->
-<div style="background:#0d1526;border-bottom:1px solid #1a2a45;padding:6px 14px;display:flex;align-items:center;gap:10px">
-  <button onclick="openSettings()"
-    style="background:linear-gradient(90deg,#1d4ed8,#0891b2);color:#fff;border:none;border-radius:6px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:700;letter-spacing:.3px">
-    ⚙️ KIS API 설정
-  </button>
-  <span style="font-size:11px;color:#475569">비밀번호: <b style="color:#60a5fa">4545</b> · KIS 앱키/시크릿 입력 후 실시간 현재가·차트 사용</span>
-  <span id="kisSettingStatus" style="font-size:11px;color:#475569;margin-left:auto"></span>
-</div>
 
 <!-- 검색바 -->
 <div class="search-bar">
@@ -541,18 +531,6 @@
 
 <div class="alert-box" id="alertBox"></div>
 
-<!-- ⚙️ 고정 설정 버튼 (항상 보임) -->
-<button onclick="openSettings()" id="fixedSettingsBtn" title="KIS API 설정 (비번: 4545)"
-  style="position:fixed;bottom:18px;left:18px;z-index:9999;
-    background:linear-gradient(135deg,#1e3a5f,#0f2340);
-    border:2px solid #3b82f6;color:#60a5fa;border-radius:50px;
-    padding:8px 16px;cursor:pointer;font-size:13px;font-weight:700;
-    box-shadow:0 4px 20px rgba(59,130,246,0.4);
-    transition:all .2s;white-space:nowrap"
-  onmouseover="this.style.background='linear-gradient(135deg,#1d4ed8,#0891b2)';this.style.color='#fff';this.style.boxShadow='0 4px 28px rgba(59,130,246,0.7)'"
-  onmouseout="this.style.background='linear-gradient(135deg,#1e3a5f,#0f2340)';this.style.color='#60a5fa';this.style.boxShadow='0 4px 20px rgba(59,130,246,0.4)'">
-  ⚙️ KIS API 설정
-</button>
 
 <script>
 // ============================================================
