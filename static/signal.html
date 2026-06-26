@@ -691,35 +691,39 @@ const NAME_MAP = {
 // ============================================================
 // ── 종목 검색 (Naver Mobile → ac.stock → corsproxy 순서) ──
 async function _searchNaver(q) {
+  // 1차: ac.stock.naver.com — CORS 허용 자동완성 API (직접 호출 가능)
+  try {
+    const r = await fetch(
+      `https://ac.stock.naver.com/ac?q=${encodeURIComponent(q)}&target=stock,etf,index`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (r.ok) {
+      const d = await r.json();
+      const items = d.items || [];
+      const mapped = items.map(i => Array.isArray(i)
+        ? { code: i[1] || '', name: i[0] || '' }
+        : { code: i.code || '', name: i.name || '' }
+      ).filter(i => i.code && i.name);
+      if (mapped.length) return mapped;
+    }
+  } catch {}
+
+  // 2차: m.stock.naver.com 검색 (CORS 프록시 경유)
   const naverTargets = [
     `https://m.stock.naver.com/api/search/all?keyword=${encodeURIComponent(q)}&page=1&pageSize=20`,
     `https://m.stock.naver.com/api/search/hits?keyword=${encodeURIComponent(q)}&market=ALL&count=20`,
-    `https://ac.stock.naver.com/ac?q=${encodeURIComponent(q)}&target=stock,etf`,
   ];
-
-  function _parseNaver(d, url) {
-    if (url.includes('ac.stock.naver.com')) {
-      const items = d.items || [];
-      return items.map(i => Array.isArray(i)
-        ? { code: i[1] || '', name: i[0] || '' }
-        : { code: i.code || i.symbol || '', name: i.name || i.korName || '' }
-      ).filter(i => i.code && i.name);
-    }
-    const list = d.stocks || d.hits || d.items || [];
-    return list.map(h => ({
-      code: h.itemCode || h.symbol || h.code || '',
-      name: h.itemName || h.name || h.korName || h.symbolName || ''
-    })).filter(h => h.code && h.name);
-  }
-
-  // CORS 프록시를 통해 네이버 API 호출
   for (const targetUrl of naverTargets) {
     for (const mk of _SIG_CORS) {
       try {
         const r = await fetch(mk(targetUrl), { signal: AbortSignal.timeout(6000) });
         if (!r.ok) continue;
         const d = await r.json();
-        const mapped = _parseNaver(d, targetUrl);
+        const list = d.stocks || d.hits || d.items || [];
+        const mapped = list.map(h => ({
+          code: h.itemCode || h.symbol || h.code || '',
+          name: h.itemName || h.name || h.korName || h.symbolName || ''
+        })).filter(h => h.code && h.name);
         if (mapped.length) return mapped;
       } catch {}
     }
