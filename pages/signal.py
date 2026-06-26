@@ -116,6 +116,32 @@ _admin_scan = {
 _has_scan = any(len(v) > 0 for v in [_admin_scan['swing'], _admin_scan['surge'],
                                       _admin_scan['tmr'], _admin_scan['small']])
 
+# ── 서버사이드 전체 종목 리스트 (CORS 없이 Python에서 직접 fetch) ──
+@st.cache_data(ttl=3600)
+def _fetch_all_stocks():
+    """KRX 전체 종목 코드+이름 딕셔너리 반환 (KOSPI + KOSDAQ)"""
+    name_map = {}
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    markets = ['KOSPI', 'KOSDAQ', 'KONEX']
+    for mkt in markets:
+        try:
+            r = _req.get(
+                f'https://m.stock.naver.com/api/stocks/all?market={mkt}&type=STOCK',
+                headers=headers, timeout=10
+            )
+            if r.ok:
+                for item in r.json():
+                    code = item.get('itemCode') or item.get('code') or ''
+                    name = item.get('itemName') or item.get('name') or ''
+                    if code and name:
+                        name_map[code] = name
+        except Exception:
+            pass
+    # 최소 보장 (fetch 실패 시 빈 dict 반환해도 기존 NAME_MAP 유지됨)
+    return name_map
+
+_all_stocks = _fetch_all_stocks()
+
 _hide_api_css = """
 #appKey, #secretKey, #acctNo, #serverType,
 .api-section > label,
@@ -148,6 +174,19 @@ _inject = f"""<script>
 
   // 2) 관리앱 스캔 결과 전역 보관
   window.__ADMIN_SCAN__ = {json.dumps(_admin_scan)};
+
+  // 서버사이드 전체 종목 리스트 → NAME_MAP 주입 (KOSPI+KOSDAQ 전종목 검색 가능)
+  (function() {{
+    var _sm = {json.dumps(_all_stocks)};
+    if (typeof NAME_MAP !== 'undefined' && Object.keys(_sm).length > 0) {{
+      Object.assign(NAME_MAP, _sm);
+    }} else {{
+      window.__SERVER_NAME_MAP__ = _sm;
+      document.addEventListener('DOMContentLoaded', function() {{
+        if (typeof NAME_MAP !== 'undefined') Object.assign(NAME_MAP, _sm);
+      }});
+    }}
+  }})();
 
   // 3-a) 텔레그램 설정 주입 (관리앱 설정 → signal.html TG_CFG)
   (function() {{
