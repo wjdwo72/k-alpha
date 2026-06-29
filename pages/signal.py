@@ -271,22 +271,17 @@ _inject = f"""<script>
     if (eAcc && _acc) eAcc.value = _acc;
     if (eSrv && _srv) eSrv.value = _srv;
 
-    // 관리앱 스캔 결과로 KALPHA_STOCKS 업데이트
+    // 관리앱 스캔 결과로 KALPHA_STOCKS 전체 덮어쓰기 (0인 카테고리도 반영)
     var sc = window.__ADMIN_SCAN__;
-    if (sc && typeof KALPHA_STOCKS !== 'undefined') {{
-      var _hasScan = (sc.swing && sc.swing.length > 0) ||
-                     (sc.surge && sc.surge.length > 0) ||
-                     (sc.tmr   && sc.tmr.length   > 0) ||
-                     (sc.small && sc.small.length  > 0);
-      if (_hasScan) {{
-        if (sc.swing && sc.swing.length > 0) KALPHA_STOCKS.swing = sc.swing;
-        if (sc.surge && sc.surge.length > 0) KALPHA_STOCKS.surge = sc.surge;
-        if (sc.tmr   && sc.tmr.length   > 0) KALPHA_STOCKS.tmr   = sc.tmr;
-        if (sc.small && sc.small.length > 0) KALPHA_STOCKS.small = sc.small;
-        if (sc.per   && sc.per.length   > 0) KALPHA_STOCKS.per   = sc.per;
-        if (typeof updateKTabCounts === 'function') updateKTabCounts();
-        if (typeof renderStockList  === 'function') renderStockList();
-      }}
+    if (sc && typeof KALPHA_STOCKS !== 'undefined' && sc.ts) {{
+      // ts(타임스탬프)가 있으면 관리앱이 최소 1회 스캔한 것 → 전체 덮어쓰기
+      KALPHA_STOCKS.swing = sc.swing || [];
+      KALPHA_STOCKS.surge = sc.surge || [];
+      KALPHA_STOCKS.tmr   = sc.tmr   || [];
+      KALPHA_STOCKS.small = sc.small || [];
+      KALPHA_STOCKS.per   = sc.per   || [];
+      if (typeof updateKTabCounts === 'function') updateKTabCounts();
+      if (typeof renderStockList  === 'function') renderStockList();
     }}
 
     // 연동 배지 삽입

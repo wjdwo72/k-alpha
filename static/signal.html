@@ -1924,7 +1924,30 @@ async function fetchCurrentPrice(code) {
     const data = await res.json();
     if (data && !data.error) { _setPriceSrc('KIS 프록시'); return data; }
   } catch {}
-  // 2차: KIS 토큰 자동 확보 후 직접 조회
+
+  // 2차: 네이버 증권 현재가 (CORS 허용 — 실시간)
+  try {
+    const r = await fetch(
+      `https://m.stock.naver.com/api/stock/${code}/integration`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (r.ok) {
+      const d = await r.json();
+      const q = d.dealTrendInfos?.[0] || d.stockItemTotalInfos?.[0] || {};
+      const price = +(d.closePrice || d.currentPrice || q.value || 0);
+      if (price > 0) {
+        const prev  = +(d.previousClosePrice || 0);
+        const chg   = price - prev;
+        const chgPct = prev ? +(chg / prev * 100).toFixed(2) : 0;
+        _setPriceSrc('Naver');
+        return { price, change: chg, changePct: chgPct,
+                 volume: +(d.accumulatedTradingVolume || 0),
+                 high: +(d.highPrice || price), low: +(d.lowPrice || price), open: +(d.openPrice || price) };
+      }
+    }
+  } catch {}
+
+  // 3차: KIS 직접 (CORS 프록시)
   await _ensureKisToken();
   if (window.__ADMIN_TOKEN__) {
     const p = await _fetchKisPriceDirect(code);
