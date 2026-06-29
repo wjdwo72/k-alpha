@@ -1925,24 +1925,35 @@ async function fetchCurrentPrice(code) {
     if (data && !data.error) { _setPriceSrc('KIS 프록시'); return data; }
   } catch {}
 
-  // 2차: 네이버 증권 현재가 (CORS 허용 — 실시간)
+  // 2차: 네이버 증권 현재가 /basic (CORS 허용 — 실시간)
   try {
     const r = await fetch(
-      `https://m.stock.naver.com/api/stock/${code}/integration`,
+      `https://m.stock.naver.com/api/stock/${code}/basic`,
       { signal: AbortSignal.timeout(5000) }
     );
     if (r.ok) {
       const d = await r.json();
-      const _n = s => +(String(s || '0').replace(/,/g, '')) || 0;
-      const price = _n(d.closePrice || d.currentPrice || d.stockEndPrice);
+      const _n = s => +(String(s ?? '0').replace(/,/g, '')) || 0;
+      const price = _n(d.closePrice);
       if (price > 0) {
-        const prev   = _n(d.previousClosePrice || d.basePrice);
-        const chg    = _n(d.compareToPreviousClosePrice || d.priceChange) * (d.fluctuationsRatio < 0 ? -1 : 1);
-        const chgPct = prev ? +(chg / prev * 100).toFixed(2) : _n(d.fluctuationsRatio);
+        const chg    = _n(d.compareToPreviousClosePrice) * (parseFloat(d.fluctuationsRatio) < 0 ? -1 : 1);
+        const chgPct = parseFloat(d.fluctuationsRatio) || 0;
+        // 고/저/시/거래량은 /price 첫 항목에서 추가 보완
+        let high = price, low = price, open = price, volume = 0;
+        try {
+          const r2 = await fetch(`https://m.stock.naver.com/api/stock/${code}/price`, { signal: AbortSignal.timeout(3000) });
+          if (r2.ok) {
+            const arr = await r2.json();
+            if (arr?.[0]) {
+              high   = _n(arr[0].highPrice)  || price;
+              low    = _n(arr[0].lowPrice)   || price;
+              open   = _n(arr[0].openPrice)  || price;
+              volume = _n(arr[0].accumulatedTradingVolume);
+            }
+          }
+        } catch {}
         _setPriceSrc('Naver');
-        return { price, change: chg, changePct: chgPct,
-                 volume: _n(d.accumulatedTradingVolume || d.tradingVolume),
-                 high: _n(d.highPrice || price), low: _n(d.lowPrice || price), open: _n(d.openPrice || price) };
+        return { price, change: chg, changePct: chgPct, volume, high, low, open };
       }
     }
   } catch {}
