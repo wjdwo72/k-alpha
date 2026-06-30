@@ -188,6 +188,40 @@ def _fetch_all_stocks():
 
 _all_stocks = _fetch_all_stocks()
 
+# ── 서버사이드 현재가 일괄 fetch (CORS 우회) ──
+@st.cache_data(ttl=60)  # 1분 캐시
+def _fetch_prices_server(codes_tuple):
+    """Naver /basic API로 종목 현재가 일괄 조회 (서버사이드 — CORS 없음)"""
+    prices = {}
+    hdrs = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://m.stock.naver.com'}
+    for code in codes_tuple:
+        try:
+            r = _req.get(f'https://m.stock.naver.com/api/stock/{code}/basic',
+                         headers=hdrs, timeout=5)
+            if r.ok:
+                d = r.json()
+                def _n(s): return float(str(s or '0').replace(',','')) if s else 0
+                price = _n(d.get('closePrice'))
+                if price > 0:
+                    chg_str = d.get('compareToPreviousClosePrice','0')
+                    ratio   = float(d.get('fluctuationsRatio', 0) or 0)
+                    chg     = _n(chg_str) * (-1 if ratio < 0 else 1)
+                    prices[code] = {'price': price, 'change': chg, 'changePct': ratio}
+        except Exception:
+            pass
+    return prices
+
+# KALPHA_STOCKS 코드 목록 수집 (서버사이드 현재가용)
+_scan_codes = set()
+for _cat in ['swing','surge','tomorrow','smallmid','per']:
+    for _s in (_scan.get(_cat) or []):
+        if _s.get('code'): _scan_codes.add(_s['code'])
+# 기본 주요 종목 추가
+for _c in ['005930','000660','035420','247540','373220','086520','196170']:
+    _scan_codes.add(_c)
+
+_server_prices = _fetch_prices_server(tuple(sorted(_scan_codes))) if _scan_codes else {}
+
 _hide_api_css = """
 #appKey, #secretKey, #acctNo, #serverType,
 .api-section > label,
@@ -227,6 +261,37 @@ _inject = f"""<script>
     if (typeof NAME_MAP !== 'undefined' && window.__SERVER_NAME_MAP__) {{
       Object.assign(NAME_MAP, window.__SERVER_NAME_MAP__);
     }}
+  }});
+
+  // 서버사이드 현재가 주입 (CORS 우회 — 1분 캐시)
+  window.__SERVER_PRICES__ = {json.dumps(_server_prices)};
+  // stockList 가격 업데이트 함수 (signal.html의 updateStockPrice 또는 직접 적용)
+  window.addEventListener('load', function() {{
+    var sp = window.__SERVER_PRICES__;
+    if (!sp || !Object.keys(sp).length) return;
+    // stockList에 서버가격 반영
+    if (typeof stockList !== 'undefined') {{
+      stockList.forEach(function(s) {{
+        if (sp[s.code]) {{
+          s.price      = sp[s.code].price;
+          s.change     = sp[s.code].change;
+          s.changePct  = sp[s.code].changePct;
+        }}
+      }});
+    }}
+    // 현재 선택 종목 현재가 덮어쓰기
+    if (typeof currentStock !== 'undefined' && currentStock && sp[currentStock.code]) {{
+      var p = sp[currentStock.code];
+      var el = document.getElementById('currentPrice');
+      var cl = document.getElementById('priceChange');
+      if (el) el.textContent = p.price.toLocaleString() + '원';
+      if (cl) {{
+        var sign = p.change >= 0 ? '+' : '';
+        cl.textContent = sign + p.changePct.toFixed(2) + '%';
+        cl.style.color = p.change >= 0 ? '#ef4444' : '#3b82f6';
+      }}
+    }}
+    if (typeof renderStockList === 'function') renderStockList();
   }});
 
   // 3-a) 텔레그램 설정 주입 (관리앱 설정 → signal.html TG_CFG)

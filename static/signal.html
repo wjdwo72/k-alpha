@@ -1917,6 +1917,12 @@ async function _ensureKisToken() {
 
 // 실시간 현재가 조회 (KIS API만 사용 — Yahoo Finance 제거)
 async function fetchCurrentPrice(code) {
+  // 0차: 서버사이드 주입 가격 (signal.py가 Naver에서 직접 가져온 실제가)
+  if (window.__SERVER_PRICES__?.[code]) {
+    const sp = window.__SERVER_PRICES__[code];
+    _setPriceSrc('실시간');
+    return sp;
+  }
   // 1차: 로컬 프록시 (KIS_proxy.py 연결 시)
   try {
     const server = (document.getElementById('serverType') || {value:'real'}).value;
