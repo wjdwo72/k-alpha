@@ -1697,15 +1697,70 @@ async function fetchKISCandles(code) {
       return direct;
     }
   }
-  // 3차: Yahoo Finance (로컬 프록시 미연결 시 폴백 — 기업행동 후 가격 차이 있을 수 있음)
+  // 3차: Naver Finance 캔들 (CORS 프록시 경유)
+  if (['D','W','M'].includes(currentPeriod)) {
+    const naver = await _fetchNaverCandles(code);
+    if (naver && naver.length > 0) {
+      log(`📈 Naver 차트 — ${code} ${naver.length}개 캔들`, 'buy');
+      return naver;
+    }
+  }
+  // 4차: Yahoo Finance
   if (['D','W','M'].includes(currentPeriod)) {
     const yahoo = await _fetchYahooCandles(code);
     if (yahoo && yahoo.length > 0) {
-      log(`📈 Yahoo Finance 캔들 (참고용 — 현재가와 다를 수 있음)`, 'warn');
+      log(`📈 Yahoo Finance 캔들 (참고용)`, 'warn');
       return yahoo;
     }
   }
   log(`캔들 조회 실패 (프록시 연결 시 실제 KIS 데이터 표시)`, 'warn');
+  return null;
+}
+
+// ── Naver Finance 캔들 (일/주/월봉) ──
+async function _fetchNaverCandles(code) {
+  const _n = s => +(String(s ?? '0').replace(/,/g, '')) || 0;
+  const tfMap = { D: 'day', W: 'week', M: 'month' };
+  const tf = tfMap[currentPeriod] || 'day';
+
+  // 1차: m.stock.naver.com /price (최근 20개)
+  const priceUrl = `https://m.stock.naver.com/api/stock/${code}/price`;
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(priceUrl), { signal: AbortSignal.timeout(7000) });
+      if (!r.ok) continue;
+      const arr = await r.json();
+      if (!Array.isArray(arr) || arr.length === 0) continue;
+      const candles = arr.map(d => ({
+        time:   d.localTradedAt,
+        open:   _n(d.openPrice),
+        high:   _n(d.highPrice),
+        low:    _n(d.lowPrice),
+        close:  _n(d.closePrice),
+        volume: +d.accumulatedTradingVolume || 0,
+      })).filter(c => c.open > 0 && c.close > 0)
+         .sort((a,b) => a.time < b.time ? -1 : 1);
+      if (candles.length > 0) return candles;
+    } catch {}
+  }
+
+  // 2차: fchart XML (최대 120개)
+  const xmlUrl = `https://fchart.stock.naver.com/sise.nhn?symbol=${code}&timeframe=${tf}&count=120&requestType=0`;
+  for (const mk of _SIG_CORS) {
+    try {
+      const r = await fetch(mk(xmlUrl), { signal: AbortSignal.timeout(7000) });
+      if (!r.ok) continue;
+      const txt = await r.text();
+      const matches = [...txt.matchAll(/<item data="([^"]+)"/g)];
+      if (!matches.length) continue;
+      const candles = matches.map(m => {
+        const [dt, o, h, l, c, v] = m[1].split('|');
+        const y = dt.slice(0,4), mo = dt.slice(4,6), da = dt.slice(6,8);
+        return { time:`${y}-${mo}-${da}`, open:+o, high:+h, low:+l, close:+c, volume:+v };
+      }).filter(c => c.open > 0 && c.close > 0);
+      if (candles.length > 0) return candles;
+    } catch {}
+  }
   return null;
 }
 
