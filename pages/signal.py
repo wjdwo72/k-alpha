@@ -41,6 +41,31 @@ _sec = _ss.get('kis_sec', '') or st.session_state.get('kis_sec', '') or ''
 _acc = _ss.get('kis_acc', '') or st.session_state.get('kis_acc', '') or ''
 _tok = _ss.get('kis_token','') or st.session_state.get('kis_token','') or ''
 _bu  = _ss.get('kis_base_url','') or st.session_state.get('kis_base_url','') or ''
+
+# server_store가 비어있으면(멀티워커) Supabase scan_cache id=2 에서 KIS 설정 읽기
+if not _ak:
+    try:
+        import os as _os
+        _sb_url = st.secrets.get('SUPABASE_URL','')
+        _sb_key = st.secrets.get('SUPABASE_SERVICE_KEY','')
+        if _sb_url and _sb_key:
+            _r2 = _req.get(
+                f"{_sb_url}/rest/v1/scan_cache?id=eq.2&select=data",
+                headers={"apikey": _sb_key, "Authorization": f"Bearer {_sb_key}"},
+                timeout=5,
+            )
+            if _r2.ok:
+                _rows = _r2.json()
+                if _rows and _rows[0].get('data'):
+                    _kd = _rows[0]['data']
+                    _ak  = _kd.get('kis_ak','')
+                    _sec = _kd.get('kis_sec','')
+                    _acc = _kd.get('kis_acc','')
+                    _bu  = ('https://openapivts.koreainvestment.com:29443'
+                            if _kd.get('kis_env','실전투자') == '모의투자'
+                            else 'https://openapi.kis.or.kr')
+    except:
+        pass
 _server_val = 'mock' if 'vts' in _bu else 'real'
 _has_creds  = bool(_ak and _sec and _acc)
 _is_mock    = _server_val == 'mock'

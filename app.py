@@ -958,6 +958,21 @@ def do_connect(ak, sec, acc, env):
             _ss['kis_sec']        = sec
             _ss['kis_acc']        = acc
             _ss['scan_refresh_min'] = st.session_state.get('scan_refresh_min', 10)
+            # Supabase에 KIS 설정 저장 → signal 페이지가 다른 worker에서도 읽을 수 있도록
+            try:
+                _sb_url2 = _get_secret('SUPABASE_URL', '')
+                _sb_key2 = _get_secret('SUPABASE_SERVICE_KEY', '')
+                if _sb_url2 and _sb_key2:
+                    import requests as _rq2
+                    _rq2.put(
+                        f"{_sb_url2}/rest/v1/scan_cache?id=eq.2",
+                        headers={"apikey": _sb_key2, "Authorization": f"Bearer {_sb_key2}",
+                                 "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"},
+                        json={"id": 2, "data": {"kis_ak": ak, "kis_sec": sec, "kis_acc": acc, "kis_env": env}, "updated_at": "now()"},
+                        timeout=5,
+                    )
+            except:
+                pass
             return True, None
         msg = d.get('msg1') or d.get('msg_cd') or d.get('error_description') or '앱키/시크릿 오류'
         return False, msg
