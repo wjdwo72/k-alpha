@@ -2914,19 +2914,25 @@ window.onload = async () => {
   const rng = document.getElementById('scanIntervalRange');
   if (rng) { rng.value = savedSec; updateScanInterval(savedSec); }
 
-  // ── localStorage 저장 KIS 설정 자동 로드 ──
+  // ── KIS 자동 연결 (localStorage 또는 입력 필드에 이미 있는 경우) ──
   (function _loadSavedKis() {
+    if (window.__ADMIN_TOKEN__) return; // 이미 관리앱 토큰 있음
     const saved = JSON.parse(localStorage.getItem('kisSettings') || '{}');
-    if (saved.ak && saved.sec && !window.__ADMIN_TOKEN__) {
-      window.__ADMIN_AK__       = saved.ak;
-      window.__ADMIN_SEC__      = saved.sec;
-      window.__ADMIN_BASE_URL__ = saved.server === 'mock'
+    const fld = id => (document.getElementById(id) || {}).value?.trim() || '';
+    const ak  = saved.ak  || fld('appKey');
+    const sec = saved.sec || fld('secretKey');
+    const acct = saved.acct || fld('acctNo');
+    const srv  = saved.server || fld('serverType') || 'real';
+    if (ak && sec) {
+      // 입력 필드 채우기
+      const set = (id, v) => { const e = document.getElementById(id); if (e && v) e.value = v; };
+      set('appKey', ak); set('secretKey', sec); set('acctNo', acct); set('serverType', srv);
+      window.__ADMIN_AK__       = ak;
+      window.__ADMIN_SEC__      = sec;
+      window.__ADMIN_BASE_URL__ = srv === 'mock'
         ? 'https://openapivts.koreainvestment.com:29443'
         : 'https://openapi.kis.or.kr';
-      const fld = (id, v) => { const e = document.getElementById(id); if (e && v) e.value = v; };
-      fld('appKey', saved.ak); fld('secretKey', saved.sec);
-      fld('acctNo', saved.acct || ''); fld('serverType', saved.server || 'real');
-      log('🔑 저장된 KIS API 설정 로드됨 — 자동 연결 시도 중...', 'info');
+      log('🔑 KIS API 설정 감지 — 자동 연결 시도 중...', 'info');
       setTimeout(() => connectKIS(), 800);
     }
   })();
